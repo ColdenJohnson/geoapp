@@ -27,7 +27,7 @@ export default function HomeScreen() {
   }, []);
   
   return (
-    <ParallaxScrollView
+    <View
       headerBackgroundColor={{ light: '#DCDCDC', dark: '#1D3D47' }}
       >
         
@@ -90,7 +90,7 @@ export default function HomeScreen() {
     
 
 
-    </ParallaxScrollView>
+    </View>
   );
 }
 
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   map_container: {
-    height: 800,
-    width: '100%', // Change width to 100% to fill the entire screen width,
+    height: '100%',
+    width: '100%',
   },
 });
