@@ -20,7 +20,7 @@ export default function UserProfileScreen() {
       <ThemedView style={styles.details}>
         <ThemedText type="defaultSemiBold">About Me</ThemedText>
         <ThemedText>
-          This is a placeholder for the user's bio or additional.
+          This is a placeholder for the user's bio or additional information.
         </ThemedText>
       </ThemedView>
 
