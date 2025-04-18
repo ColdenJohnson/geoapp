@@ -26,7 +26,7 @@ export default function UserProfileScreen() {
 
       {/* Actions */}
       <ThemedView style={styles.actions}>
-        <ThemedText type="link">Edit Something</ThemedText>
+        <ThemedText type="link">Edit This</ThemedText>
         <ThemedText type="link">Settings</ThemedText>
         <ThemedText type="link">Logout</ThemedText>
       </ThemedView>
