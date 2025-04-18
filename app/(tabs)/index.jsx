@@ -1,6 +1,4 @@
 import { Image, StyleSheet, Platform, View} from 'react-native';
-
-import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import MapView from 'react-native-maps';
