@@ -5,12 +5,14 @@ import MapView from 'react-native-maps';
 import {Marker} from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
-  
+  const PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL // from .env file
+
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -18,11 +20,28 @@ export default function HomeScreen() {
         setErrorMsg('Permission to access location was denied');
         return;
       }
-  
       let currentLocation = await Location.getCurrentPositionAsync({});
       setLocation(currentLocation);
     })();
   }, []);
+
+    // this should be broken out into a separate file, that contains all API calls
+    const location_press = async (location) => {
+      try {
+        const response = await axios.post(`${PUBLIC_BASE_URL}/log`, {
+          message: 'pressed your location!',
+          location: {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          },
+        });
+        if (response.status !== 200) {
+          console.error('Failed to send log to server');
+        }
+      } catch (error) {
+        console.error('Error sending log to server:', error);
+      }
+    };
   
   return (
     <View
@@ -70,7 +89,7 @@ export default function HomeScreen() {
     title="Your Location"
     description="You are here"
     pinColor="blue"
-    onPress={() => console.log('Your location pressed!')}
+    onPress={() => location_press(location)}
   />
 )}
 
@@ -81,7 +100,7 @@ export default function HomeScreen() {
           }}
           title="Geo Pin"
           description="This is a photo point."
-          onPress={() => console.log('Pin pressed!')}
+          onPress={() => location_press(location)}
         />
       </MapView>
     </View>
