@@ -28,7 +28,7 @@ export default function HomeScreen() {
     // this should be broken out into a separate file, that contains all API calls
     const location_press = async (location) => {
       try {
-        const response = await axios.post(`${PUBLIC_BASE_URL}/log`, {
+        const response = await axios.post(`${PUBLIC_BASE_URL}/location_pin`, {
           message: 'pressed your location!',
           location: {
             latitude: location.coords.latitude,

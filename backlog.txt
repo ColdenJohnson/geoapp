@@ -1,0 +1,7 @@
+Integrate Firebase
+-Ensure security protocols
+-Have firebase handle login authentication
+-Firebase for Image upload storage
+    -Image compression
+-Firebase Firestore? 
+-Cloudflare?
