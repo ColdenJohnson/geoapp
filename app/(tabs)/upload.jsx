@@ -34,26 +34,23 @@ export default function Upload() {
     };
     checkIfEmulator();
   }, []);
-  
 
-  async function uploadMockImage() {
-    try {
-      const asset = Asset.fromModule(mockImage);
-      await asset.downloadAsync();
+  // async function uploadMockImage() {
+  //   try {
+  //     const asset = Asset.fromModule(mockImage);
+  //     await asset.downloadAsync();
   
-      const response = await fetch(asset.localUri);
-      const blob = await response.blob();
+  //     const response = await fetch(asset.localUri);
+  //     const blob = await response.blob();
   
-      const ref = storage().ref('images/michael_cornell_sexy.jpeg');
-      await ref.put(blob);
+  //     const ref = storage().ref('images/michael_cornell_sexy.jpeg');
+  //     await ref.put(blob);
   
-      console.log('Upload successful');
-    } catch (err) {
-      console.error('Upload failed:', err);
-    }
-  }
-
-
+  //     console.log('Upload successful');
+  //   } catch (err) {
+  //     console.error('Upload failed:', err);
+  //   }
+  // }
   // For Dev
 
   if (!permission) return <View /> // still loading
@@ -65,6 +62,21 @@ export default function Upload() {
         <Button title="Grant Permission" onPress={requestPermission} />
       </View>
     )
+  }
+
+  async function uploadImage(uri) {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const fileName = uri.split('/').pop(); // Extract the file name from the URI
+      const ref = storage().ref(`images/${fileName}`);
+      await ref.put(blob);
+
+      console.log('Upload successful');
+    } catch (err) {
+      console.error('Upload failed:', err);
+    }
   }
 
   const toggleFacing = () => {
@@ -89,7 +101,7 @@ export default function Upload() {
         <Button 
         onPress={() => {
         console.log('Upload picture:', uri);
-        uploadMockImage();
+        uploadImage(uri);
         }} 
         title="Upload picture" 
       />
