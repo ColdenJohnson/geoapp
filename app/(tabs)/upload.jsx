@@ -67,9 +67,8 @@ export default function Upload() {
 
   async function uploadImage(uri) {
     try {
-      const compressedUri = await compressImage(uri);
 
-      const response = await fetch(compressedUri);
+      const response = await fetch(uri);
       const blob = await response.blob();
 
       const fileName = `${Date.now()}_${uri.split('/').pop()}`; // Extract the file name from the URI
@@ -82,28 +81,6 @@ export default function Upload() {
     }
   }
 
-  async function compressImage(uri) {
-    try {
-      const response = await fetch(uri);
-      const beforeBlob = await response.blob();
-      console.log('Before compression size:', beforeBlob.size, 'bytes');
-
-      const result = await ImageManipulator.manipulateAsync(
-        uri,
-        [],
-        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG } // Adjust compression level as needed
-      );
-
-      const afterResponse = await fetch(result.uri);
-      const afterBlob = await afterResponse.blob();
-      console.log('After compression size:', afterBlob.size, 'bytes');
-
-      return result.uri;
-    } catch (err) {
-      console.error('Image compression failed:', err);
-      throw err;
-    }
-  }
 
 // probably fetch image function, but untested
 
@@ -127,7 +104,8 @@ export default function Upload() {
   };
 
   const takePicture = async () => {
-    const photo = await ref.current?.takePictureAsync();
+    const photo = await ref.current?.takePictureAsync({
+      quality: 0.8});
     setUri(photo?.uri);
     console.log('Photo captured:', photo?.uri);
   };
