@@ -144,45 +144,46 @@ export default function Upload() {
 
   const renderCamera = () => {
   return (
-    <View style={styles.cameraContainer}>
-      <CameraView
-        style={styles.camera}
-        ref={ref}
-        facing={facing}
-        mute={false}
-        responsiveOrientationWhenOrientationLocked
-        ratio="4:3"
-      >
-        <View style={styles.shutterContainer}>
-          {/* Empty view to maintain space, could add a button here instead. */}
-          <View style={{ width: 32}} /> 
+    <View style={{ flex: 1 }}>
+      <View style={styles.cameraContainer}>
+        <CameraView
+          style={styles.camera}
+          ref={ref}
+          facing={facing}
+          mute={false}
+          responsiveOrientationWhenOrientationLocked
+          ratio="4:3"
+        />
+      </View>
+      <View style={styles.shutterContainer}>
+        {/* Empty view to maintain space, could add a button here instead. */}
+        <View style={{ width: 32 }} />
 
-          <Pressable onPress={takePicture}>
-            {({ pressed }) => (
+        <Pressable onPress={takePicture}>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.shutterBtn,
+                {
+                  opacity: pressed ? 0.5 : 1,
+                },
+              ]}
+            >
               <View
                 style={[
-                  styles.shutterBtn,
+                  styles.shutterBtnInner,
                   {
-                    opacity: pressed ? 0.5 : 1,
+                    backgroundColor: "black",
                   },
                 ]}
-              >
-                <View
-                  style={[
-                    styles.shutterBtnInner,
-                    {
-                      backgroundColor: "white",
-                    },
-                  ]}
-                />
-              </View>
-            )}
-          </Pressable>
-          <Pressable onPress={toggleFacing}>
-            <FontAwesome6 name="rotate-left" size={32} color="white" />
-          </Pressable>
-        </View>
-      </CameraView>
+              />
+            </View>
+          )}
+        </Pressable>
+        <Pressable onPress={toggleFacing}>
+          <FontAwesome6 name="rotate-left" size={32} color="black" />
+        </Pressable>
+      </View>
     </View>
   );
 };
