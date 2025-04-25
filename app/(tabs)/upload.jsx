@@ -76,7 +76,7 @@ export default function Upload() {
       const ref = storage().ref(`images/${fileName}`);
       await ref.put(blob);
 
-      console.log('Upload successful', fileName); // I believe this is essentially what should be stored in MongoDB to reference the blob
+      console.log('Upload successful', fileName, 'current date:', Date.now()); // I believe this is essentially what should be stored in MongoDB to reference the blob
     } catch (err) {
       console.error('Upload failed:', err);
     }
@@ -133,7 +133,7 @@ export default function Upload() {
     const result = await ImageManipulator.manipulateAsync(
       uri,
       [],
-      { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+      { compress: 0.01, format: ImageManipulator.SaveFormat.JPEG }
     );
     return result.uri;
   }
