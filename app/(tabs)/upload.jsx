@@ -79,6 +79,23 @@ export default function Upload() {
     }
   }
 
+// probably fetch image function, but untested
+
+  // async function fetchImage(fileName) {
+  //   try {
+  //     const ref = storage().ref(`images/${fileName}`);
+  //     const url = await ref.getDownloadURL();
+  //     console.log('Image URL:', url);
+  //     setUri(url); // Update the state to display the image
+  //   } catch (err) {
+  //     console.error('Failed to fetch image:', err);
+  //   }
+  // }
+
+  // useEffect(() => {
+  //   fetchImage('michael_cornell_sexy.jpeg');
+  // }, []);
+
   const toggleFacing = () => {
     setFacing((prev) => (prev === "back" ? "front" : "back"));
   };
