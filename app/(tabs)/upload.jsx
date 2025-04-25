@@ -13,7 +13,7 @@ import { FontAwesome6 } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import DeviceInfo from 'react-native-device-info';
 import storage from '@react-native-firebase/storage';
-import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
+// import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
 import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
 
 export default function Upload() {
@@ -76,29 +76,13 @@ export default function Upload() {
       const ref = storage().ref(`images/${fileName}`);
       await ref.put(blob);
 
-      console.log('Upload successful', fileName, 'current date:', Date.now()); // I believe this is essentially what should be stored in MongoDB to reference the blob
+      const downloadURL = await ref.getDownloadURL();
+      console.log('Download URL:', downloadURL); // next step here might be to retrieve the image using the URL, to prove that functionality works.
+
     } catch (err) {
       console.error('Upload failed:', err);
     }
   }
-
-
-// probably fetch image function, but untested
-
-  // async function fetchImage(fileName) {
-  //   try {
-  //     const ref = storage().ref(`images/${fileName}`);
-  //     const url = await ref.getDownloadURL();
-  //     console.log('Image URL:', url);
-  //     setUri(url); // Update the state to display the image
-  //   } catch (err) {
-  //     console.error('Failed to fetch image:', err);
-  //   }
-  // }
-
-  // useEffect(() => {
-  //   fetchImage('michael_cornell_sexy.jpeg');
-  // }, []);
 
   const toggleFacing = () => {
     setFacing((prev) => (prev === "back" ? "front" : "back"));
