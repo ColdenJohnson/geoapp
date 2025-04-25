@@ -105,7 +105,8 @@ export default function Upload() {
 
   const takePicture = async () => {
     const photo = await ref.current?.takePictureAsync({
-      quality: 0.8});
+      skipProcessing: true
+    });
     setUri(photo?.uri);
     console.log('Photo captured:', photo?.uri);
   };
@@ -130,6 +131,15 @@ export default function Upload() {
     );
   };
 
+  async function compressImage(uri) {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{resize: { width: 1024 }}],
+      { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return result.uri;
+  }
+
   const renderCamera = () => {
   return (
     <CameraView
@@ -138,6 +148,7 @@ export default function Upload() {
       facing={facing}
       mute={false}
       responsiveOrientationWhenOrientationLocked
+      ratio="4:3"
     >
       <View style={styles.shutterContainer}>
         {/* Empty view to maintain space, could add a button here instead. */}
