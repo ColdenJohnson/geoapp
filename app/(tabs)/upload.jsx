@@ -119,7 +119,7 @@ export default function Upload() {
         <Image
           source={{ uri }}
           contentFit="contain"
-          style={{ width: 500, aspectRatio: 1 }}
+          style={{ width: 500, aspectRatio: 3/4 }}
         />
         <Button onPress={() => setUri(null)} title="Take another picture" />
         <Button 
@@ -202,6 +202,7 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
     width: "100%",
+    aspectRatio: 3 / 4,
   },
   shutterContainer: {
     position: "absolute",
