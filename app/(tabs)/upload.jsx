@@ -25,16 +25,16 @@ export default function Upload() {
 
   // For Dev
 
-  useEffect(() => {
-    const checkIfEmulator = async () => {
-      const isEmulator = await DeviceInfo.isEmulator();
-      if (__DEV__ && Platform.OS === 'ios' && isEmulator) {
-        console.log("Mocking camera photo for emulator.");
-        setUri(mockImage); // or local asset
-      }
-    };
-    checkIfEmulator();
-  }, []);
+  // useEffect(() => {
+  //   const checkIfEmulator = async () => {
+  //     const isEmulator = await DeviceInfo.isEmulator();
+  //     if (__DEV__ && Platform.OS === 'ios' && isEmulator) {
+  //       console.log("Mocking camera photo for emulator.");
+  //       setUri(mockImage); // or local asset
+  //     }
+  //   };
+  //   checkIfEmulator();
+  // }, []);
 
   // async function uploadMockImage() {
   //   try {
@@ -72,11 +72,11 @@ export default function Upload() {
       const response = await fetch(compressedUri);
       const blob = await response.blob();
 
-      const fileName = uri.split('/').pop(); // Extract the file name from the URI
+      const fileName = `${Date.now()}_${uri.split('/').pop()}`; // Extract the file name from the URI
       const ref = storage().ref(`images/${fileName}`);
       await ref.put(blob);
 
-      console.log('Upload successful');
+      console.log('Upload successful', fileName); // I believe this is essentially what should be stored in MongoDB to reference the blob
     } catch (err) {
       console.error('Upload failed:', err);
     }
