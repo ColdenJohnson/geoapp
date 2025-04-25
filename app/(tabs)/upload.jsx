@@ -173,7 +173,7 @@ export default function Upload() {
                 style={[
                   styles.shutterBtnInner,
                   {
-                    backgroundColor: "white",
+                    backgroundColor: "black",
                   },
                 ]}
               />
