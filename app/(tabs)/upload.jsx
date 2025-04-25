@@ -173,7 +173,7 @@ export default function Upload() {
                 style={[
                   styles.shutterBtnInner,
                   {
-                    backgroundColor: "black",
+                    backgroundColor: "white",
                   },
                 ]}
               />
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   shutterBtn: {
     backgroundColor: "transparent",
     borderWidth: 5,
-    borderColor: "white",
+    borderColor: "black",
     width: 85,
     height: 85,
     borderRadius: 45,
