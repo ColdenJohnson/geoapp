@@ -4,6 +4,7 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useState, useRef, useEffect } from 'react'
 import { Button, Pressable, StyleSheet, Text, View, Platform } from "react-native";
 import { AntDesign } from "@expo/vector-icons";
@@ -66,7 +67,9 @@ export default function Upload() {
 
   async function uploadImage(uri) {
     try {
-      const response = await fetch(uri);
+      const compressedUri = await compressImage(uri);
+
+      const response = await fetch(compressedUri);
       const blob = await response.blob();
 
       const fileName = `${Date.now()}_${uri.split('/').pop()}`; // Extract the file name from the URI
@@ -125,6 +128,15 @@ export default function Upload() {
       </View>
     );
   };
+
+  async function compressImage(uri) {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [],
+      { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return result.uri;
+  }
 
   const renderCamera = () => {
   return (
