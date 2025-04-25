@@ -4,12 +4,16 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
-import { useState, useRef } from 'react'
-import { Button, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState, useRef, useEffect } from 'react'
+import { Button, Pressable, StyleSheet, Text, View, Platform } from "react-native";
 import { AntDesign } from "@expo/vector-icons";
 import { Feather } from "@expo/vector-icons";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import DeviceInfo from 'react-native-device-info';
+import storage from '@react-native-firebase/storage';
+import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
+import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
 
 export default function Upload() {
   const [facing, setFacing] = useState("back");
@@ -17,6 +21,40 @@ export default function Upload() {
   const [uri, setUri] = useState(null);
   const [mode, setMode] = useState("picture");
   const ref = useRef(null);
+
+  // For Dev
+
+  useEffect(() => {
+    const checkIfEmulator = async () => {
+      const isEmulator = await DeviceInfo.isEmulator();
+      if (__DEV__ && Platform.OS === 'ios' && isEmulator) {
+        console.log("Mocking camera photo for emulator.");
+        setUri(mockImage); // or local asset
+      }
+    };
+    checkIfEmulator();
+  }, []);
+  
+
+  async function uploadMockImage() {
+    try {
+      const asset = Asset.fromModule(mockImage);
+      await asset.downloadAsync();
+  
+      const response = await fetch(asset.localUri);
+      const blob = await response.blob();
+  
+      const ref = storage().ref('images/michael_cornell_sexy.jpeg');
+      await ref.put(blob);
+  
+      console.log('Upload successful');
+    } catch (err) {
+      console.error('Upload failed:', err);
+    }
+  }
+
+
+  // For Dev
 
   if (!permission) return <View /> // still loading
 
@@ -48,7 +86,13 @@ export default function Upload() {
           style={{ width: 500, aspectRatio: 1 }}
         />
         <Button onPress={() => setUri(null)} title="Take another picture" />
-        <Button onPress={() => console.log('Upload picture:', uri)} title="Upload picture" />
+        <Button 
+        onPress={() => {
+        console.log('Upload picture:', uri);
+        uploadMockImage();
+        }} 
+        title="Upload picture" 
+      />
       </View>
     );
   };
