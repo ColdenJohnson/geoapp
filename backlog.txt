@@ -1,3 +1,14 @@
+To integrate firebase:
+1. Move off expo go to a native dev build that can run react native firebase: called Expo Dev Client
+    - basically is Expo Go but includes app's native code
+2. Install react native firebase
+    - https://rnfirebase.io/
+3. Set up cloud storage
+    - https://rnfirebase.io/storage/usage
+
+
+
+
 Integrate Firebase
 -Ensure security protocols
 -Have firebase handle login authentication
