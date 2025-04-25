@@ -106,7 +106,8 @@ export default function Upload() {
 
   const takePicture = async () => {
     const photo = await ref.current?.takePictureAsync({
-      skipProcessing: true
+      skipProcessing: true,
+      ratio: "4:3"
     });
     setUri(photo?.uri);
     console.log('Photo captured:', photo?.uri);
