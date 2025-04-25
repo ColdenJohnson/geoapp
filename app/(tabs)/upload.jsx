@@ -119,7 +119,7 @@ export default function Upload() {
         <Image
           source={{ uri }}
           contentFit="contain"
-          style={{ width: 500, aspectRatio: 3/4 }}
+          style={{ width: 300, aspectRatio: 3/4 }}
         />
         <Button onPress={() => setUri(null)} title="Take another picture" />
         <Button 
