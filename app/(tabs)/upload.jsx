@@ -67,8 +67,9 @@ export default function Upload() {
 
   async function uploadImage(uri) {
     try {
+      const compressedUri = await compressImage(uri);
 
-      const response = await fetch(uri);
+      const response = await fetch(compressedUri);
       const blob = await response.blob();
 
       const fileName = `${Date.now()}_${uri.split('/').pop()}`; // Extract the file name from the URI
