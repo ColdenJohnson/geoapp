@@ -82,6 +82,29 @@ export default function Upload() {
     }
   }
 
+  async function compressImage(uri) {
+    try {
+      const response = await fetch(uri);
+      const beforeBlob = await response.blob();
+      console.log('Before compression size:', beforeBlob.size, 'bytes');
+
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [],
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG } // Adjust compression level as needed
+      );
+
+      const afterResponse = await fetch(result.uri);
+      const afterBlob = await afterResponse.blob();
+      console.log('After compression size:', afterBlob.size, 'bytes');
+
+      return result.uri;
+    } catch (err) {
+      console.error('Image compression failed:', err);
+      throw err;
+    }
+  }
+
 // probably fetch image function, but untested
 
   // async function fetchImage(fileName) {
@@ -128,15 +151,6 @@ export default function Upload() {
       </View>
     );
   };
-
-  async function compressImage(uri) {
-    const result = await ImageManipulator.manipulateAsync(
-      uri,
-      [],
-      { compress: 0.01, format: ImageManipulator.SaveFormat.JPEG }
-    );
-    return result.uri;
-  }
 
   const renderCamera = () => {
   return (
