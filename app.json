@@ -10,9 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.coldenjohnson.geoapp"
+      "bundleIdentifier": "com.coldenjohnson.geoapp",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
+      "package": "com.coldenjohnson.geoapp",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -23,8 +26,7 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_MEDIA_LOCATION"
-      ],
-      "package": "com.coldenjohnson.geoapp"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -74,7 +76,16 @@
           "isAccessMediaLocationEnabled": true
         }
       ],
-      "react-native-vision-camera"
+      "react-native-vision-camera",
+      "@react-native-firebase/app",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

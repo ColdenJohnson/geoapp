@@ -16,3 +16,4 @@ Integrate Firebase
     -Image compression
 -Firebase Firestore? 
 -Cloudflare?
+
