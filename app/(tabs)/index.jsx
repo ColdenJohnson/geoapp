@@ -7,7 +7,7 @@ import axios from 'axios';
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useNavigation } from 'expo-router'; // for navigation with create new challenge
 
-import { createNewChallenge, fetchAllLocationPins } from '../../lib/api';
+import { newPhotoChallenge, addPhotoChallenge, fetchAllLocationPins } from '../../lib/api';
 import { ImgFromUrl } from '../../components/ImgDisplay';
 
 export default function HomeScreen() {
@@ -40,7 +40,16 @@ export default function HomeScreen() {
       navigation.navigate('upload');
     });
   
-    await createNewChallenge(location, uploadResult);
+    await newPhotoChallenge(location, uploadResult);
+  }
+
+  async function handleAddPhotoToChallenge(pin) {
+    const uploadResult = await new Promise((resolve) => {
+      setUploadResolver(resolve);
+      navigation.navigate('upload');
+    });
+  
+    await addPhotoChallenge(pin._id, uploadResult);
   }
 
   
@@ -112,7 +121,7 @@ export default function HomeScreen() {
     >
       <Callout
         tooltip
-        onPress={() => console.log('add new photo to challenge')}
+        onPress={() => handleAddPhotoToChallenge(pin)}
       >
         <View style={{ width: 150, height: 150, padding: 5, backgroundColor: 'white', borderRadius: 10, alignItems: 'center' }}>
           <ImgFromUrl 
