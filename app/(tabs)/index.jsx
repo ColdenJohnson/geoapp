@@ -7,7 +7,7 @@ import axios from 'axios';
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useNavigation } from 'expo-router'; // for navigation with create new challenge
 
-import { newPhotoChallenge, addPhotoChallenge, fetchAllLocationPins } from '../../lib/api';
+import { newPhotoChallenge, addPhotoChallenge, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
 import { ImgFromUrl } from '../../components/ImgDisplay';
 
 export default function HomeScreen() {
@@ -16,6 +16,7 @@ export default function HomeScreen() {
   const PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL // from .env file
   const navigation = useNavigation();
   const [pins, setPins] = useState([]); // for all pins
+  const [pinPhotoUrls, setPinPhotoUrls] = useState({});
 
   
 
@@ -30,7 +31,21 @@ export default function HomeScreen() {
       setLocation(currentLocation);
 
       const allPins = await fetchAllLocationPins();
-      setPins(allPins)
+      setPins(allPins);
+
+      // Fetch first photo for each pin
+      // this probably should be its own function for clarity
+      const photoMap = {};
+      for (const pin of allPins) {
+        if (pin?._id) {
+          const photos = await fetchPhotosByPinId(pin._id);
+          if (photos.length > 0) {
+            photoMap[pin._id] = photos[0].file_url;
+          }
+        }
+      }
+      setPinPhotoUrls(photoMap);
+
     })();
   }, []);
 
@@ -126,7 +141,7 @@ export default function HomeScreen() {
       >
         <View style={{ width: 150, height: 150, padding: 5, backgroundColor: 'white', borderRadius: 10, alignItems: 'center' }}>
           <ImgFromUrl 
-            url={pin.file_url} 
+            url={pinPhotoUrls[pin._id]}
             style={{ width: '100%', height: '100%' }}
             resizeMode="cover"
           />
