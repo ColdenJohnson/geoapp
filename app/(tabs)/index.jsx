@@ -1,5 +1,4 @@
-import { Image, StyleSheet, Platform, View} from 'react-native';
-import MapView from 'react-native-maps';
+import { Image, StyleSheet, Platform, View, Pressable, Text } from 'react-native';import MapView from 'react-native-maps';
 import {Marker} from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
@@ -25,7 +24,7 @@ export default function HomeScreen() {
   }, []);
 
     // this should be broken out into a separate file, that contains all API calls
-    const location_press = async (location) => {
+    const create_new_challenge = async (location) => {
       try {
         const response = await axios.post(`${PUBLIC_BASE_URL}/location_pin`, {
           message: 'pressed your location!',
@@ -41,6 +40,8 @@ export default function HomeScreen() {
         console.error('Error sending log to server:', error);
       }
     };
+
+
   
   return (
     <View
@@ -50,7 +51,16 @@ export default function HomeScreen() {
     {/* If breaking during deployment, it is because it needs an API https://docs.expo.dev/versions/latest/sdk/map-view/ 
     Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps
     */}
-    <View style={styles.map_container}> 
+    <View style={styles.map_container}>
+    <Pressable 
+        style={({ pressed }) => [
+          styles.button, 
+          { opacity: pressed ? 0.5 : 1 } // Halve opacity on press
+        ]} 
+        onPress={() => create_new_challenge(location).then(() => console.log("upload a photo"))}
+      >
+        <Text style={styles.buttonText}>+</Text>
+        </Pressable>
     <MapView 
         style={styles.map} 
         showsUserLocation={true}
@@ -84,7 +94,7 @@ export default function HomeScreen() {
     title="Your Location"
     description="You are here"
     pinColor="blue"
-    onPress={() => location_press(location)}
+    onPress={() => create_new_challenge(location)}
   />
 )}
 
@@ -95,7 +105,7 @@ export default function HomeScreen() {
           }}
           title="Geo Pin"
           description="This is a photo point."
-          onPress={() => location_press(location)}
+          onPress={() => create_new_challenge(location)}
         />
       </MapView>
     </View>
@@ -120,5 +130,19 @@ const styles = StyleSheet.create({
   map_container: {
     height: '100%',
     width: '100%',
+  },
+  button: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 10,
+    zIndex: 10,
+    elevation: 10,
+  },
+  buttonText: {
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });
