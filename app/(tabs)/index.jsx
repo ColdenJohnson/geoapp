@@ -35,12 +35,14 @@ export default function HomeScreen() {
 
       // Fetch first photo for each pin
       // this probably should be its own function for clarity
+      // this will also eventually be limited to a certain user radius, or only on click/something similar
+      // this is a bit fucked because /view_photo_for_each_pin/:pin_id actually returns an array of photo urls of exactly length 1 (filtered in the backend)
       const photoMap = {};
       for (const pin of allPins) {
         if (pin?._id) {
           const photos = await fetchPhotosByPinId(pin._id);
           if (photos.length > 0) {
-            photoMap[pin._id] = photos[0].file_url;
+            photoMap[pin._id] = photos[0].file_url; // currently just displays the first photo in the array. should do other logic.
           }
         }
       }
