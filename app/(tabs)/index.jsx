@@ -17,6 +17,8 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const [pins, setPins] = useState([]); // for all pins
 
+  
+
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -32,7 +34,14 @@ export default function HomeScreen() {
     })();
   }, []);
 
-
+  async function handleCreateChallengePress() {
+    const uploadResult = await new Promise((resolve) => {
+      setUploadResolver(resolve); // resolver is stored globally
+      navigation.navigate('upload');
+    });
+  
+    await createNewChallenge(location, uploadResult);
+  }
 
   
   return (
@@ -49,14 +58,7 @@ export default function HomeScreen() {
           styles.button, 
           { opacity: pressed ? 0.5 : 1 }
         ]} 
-        onPress={async () => {
-      const uploadResult = await new Promise((resolve) => {
-        setUploadResolver(resolve); // resolver is stored globally
-        navigation.navigate('upload');
-      });
-
-      await createNewChallenge(location, uploadResult);
-    }}
+        onPress={handleCreateChallengePress}
       >
         <Text style={styles.buttonText}>+</Text>
         </Pressable>
@@ -99,31 +101,31 @@ export default function HomeScreen() {
 
 
   {pins.map((pin) => (
-      <Marker
-    key={pin._id}
-    coordinate={{
-      latitude: pin.location.latitude,
-      longitude: pin.location.longitude,
-    }}
-    title={"Photo Challenge"}
-    description={pin.message || 'Geo Pin'}
-  >
-    <Callout tooltip>
-      <View style={{ width: 150, height: 150, padding: 5, backgroundColor: 'white', borderRadius: 10 }}>
-        <ImgFromUrl 
-          url={pin.file_url} 
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="cover"
-        />
-      </View>
-    </Callout>
-  </Marker>
+    <Marker
+      key={pin._id}
+      coordinate={{
+        latitude: pin.location.latitude,
+        longitude: pin.location.longitude,
+      }}
+      title={"Photo Challenge"}
+      description={pin.message || 'Geo Pin'}
+    >
+      <Callout
+        tooltip
+        onPress={() => console.log('add new photo to challenge')}
+      >
+        <View style={{ width: 150, height: 150, padding: 5, backgroundColor: 'white', borderRadius: 10, alignItems: 'center' }}>
+          <ImgFromUrl 
+            url={pin.file_url} 
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
+        </View>
+      </Callout>
+    </Marker>
   ))}
       </MapView>
     </View>
-    
-
-
     </View>
   );
 }
