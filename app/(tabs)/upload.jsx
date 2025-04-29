@@ -15,13 +15,16 @@ import DeviceInfo from 'react-native-device-info';
 import storage from '@react-native-firebase/storage';
 // import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
 import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
+import { resolveUpload } from '../../lib/promiseStore';
+import { useNavigation } from 'expo-router';
 
 export default function Upload() {
-  const [facing, setFacing] = useState("back");
+  const [facing, setFacing] = useState ("back");
   const [permission, requestPermission] = useCameraPermissions()
   const [uri, setUri] = useState(null);
   const [mode, setMode] = useState("picture");
   const ref = useRef(null);
+
 
   // For Dev
 
@@ -77,10 +80,12 @@ export default function Upload() {
       await ref.put(blob);
 
       const downloadURL = await ref.getDownloadURL();
-      console.log('Download URL:', downloadURL); // next step here might be to retrieve the image using the URL, to prove that functionality works.
+      console.log('Download URL:', downloadURL); 
+      return downloadURL;
 
     } catch (err) {
       console.error('Upload failed:', err);
+      throw err;
     }
   }
 
@@ -107,12 +112,13 @@ export default function Upload() {
         />
         <Button onPress={() => setUri(null)} title="Take another picture" />
         <Button 
-        onPress={() => {
-        console.log('Upload picture:', uri);
-        uploadImage(uri);
-        }} 
-        title="Upload picture" 
-      />
+  onPress={async () => {
+    const downloadURL = await uploadImage(uri); 
+    resolveUpload(downloadURL); // fulfill the original Promise
+    // ideally would like to navigate back
+  }}
+  title="Upload picture"
+/>
       </View>
     );
   };

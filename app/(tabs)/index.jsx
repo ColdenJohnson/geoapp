@@ -4,12 +4,15 @@ import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
+import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
+import { useNavigation } from 'expo-router'; // for navigation with create new challenge
 
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL // from .env file
+  const navigation = useNavigation();
 
   useEffect(() => {
     (async () => {
@@ -24,15 +27,18 @@ export default function HomeScreen() {
   }, []);
 
     // this should be broken out into a separate file, that contains all API calls
-    const create_new_challenge = async (location) => {
+    const create_new_challenge = async (location, file_url) => {
+      console.log('callling create_new_challenge');
       try {
-        const response = await axios.post(`${PUBLIC_BASE_URL}/location_pin`, {
-          message: 'pressed your location!',
+        const response = await axios.post(`${PUBLIC_BASE_URL}/new_challenge`, {
+          message: 'New Photo Challenge!',
           location: {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
           },
+          file_url: file_url
         });
+        console.log(`Location uploaded to server at ${location.coords.latitude}, ${location.coords.longitude}, with URL ${file_url}`);
         if (response.status !== 200) {
           console.error('Failed to send log to server');
         }
@@ -52,12 +58,19 @@ export default function HomeScreen() {
     Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps
     */}
     <View style={styles.map_container}>
-    <Pressable 
+    <Pressable // button to create new challenge
         style={({ pressed }) => [
           styles.button, 
-          { opacity: pressed ? 0.5 : 1 } // Halve opacity on press
+          { opacity: pressed ? 0.5 : 1 }
         ]} 
-        onPress={() => create_new_challenge(location).then(() => console.log("upload a photo"))}
+        onPress={async () => {
+      const uploadResult = await new Promise((resolve) => {
+        setUploadResolver(resolve); // resolver is stored globally
+        navigation.navigate('upload');
+      });
+
+      await create_new_challenge(location, uploadResult);
+    }}
       >
         <Text style={styles.buttonText}>+</Text>
         </Pressable>
@@ -94,9 +107,10 @@ export default function HomeScreen() {
     title="Your Location"
     description="You are here"
     pinColor="blue"
-    onPress={() => create_new_challenge(location)}
+    // onPress={() => create_new_challenge(location)}
   />
 )}
+
 
         <Marker
           coordinate={{
@@ -105,7 +119,7 @@ export default function HomeScreen() {
           }}
           title="Geo Pin"
           description="This is a photo point."
-          onPress={() => create_new_challenge(location)}
+          // onPress={() => create_new_challenge(location)}
         />
       </MapView>
     </View>
