@@ -109,7 +109,7 @@ export default function HomeScreen() {
     description={pin.message || 'Geo Pin'}
   >
     <Callout tooltip>
-      <View style={{ width: 100, height: 100, padding: 5, backgroundColor: 'white', borderRadius: 10 }}>
+      <View style={{ width: 150, height: 150, padding: 5, backgroundColor: 'white', borderRadius: 10 }}>
         <ImgFromUrl 
           url={pin.file_url} 
           style={{ width: '100%', height: '100%' }}

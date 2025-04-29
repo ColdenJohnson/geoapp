@@ -19,8 +19,6 @@ export function ImgFromUrl({ url, style, resizeMode = "contain" }) {
 // Proper Component
 export function ImgDisplay({ filename, style, resizeMode = "contain" }) {
   const imageUrl = useFirebaseImage(filename);
-
-
   if (!imageUrl) {
     return (
       <View style={[{ width: 200, height: 200, justifyContent: 'center', alignItems: 'center' }, style]}>
