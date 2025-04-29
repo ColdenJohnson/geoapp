@@ -1,6 +1,4 @@
 import { Image, StyleSheet, Platform, View} from 'react-native';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
 import MapView from 'react-native-maps';
 import {Marker} from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -48,10 +46,6 @@ export default function HomeScreen() {
     <View
       headerBackgroundColor={{ light: '#DCDCDC', dark: '#1D3D47' }}
       >
-        
-    {/* <ThemedView style={styles.titleContainer}>
-      <ThemedText type="title">User Map!</ThemedText>
-    </ThemedView> */}
 
     {/* If breaking during deployment, it is because it needs an API https://docs.expo.dev/versions/latest/sdk/map-view/ 
     Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps

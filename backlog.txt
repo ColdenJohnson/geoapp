@@ -26,3 +26,7 @@ Steps to MVP:
     -enter challenge prompt + take photo
     -this saves challenge coords in mongodb. pin appears on map
 4. profile stays under user
+
+
+Should have test cases
+Should be using better AI integration

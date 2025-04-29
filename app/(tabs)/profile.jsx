@@ -3,15 +3,16 @@ import { StyleSheet, Image } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
+import { useFirebaseImage } from '@/hooks/useFirebaseImage';
+import { ImgDisplay } from '@/components/ImgDisplay';
+
+
 export default function UserProfileScreen() {
   return (
     <ThemedView style={styles.container}>
-      {/* Profile Header */}
+      {/* Profile Header -- could have a different profile picture */}
       <ThemedView style={styles.header}>
-        <Image
-          source={{ uri: 'https://via.placeholder.com/150' }}
-          style={styles.profileImage}
-        />
+      <ImgDisplay filename="michael_cornell_sexy.jpeg" style={styles.profileImage} /> 
         <ThemedText type="title">Colden Johnson</ThemedText>
         <ThemedText type="subtitle">user@example.com</ThemedText>
       </ThemedView>
