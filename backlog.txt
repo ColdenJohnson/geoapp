@@ -35,3 +35,7 @@ Should be using better AI integration
 
 
 should use async storage to cache things (like pins, etc.): https://reactnative.dev/docs/asyncstorage
+
+
+Use mongoose in mongodb:
+    -much better

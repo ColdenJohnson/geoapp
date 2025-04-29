@@ -110,6 +110,7 @@ export default function HomeScreen() {
 
 
   {pins.map((pin) => (
+    pin?.location ? (
     <Marker
       key={pin._id}
       coordinate={{
@@ -131,7 +132,7 @@ export default function HomeScreen() {
           />
         </View>
       </Callout>
-    </Marker>
+    </Marker> ) : null
   ))}
       </MapView>
     </View>
