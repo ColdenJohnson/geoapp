@@ -17,3 +17,12 @@ Integrate Firebase
 -Firebase Firestore? 
 -Cloudflare?
 
+
+
+Steps to MVP:
+1. Have a user login page (firebase)
+2. Save user login data to database
+3. On map have 1 button: create new challenge
+    -enter challenge prompt + take photo
+    -this saves challenge coords in mongodb. pin appears on map
+4. profile stays under user
