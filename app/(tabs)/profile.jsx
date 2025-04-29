@@ -6,6 +6,13 @@ import { ThemedView } from '@/components/ThemedView';
 import { useFirebaseImage } from '@/hooks/useFirebaseImage';
 import { ImgDisplay } from '@/components/ImgDisplay';
 
+import { auth } from '../../config/firebase'; // adjust path as needed
+import { signOut } from 'firebase/auth'; 
+import { Button } from 'react-native';
+
+
+console.log('auth: ', auth);
+console.log('auth.currentUser:', auth?.currentUser);
 
 export default function UserProfileScreen() {
   return (
@@ -29,7 +36,21 @@ export default function UserProfileScreen() {
       <ThemedView style={styles.actions}>
         <ThemedText type="link">Edit Profile</ThemedText>
         <ThemedText type="link">Settings</ThemedText>
-        <ThemedText type="link">Logout</ThemedText>
+
+        {/* Sign Out button, theoretically. */}
+      <Button
+        title="Sign Out"
+        onPress={async () => {
+          try {
+            await auth.signOut();
+            console.log('User signed out');
+          } catch (error) {
+            console.error('Sign out failed:', error);
+          }
+        }}
+      />
+
+
       </ThemedView>
     </ThemedView>
   );
