@@ -1,5 +1,5 @@
 import { Image, StyleSheet, Platform, View, Pressable, Text } from 'react-native';import MapView from 'react-native-maps';
-import {Marker} from 'react-native-maps';
+import {Marker, Callout} from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
@@ -7,12 +7,15 @@ import axios from 'axios';
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useNavigation } from 'expo-router'; // for navigation with create new challenge
 
+import { createNewChallenge, fetchAllLocationPins } from '../../lib/api';
+import { ImgFromUrl } from '../../components/ImgDisplay';
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL // from .env file
   const navigation = useNavigation();
+  const [pins, setPins] = useState([]); // for all pins
 
   useEffect(() => {
     (async () => {
@@ -23,29 +26,12 @@ export default function HomeScreen() {
       }
       let currentLocation = await Location.getCurrentPositionAsync({});
       setLocation(currentLocation);
+
+      const allPins = await fetchAllLocationPins();
+      setPins(allPins)
     })();
   }, []);
 
-    // this should be broken out into a separate file, that contains all API calls
-    const create_new_challenge = async (location, file_url) => {
-      console.log('callling create_new_challenge');
-      try {
-        const response = await axios.post(`${PUBLIC_BASE_URL}/new_challenge`, {
-          message: 'New Photo Challenge!',
-          location: {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          },
-          file_url: file_url
-        });
-        console.log(`Location uploaded to server at ${location.coords.latitude}, ${location.coords.longitude}, with URL ${file_url}`);
-        if (response.status !== 200) {
-          console.error('Failed to send log to server');
-        }
-      } catch (error) {
-        console.error('Error sending log to server:', error);
-      }
-    };
 
 
   
@@ -69,7 +55,7 @@ export default function HomeScreen() {
         navigation.navigate('upload');
       });
 
-      await create_new_challenge(location, uploadResult);
+      await createNewChallenge(location, uploadResult);
     }}
       >
         <Text style={styles.buttonText}>+</Text>
@@ -101,8 +87,8 @@ export default function HomeScreen() {
 {location?.coords && (
   <Marker
     coordinate={{
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
+      latitude: location.coords.latitude + 1,
+      longitude: location.coords.longitude + 1,
     }}
     title="Your Location"
     description="You are here"
@@ -112,15 +98,27 @@ export default function HomeScreen() {
 )}
 
 
-        <Marker
-          coordinate={{
-            latitude: 31.416077,
-            longitude: 120.901488,
-          }}
-          title="Geo Pin"
-          description="This is a photo point."
-          // onPress={() => create_new_challenge(location)}
+  {pins.map((pin) => (
+      <Marker
+    key={pin._id}
+    coordinate={{
+      latitude: pin.location.latitude,
+      longitude: pin.location.longitude,
+    }}
+    title={"Photo Challenge"}
+    description={pin.message || 'Geo Pin'}
+  >
+    <Callout tooltip>
+      <View style={{ width: 100, height: 100, padding: 5, backgroundColor: 'white', borderRadius: 10 }}>
+        <ImgFromUrl 
+          url={pin.file_url} 
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
         />
+      </View>
+    </Callout>
+  </Marker>
+  ))}
       </MapView>
     </View>
     

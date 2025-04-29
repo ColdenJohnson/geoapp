@@ -2,8 +2,6 @@ import { storage } from '@/config/firebase';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { useState, useEffect } from 'react';
 
-
-
 export function useFirebaseImage(filename) {
     const [imageUrl, setImageUrl] = useState(null);
   
