@@ -1,3 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage' // just figured out how to import -- now need to use it!
+!!
+
 To integrate firebase:
 1. Move off expo go to a native dev build that can run react native firebase: called Expo Dev Client
     - basically is Expo Go but includes app's native code
