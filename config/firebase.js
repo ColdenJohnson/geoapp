@@ -27,3 +27,4 @@ export const auth = getAuth(app);
 console.log('Initializing Firebase...');
 console.log('app:', app);
 console.log('auth:', auth);
+console.log('auth.currentUser:', auth?.currentUser);

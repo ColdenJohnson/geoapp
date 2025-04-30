@@ -11,9 +11,6 @@ import { signOut } from 'firebase/auth';
 import { Button } from 'react-native';
 
 
-console.log('auth: ', auth);
-console.log('auth.currentUser:', auth?.currentUser);
-
 export default function UserProfileScreen() {
   return (
     <ThemedView style={styles.container}>
@@ -42,7 +39,7 @@ export default function UserProfileScreen() {
         title="Sign Out"
         onPress={async () => {
           try {
-            await auth.signOut();
+            // await auth.signOut();
             console.log('User signed out');
           } catch (error) {
             console.error('Sign out failed:', error);

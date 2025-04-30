@@ -12,7 +12,7 @@ import LoginScreen from '../screens/LoginScreen';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
-SplashScreen.preventAutoHideAsync(); // is this necessary?
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -21,23 +21,22 @@ export default function RootLayout() {
   });
 
   const [user, setUser] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('Auth state changed. User:', user);
       setUser(user);
+      setLoadingAuth(false); // signal that auth check is done
     });
     return unsubscribe;
   }, []);
 
   useEffect(() => {
-    if (loaded) {
+    if (loaded && !loadingAuth) {
       SplashScreen.hideAsync();
     }
-  }, [loaded]);
-
-  if (!loaded) {
-    return null;
-  }
+  }, [loaded, loadingAuth]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -45,7 +44,6 @@ export default function RootLayout() {
         <>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
           </Stack>
           <StatusBar style="auto" />
         </>

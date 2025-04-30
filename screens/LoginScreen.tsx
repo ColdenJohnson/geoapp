@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+// import * as SecureStore from 'expo-secure-store';
+// do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
 import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
+
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -12,7 +15,17 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      console.log('Logged in')
+      console.log('Logged in current user: ', auth.currentUser);
+
+      const user = auth.currentUser;
+      if (user) {
+        const token = await user.getIdToken();
+        // console.log('SecureStore module:', SecureStore);
+        // await SecureStore.setItemAsync('user_token', token);
+      }
+
+
+
     } catch (err: any) {
       setErrorMsg(err.message);
     }
