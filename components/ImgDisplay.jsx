@@ -27,7 +27,6 @@ export function ImgDisplay({ filename, style, resizeMode = "contain" }) {
     );
   }
 
-
   return (
     <Image
       source={{ uri: imageUrl }}

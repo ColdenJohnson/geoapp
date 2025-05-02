@@ -19,7 +19,8 @@ export default function UserProfileScreen() {
     <ThemedView style={styles.container}>
       {/* Profile Header -- could have a different profile picture */}
       <ThemedView style={styles.header}>
-      <ImgDisplay filename="michael_cornell_sexy.jpeg" style={styles.profileImage} /> 
+      {/* This line allows for a profile photo -- need to put this back in. */}
+      {/* <ImgDisplay filename="michael_cornell_sexy.jpeg" style={styles.profileImage} />  */} 
         <ThemedText type="title">Colden Johnson</ThemedText>
         <ThemedText type="subtitle">user@example.com</ThemedText>
       </ThemedView>
