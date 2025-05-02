@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage' // just figured out how to import -- now need to use it!
-!!
+using AsyncStorage from '@react-native-async-storage/async-storage' is not as clean as using firebase/auth. I should be using this instead to store user state -- it is more secure. Do this later.
+
 
 To integrate firebase:
 1. Move off expo go to a native dev build that can run react native firebase: called Expo Dev Client

@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
+import { Image, View } from 'react-native';
 
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -48,11 +49,15 @@ export default function RootLayout() {
 
 
 
-  useEffect(() => {
-    if (loaded && !loadingAuth) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded, loadingAuth]);
+
+  // if not loaded, show splash screen (logo)
+  if (!loaded || loadingAuth) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Image source={require('../assets/images/icon.png')} style={{ width: 200, height: 200 }} />
+      </View>
+    );
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -64,7 +69,7 @@ export default function RootLayout() {
           <StatusBar style="auto" />
         </>
       ) : (
-        <LoginScreen />
+        <LoginScreen onLogin={(user) => setUser(user)} /> // this passes in onLogin as a prop to LoginScreen
       )}
     </ThemeProvider>
   );

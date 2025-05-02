@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 
 
-export default function LoginScreen() {
+export default function LoginScreen( {onLogin} ) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -26,11 +26,12 @@ export default function LoginScreen() {
         const token = await user.getIdToken();
         console.log('User token:', token);
         await AsyncStorage.setItem('user_token', token);
+        onLogin(token); // calls the onLogin function passed as a prop --> goes to _layout.jsx, setUser(user)
       }
 
 
 
-    } catch (err: any) {
+    } catch (err) {
       setErrorMsg(err.message);
     }
   };
@@ -39,7 +40,7 @@ export default function LoginScreen() {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       console.log('Registered new user');
-    } catch (err: any) {
+    } catch (err) {
       setErrorMsg(err.message);
     }
   };
