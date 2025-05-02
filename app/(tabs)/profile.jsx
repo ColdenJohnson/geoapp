@@ -9,9 +9,12 @@ import { ImgDisplay } from '@/components/ImgDisplay';
 import { Button } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useContext } from 'react';
+import { AuthContext } from '../../hooks/AuthContext';
 
 
 export default function UserProfileScreen() {
+  const { setUser } = useContext(AuthContext);
   return (
     <ThemedView style={styles.container}>
       {/* Profile Header -- could have a different profile picture */}
@@ -40,14 +43,14 @@ export default function UserProfileScreen() {
         onPress={async () => {
           try {
             await AsyncStorage.removeItem('user_token');
+            setUser(null); // clear user state, automatically rerun RootLayout
+
             console.log('User signed out');
           } catch (error) {
             console.error('Sign out failed:', error);
           }
         }}
       />
-
-
       </ThemedView>
     </ThemedView>
   );

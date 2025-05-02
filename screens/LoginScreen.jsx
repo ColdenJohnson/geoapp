@@ -6,27 +6,28 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'fire
 import { auth } from '../config/firebase';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useContext } from 'react';
+import { AuthContext } from '../hooks/AuthContext';
 
 
 
-export default function LoginScreen( {onLogin} ) {
+export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  const { setUser } = useContext(AuthContext);
 
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      console.log('Logged in current user: ', auth.currentUser);
 
       const user = auth.currentUser;
-      console.log('User:', user);
       if (user) {
         const token = await user.getIdToken();
-        console.log('User token:', token);
+        // console.log('User token:', token);
         await AsyncStorage.setItem('user_token', token);
-        onLogin(token); // calls the onLogin function passed as a prop --> goes to _layout.jsx, setUser(user)
+        setUser({ token });
       }
 
 

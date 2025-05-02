@@ -9,6 +9,7 @@ import { Image, View } from 'react-native';
 
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthContext } from '../hooks/AuthContext';
 // import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import LoginScreen from '../screens/LoginScreen';
@@ -28,7 +29,7 @@ export default function RootLayout() {
       const token = await AsyncStorage.getItem('user_token');
       if (token) {
         // Optional: validate token with backend or just trust it
-        setUser({ token }); // or call a function like setUserAsLoggedIn()
+        setUser({ token });
       }
       setLoadingAuth(false);
     };
@@ -60,6 +61,7 @@ export default function RootLayout() {
   }
 
   return (
+    <AuthContext.Provider value={{ user, setUser, loadingAuth }}>
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       {user ? (
         <>
@@ -69,8 +71,9 @@ export default function RootLayout() {
           <StatusBar style="auto" />
         </>
       ) : (
-        <LoginScreen onLogin={(user) => setUser(user)} /> // this passes in onLogin as a prop to LoginScreen
+        <LoginScreen /> // this passes in onLogin as a prop to LoginScreen
       )}
     </ThemeProvider>
+    </AuthContext.Provider>
   );
 }
