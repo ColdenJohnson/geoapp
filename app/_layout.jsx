@@ -6,13 +6,15 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
 
-import { onAuthStateChanged } from 'firebase/auth';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+// import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import LoginScreen from '../screens/LoginScreen';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
-SplashScreen.preventAutoHideAsync();
+
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -20,17 +22,31 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
+  useEffect(() => {
+    const restoreSession = async () => {
+      const token = await AsyncStorage.getItem('user_token');
+      if (token) {
+        // Optional: validate token with backend or just trust it
+        setUser({ token }); // or call a function like setUserAsLoggedIn()
+      }
+      setLoadingAuth(false);
+    };
+    restoreSession();
+  }, []);
+
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed. User:', user);
-      setUser(user);
-      setLoadingAuth(false); // signal that auth check is done
-    });
-    return unsubscribe;
-  }, []);
+  // useEffect(() => {
+  //   const unsubscribe = onAuthStateChanged(auth, (user) => {
+  //     console.log('Auth state changed. User:', user);
+  //     setUser(user);
+  //     setLoadingAuth(false); // signal that auth check is done
+  //   });
+  //   return unsubscribe;
+  // }, []);
+
+
 
   useEffect(() => {
     if (loaded && !loadingAuth) {

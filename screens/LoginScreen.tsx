@@ -5,7 +5,7 @@ import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 
-import AsyncStorage from '@react-native-async-storage/async-storage' // just figured out how to import -- now need to use it!
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 
 
@@ -21,10 +21,11 @@ export default function LoginScreen() {
       console.log('Logged in current user: ', auth.currentUser);
 
       const user = auth.currentUser;
+      console.log('User:', user);
       if (user) {
         const token = await user.getIdToken();
-        // console.log('SecureStore module:', SecureStore);
-        // await SecureStore.setItemAsync('user_token', token);
+        console.log('User token:', token);
+        await AsyncStorage.setItem('user_token', token);
       }
 
 

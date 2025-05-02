@@ -6,9 +6,9 @@ import { ThemedView } from '@/components/ThemedView';
 import { useFirebaseImage } from '@/hooks/useFirebaseImage';
 import { ImgDisplay } from '@/components/ImgDisplay';
 
-import { auth } from '../../config/firebase'; // adjust path as needed
-import { signOut } from 'firebase/auth'; 
 import { Button } from 'react-native';
+
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 
 export default function UserProfileScreen() {
@@ -39,7 +39,7 @@ export default function UserProfileScreen() {
         title="Sign Out"
         onPress={async () => {
           try {
-            // await auth.signOut();
+            await AsyncStorage.removeItem('user_token');
             console.log('User signed out');
           } catch (error) {
             console.error('Sign out failed:', error);
