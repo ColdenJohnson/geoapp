@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
-import { useNavigation } from 'expo-router'; // for navigation with create new challenge
+import { useRouter} from 'expo-router';
 
 import { newPhotoChallenge, addPhotoChallenge, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
 import { ImgFromUrl } from '../../components/ImgDisplay';
@@ -14,9 +14,9 @@ export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL // from .env file
-  const navigation = useNavigation();
   const [pins, setPins] = useState([]); // for all pins
   const [pinPhotoUrls, setPinPhotoUrls] = useState({});
+  const router = useRouter();
 
   
 
@@ -54,7 +54,8 @@ export default function HomeScreen() {
   async function handleCreateChallengePress() {
     const uploadResult = await new Promise((resolve) => {
       setUploadResolver(resolve); // resolver is stored globally
-      navigation.navigate('upload');
+      // navigation.navigate('upload');
+      router.push('/upload');
     });
   
     await newPhotoChallenge(location, uploadResult);
@@ -63,7 +64,7 @@ export default function HomeScreen() {
   async function handleAddPhotoToChallenge(pin) {
     const uploadResult = await new Promise((resolve) => {
       setUploadResolver(resolve);
-      navigation.navigate('upload');
+      router.push('/upload');
     });
   
     await addPhotoChallenge(pin._id, uploadResult);

@@ -33,13 +33,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name = "upload"
-        options={{
-          title: 'Upload',
-          tabBarIcon: ({ color, focused}) => <IconSymbol size={28} name={focused ? "square.and.arrow.up": "square.and.arrow.up.fill"} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

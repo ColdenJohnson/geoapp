@@ -15,8 +15,8 @@ import DeviceInfo from 'react-native-device-info';
 import storage from '@react-native-firebase/storage';
 // import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
 import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
-import { resolveUpload } from '../../lib/promiseStore';
-import { useNavigation } from 'expo-router';
+import { resolveUpload } from '../lib/promiseStore';
+import { useRouter } from 'expo-router';
 
 export default function Upload() {
   const [facing, setFacing] = useState ("back");
@@ -24,6 +24,7 @@ export default function Upload() {
   const [uri, setUri] = useState(null);
   const [mode, setMode] = useState("picture");
   const ref = useRef(null);
+  const router = useRouter();
 
 
   // For Dev
@@ -100,6 +101,7 @@ export default function Upload() {
     });
     setUri(photo?.uri);
     console.log('Photo captured:', photo?.uri);
+
   };
 
   const renderPicture = () => {
@@ -113,9 +115,14 @@ export default function Upload() {
         <Button onPress={() => setUri(null)} title="Take another picture" />
         <Button 
   onPress={async () => {
-    const downloadURL = await uploadImage(uri); 
-    resolveUpload(downloadURL); // fulfill the original Promise
-    // ideally would like to navigate back
+    try {
+      const downloadURL = await uploadImage(uri); 
+      resolveUpload(downloadURL); // fulfill the original Promise
+      router.back();
+    } catch (err) {
+      console.error('Error uploading image:', err);
+    }
+    // TODO: make this loading screen not slow
   }}
   title="Upload picture"
 />
