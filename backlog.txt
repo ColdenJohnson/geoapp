@@ -31,3 +31,6 @@ should use async storage to cache things (like pins, etc.): https://reactnative.
 
 Use mongoose in mongodb:
     -much better
+
+
+Add Jest for automatic testing/unit tests jest-expo already a package in package.json. Just need to make a new folder called tests and then make some unit tests with assertions.

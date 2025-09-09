@@ -7,7 +7,7 @@ import axios from 'axios';
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useRouter} from 'expo-router';
 
-import { newPhotoChallenge, addPhotoChallenge, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
+import { newChallenge, addPhoto, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
 import { ImgFromUrl } from '../../components/ImgDisplay';
 
 export default function HomeScreen() {
@@ -39,11 +39,14 @@ export default function HomeScreen() {
       // this is a bit fucked because /view_photo_for_each_pin/:pin_id actually returns an array of photo urls of exactly length 1 (filtered in the backend)
       const photoMap = {};
       for (const pin of allPins) {
-        if (pin?._id) {
-          const photos = await fetchPhotosByPinId(pin._id);
-          if (photos.length > 0) {
-            photoMap[pin._id] = photos[0].file_url; // currently just displays the first photo in the array. should do other logic.
-          }
+        // if (pin?._id) {
+        //   const photos = await fetchPhotosByPinId(pin._id);
+        //   if (photos.length > 0) {
+        //     photoMap[pin._id] = photos[0].file_url; // currently just displays the first photo in the array. should do other logic.
+        //   }
+        // }
+        if (pin?._id && pin.most_recent_photo_url) {
+          photoMap[pin._id] = pin.most_recent_photo_url;
         }
       }
       setPinPhotoUrls(photoMap);
@@ -58,7 +61,7 @@ export default function HomeScreen() {
       router.push('/upload');
     });
   
-    await newPhotoChallenge(location, uploadResult);
+    await newChallenge(location, uploadResult);
   }
 
   async function handleAddPhotoToChallenge(pin) {
@@ -67,7 +70,7 @@ export default function HomeScreen() {
       router.push('/upload');
     });
   
-    await addPhotoChallenge(pin._id, uploadResult);
+    await addPhoto(pin._id, uploadResult);
   }
 
   
@@ -89,8 +92,9 @@ export default function HomeScreen() {
       >
         <Text style={styles.buttonText}>+</Text>
         </Pressable>
-    <MapView 
-        style={styles.map} 
+    <MapView
+        key={`map-${pins.length} > 0`} // This line fixes map loading in without pins. It forces a remount of the map when pins.length changes to greater than 0.
+        style={styles.map}
         showsUserLocation={true}
         
         region={
@@ -152,6 +156,7 @@ export default function HomeScreen() {
       </Callout>
     </Marker> ) : null
   ))}
+
       </MapView>
     </View>
     </View>
