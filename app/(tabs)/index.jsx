@@ -34,7 +34,7 @@ export default function HomeScreen() {
       setPins(allPins);
 
       // Fetch first photo for each pin
-      // this probably should be its own function for clarity
+      // TODO: this probably should be its own function for clarity
       // this will also eventually be limited to a certain user radius, or only on click/something similar
       // this is a bit fucked because /view_photo_for_each_pin/:pin_id actually returns an array of photo urls of exactly length 1 (filtered in the backend)
       const photoMap = {};

@@ -48,3 +48,8 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+
+
+
+## NOTE: On restart, may need to edit .env.local file to get new EXPO_PUBLIC_BASE_URL. Instructions to do this located in .env.local file. This will resolve error with axios "Failed to fetch location pins"
