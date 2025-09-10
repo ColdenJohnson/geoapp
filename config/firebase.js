@@ -9,12 +9,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCcrsL_8rLBcl5XlBbgCXFfePEZvdnz60E",
-  authDomain: "geoapp-fb.firebaseapp.com",
-  projectId: "geoapp-fb",
-  storageBucket: 'geoapp-fb.appspot.com', // geoapp-fb.appspot.com" or "geoapp-fb.firebasestorage.app" -- unsure which
-  messagingSenderId: "834952308922",
-  appId: "1:834952308922:web:e9b54816f1e1b2cb03fa83",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase
