@@ -2,7 +2,8 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getStorage } from "firebase/storage";
-import { getAuth } from "firebase/auth";
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 
@@ -11,7 +12,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyCcrsL_8rLBcl5XlBbgCXFfePEZvdnz60E",
   authDomain: "geoapp-fb.firebaseapp.com",
   projectId: "geoapp-fb",
-  storageBucket: "geoapp-fb.firebasestorage.app", // geoapp-fb.appspot.com" or "geoapp-fb.firebasestorage.app" -- unsure which
+  storageBucket: 'geoapp-fb.appspot.com', // geoapp-fb.appspot.com" or "geoapp-fb.firebasestorage.app" -- unsure which
   messagingSenderId: "834952308922",
   appId: "1:834952308922:web:e9b54816f1e1b2cb03fa83",
 };
@@ -21,7 +22,9 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp(); // if 
 
 const storage = getStorage(app);
 export { storage };
-export const auth = getAuth(app);
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage),
+});
 
 
 console.log('Initializing Firebase...');

@@ -49,7 +49,7 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <TextInput
-        placeholder="Email"
+        placeholder="Email. Note this screen is controlled under screens > loginscreen.jsx"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
