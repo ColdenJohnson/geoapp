@@ -9,27 +9,43 @@ import { ImgDisplay } from '@/components/ImgDisplay';
 import { Button } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useContext } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
+
+import { fetchUsersByUID, updateUserProfile } from '@/lib/api';
 
 
 export default function UserProfileScreen() {
-  const { setUser } = useContext(AuthContext);
+  const { user, setUser } = useContext(AuthContext);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user) {
+        const userProfile = await fetchUsersByUID(user.uid);
+        setProfile(userProfile);
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [user]);
+
   return (
     <ThemedView style={styles.container}>
       {/* Profile Header -- could have a different profile picture */}
       <ThemedView style={styles.header}>
       {/* This line allows for a profile photo -- need to put this back in. */}
       {/* <ImgDisplay filename="michael_cornell_sexy.jpeg" style={styles.profileImage} />  */} 
-        <ThemedText type="title">Colden Johnson</ThemedText>
-        <ThemedText type="subtitle">user@example.com</ThemedText>
+        <ThemedText type="title">{profile?.display_name || "No Display Name set"}</ThemedText>
+        <ThemedText type="subtitle">{profile?.email || "noemail"}</ThemedText> 
       </ThemedView>
 
       {/* Profile Details */}
       <ThemedView style={styles.details}>
         <ThemedText type="defaultSemiBold">About Me</ThemedText>
         <ThemedText>
-          This is a placeholder for the user's bio or additional information.
+          {profile?.bio || "No bio set."}
         </ThemedText>
       </ThemedView>
 
