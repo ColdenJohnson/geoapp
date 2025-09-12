@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';  // TODO: for production prefer expo-secure-store for tokens, or similar -- asyncstorage is plain key-value
 import { AuthContext } from '../hooks/AuthContext';
 import { onAuthStateChanged, onIdTokenChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -50,6 +50,7 @@ export default function RootLayout() {
     };
   }, []);
 
+  // Show splash screen while loading / not authorized
   if (!loaded || loadingAuth) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
