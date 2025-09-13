@@ -10,6 +10,7 @@ import { onAuthStateChanged, onIdTokenChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import LoginScreen from '../screens/LoginScreen';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { fetchUsersByUID } from '@/lib/api';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -20,12 +21,14 @@ export default function RootLayout() {
 
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [ profile, setProfile] = useState(null);
 
   // Listen for user sign-in/out and keep ID token fresh
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
       if (!fbUser) {
         setUser(null);
+        setProfile(null);
         setLoadingAuth(false);
         await AsyncStorage.removeItem('user_token');
         return;
@@ -50,6 +53,24 @@ export default function RootLayout() {
     };
   }, []);
 
+
+  // Fetch Mongo UserProfile when we have a signed-in user
+  useEffect(() => {
+    (async function loadProfile() {
+      if (!user?.uid) {
+        setProfile(null);
+        console.log('No UID, so no profile')
+        return;
+      }
+      try {
+        const p = await fetchUsersByUID(user.uid);
+        setProfile(p);
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    })();
+  }, [user?.uid]);
+
   // Show splash screen while loading / not authorized
   if (!loaded || loadingAuth) {
     return (
@@ -60,7 +81,7 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loadingAuth }}>
+    <AuthContext.Provider value={{ user, setUser, profile, setProfile, loadingAuth }}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         {user ? (
           <>

@@ -1,4 +1,4 @@
-import { StyleSheet, Image } from 'react-native';
+import { StyleSheet, Image, TextInput, TouchableOpacity } from 'react-native';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -12,47 +12,133 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 
-import { fetchUsersByUID, updateUserProfile } from '@/lib/api';
+import { updateUserProfile } from '@/lib/api';
 
+import emptyPfp from '@/assets/images/empty_pfp.png';
+import * as ImagePicker from 'expo-image-picker';
+import storage from '@react-native-firebase/storage';
 
 export default function UserProfileScreen() {
-  const { user, setUser } = useContext(AuthContext);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, setUser, profile, setProfile } = useContext(AuthContext);
+  const [editing, setEditing] = useState(false);
+  const [formDisplayName, setFormDisplayName] = useState('');
+  const [formBio, setFormBio] = useState('');
+  const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (user) {
-        const userProfile = await fetchUsersByUID(user.uid);
-        setProfile(userProfile);
-        setLoading(false);
+  const beginEdit = () => {
+    if (!profile) return;
+    setFormDisplayName(profile.display_name || '');
+    setFormBio(profile.bio || '');
+    setEditing(true);
+  };
+
+  const saveEdits = async () => {
+    if (!user?.uid) return;
+    const updates = { display_name: formDisplayName, bio: formBio };
+    const updated = await updateUserProfile(user.uid, updates); // Actually save updates to backend
+    if (updated) {
+      setProfile(updated);
+      setEditing(false);
+    }
+  };
+
+  async function uploadImageToStorage(uri) {
+    // Minimal: no compression here; reuse your existing pattern from Upload tab
+    const resp = await fetch(uri);
+    const blob = await resp.blob();
+    const safeName = uri.split('/').pop() || 'photo.jpg';
+    const fileName = `profile_${user?.uid || 'anon'}_${Date.now()}_${safeName}`;
+    const ref = storage().ref(`profile_photos/${fileName}`);
+    await ref.put(blob);
+    const downloadURL = await ref.getDownloadURL();
+    return downloadURL;
+  }
+
+  const pickAndUploadPhoto = async () => {
+    try {
+      if (!user?.uid) return;
+      // Ask for permission
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== 'granted') {
+        console.warn('Media library permission not granted');
+        return;
       }
-    };
-    fetchProfile();
-  }, [user]);
+      // Launch picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.9,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset?.uri) return;
+      setUploading(true);
+
+      const url = await uploadImageToStorage(asset.uri);
+
+      // Persist to your profile
+      const updated = await updateUserProfile(user.uid, { photo_url: url });
+      if (updated) setProfile(updated);
+    } catch (e) {
+      console.error('Profile photo upload failed:', e);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
       {/* Profile Header -- could have a different profile picture */}
       <ThemedView style={styles.header}>
-      {/* This line allows for a profile photo -- need to put this back in. */}
-      {/* <ImgDisplay filename="michael_cornell_sexy.jpeg" style={styles.profileImage} />  */} 
-        <ThemedText type="title">{profile?.display_name || "No Display Name set"}</ThemedText>
-        <ThemedText type="subtitle">{profile?.email || "noemail"}</ThemedText> 
+      <TouchableOpacity onPress={pickAndUploadPhoto} disabled={uploading}>
+        <Image
+          source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
+          style={styles.profileImage}
+        />
+      </TouchableOpacity>
+      {editing ? (
+        <TextInput
+          style={styles.input}
+          placeholder={profile?.display_name || "Enter display name"}
+          value={formDisplayName}
+          onChangeText={setFormDisplayName}
+        />
+      ) : (
+        <ThemedText type="title">{profile?.display_name || 'No Display Name set'}</ThemedText>
+      )}
+      <ThemedText type="subtitle">{profile?.email || "noemail"}</ThemedText> 
       </ThemedView>
 
       {/* Profile Details */}
       <ThemedView style={styles.details}>
         <ThemedText type="defaultSemiBold">About Me</ThemedText>
-        <ThemedText>
-          {profile?.bio || "No bio set."}
-        </ThemedText>
+        {editing ? (
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            placeholder="Bio"
+            value={formBio}
+            onChangeText={setFormBio}
+            multiline
+            numberOfLines={4}
+          />
+        ) : (
+          <ThemedText>
+            {profile?.bio || 'No bio set.'}
+          </ThemedText>
+        )}
       </ThemedView>
 
       {/* Actions */}
       <ThemedView style={styles.actions}>
-        <ThemedText type="link">Edit Profile</ThemedText>
-        <ThemedText type="link">Settings</ThemedText>
+        {editing ? (
+          <>
+            <ThemedText type="link" onPress={saveEdits}>Save</ThemedText>
+            <ThemedText type="link" onPress={() => setEditing(false)}>Cancel</ThemedText>
+          </>
+        ) : (
+          <ThemedText type="link" onPress={beginEdit}>Edit Settings</ThemedText>
+        )}
 
         {/* Sign Out button, theoretically. */}
       <Button
@@ -93,5 +179,18 @@ const styles = StyleSheet.create({
   },
   actions: {
     marginTop: 16,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignSelf: 'stretch',
+    marginTop: 8,
+  },
+  multiline: {
+    textAlignVertical: 'top',
+    minHeight: 100,
   },
 });

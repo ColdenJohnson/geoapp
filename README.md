@@ -53,3 +53,11 @@ Join our community of developers creating universal apps.
 
 
 ## NOTE: On restart, may need to edit .env.local file to get new EXPO_PUBLIC_BASE_URL. Instructions to do this located in .env.local file. This will resolve error with axios "Failed to fetch location pins"
+
+## When installing new packages:
+npx expo install __
+npx pod-install ios
+npx expo run   (ios)
+npx expo run --device
+
+npx expo start
