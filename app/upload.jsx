@@ -110,7 +110,7 @@ export default function Upload() {
         <Image
           source={{ uri }}
           contentFit="contain"
-          style={{ width: 300, aspectRatio: 3/4 }}
+          style={{ width: '100%', aspectRatio: 3/4 }}
         />
         <Button onPress={() => setUri(null)} title="Take another picture" />
         <Button 
@@ -234,6 +234,3 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
 });
-
-
-// import { Image } from "expo-image";

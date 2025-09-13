@@ -64,13 +64,15 @@ export default function HomeScreen() {
     await newChallenge(location, uploadResult);
   }
 
-  async function handleAddPhotoToChallenge(pin) {
-    const uploadResult = await new Promise((resolve) => {
-      setUploadResolver(resolve);
-      router.push('/upload');
-    });
+  // TODO: This logic is good, apply somewhere else
+  async function viewPhotoChallenge(pin) {
+    // const uploadResult = await new Promise((resolve) => {
+    //   setUploadResolver(resolve);
+    //   router.push('/upload');
+    // });
   
-    await addPhoto(pin._id, uploadResult);
+    // await addPhoto(pin._id, uploadResult);
+    router.push({pathname: '/view_photochallenge', params: { pinId: pin._id } });
   }
 
   
@@ -144,7 +146,7 @@ export default function HomeScreen() {
     >
       <Callout
         tooltip
-        onPress={() => handleAddPhotoToChallenge(pin)}
+        onPress={() => viewPhotoChallenge(pin)}
       >
         <View style={{ width: 150, height: 150, padding: 5, backgroundColor: 'white', borderRadius: 10, alignItems: 'center' }}>
           <ImgFromUrl 
@@ -182,14 +184,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 20,
     right: 20,
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'white',
-    borderRadius: 20,
+    borderRadius: 25,
     padding: 10,
     zIndex: 10,
     elevation: 10,
   },
   buttonText: {
-    fontSize: 24,
+    fontSize: 34,
+    lineHeight: 34,
     fontWeight: 'bold',
   },
 });
