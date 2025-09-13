@@ -4,6 +4,8 @@ import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { fetchPhotosByPinId, addPhoto } from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { setUploadResolver } from '../lib/promiseStore';
+import BottomBar from '@/components/ui/BottomBar';
+import { CTAButton } from '@/components/ui/Buttons';
 
 export default function ViewPhotoChallengeScreen() {
   const { pinId } = useLocalSearchParams();   // pinId comes from router params
@@ -77,16 +79,9 @@ export default function ViewPhotoChallengeScreen() {
       </View>
 
       {/* Bottom, always-on-screen action bar (not absolute) */}
-      <View style={styles.bottomBar}>
-        <View style={styles.bottomBarInner}>
-          <Pressable
-            onPress={uploadPhotoChallenge}
-            style={({ pressed }) => [styles.ctaButton, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.ctaText}>Upload Photo</Text>
-          </Pressable>
-        </View>
-      </View>
+      <BottomBar>
+        <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} />
+      </BottomBar>
 
       {/* Fullscreen image viewer */}
       <Modal visible={viewerVisible} transparent={true} animationType="fade" onRequestClose={() => setViewerVisible(false)}>
@@ -119,46 +114,5 @@ const styles = StyleSheet.create({
   viewerImage: {
     width: '100%',
     height: '100%',
-  },
-  bottomBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E5E5EA',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
-    // subtle elevation/shadow so it sits visually above other content
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: -2 },
-    shadowRadius: 6,
-    elevation: 6,
-    zIndex: 10,
-  },
-  bottomBarInner: {
-    maxWidth: 720,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  ctaButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 28,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E6E6E6',
-    // pill-like shadow similar to Duolingo UI chip
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-  },
-  ctaText: {
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    color: '#1DA1F2',
   },
 });

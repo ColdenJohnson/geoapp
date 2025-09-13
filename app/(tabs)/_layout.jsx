@@ -36,7 +36,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "person.crop.circle": "person.crop.circle.fill"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "person.circle": "person.circle.fill"} color={color} />,
         }}
       />
     </Tabs>

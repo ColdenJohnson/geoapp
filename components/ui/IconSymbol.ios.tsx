@@ -1,3 +1,4 @@
+// This is where the tab icons themselves come from (for iOS). Stop deleting this file.
 import { SymbolView, SymbolViewProps, SymbolWeight } from 'expo-symbols';
 import { StyleProp, ViewStyle } from 'react-native';
 
