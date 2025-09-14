@@ -16,7 +16,7 @@ import storage from '@react-native-firebase/storage';
 // import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
 import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
 import { resolveUpload } from '../lib/promiseStore';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 export default function Upload() {
   const [facing, setFacing] = useState ("back");
@@ -25,6 +25,7 @@ export default function Upload() {
   const [mode, setMode] = useState("picture");
   const ref = useRef(null);
   const router = useRouter();
+  const { next } = useLocalSearchParams();
 
 
   // For Dev
@@ -118,7 +119,13 @@ export default function Upload() {
     try {
       const downloadURL = await uploadImage(uri); 
       resolveUpload(downloadURL); // fulfill the original Promise
-      router.back();
+      if (next) {
+        console.log('Navigating to next:', next);
+        router.push(String(next));
+      } else {
+        console.log('No next specified, going back');
+        router.back();
+      }
     } catch (err) {
       console.error('Error uploading image:', err);
     }

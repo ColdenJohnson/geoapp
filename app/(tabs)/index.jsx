@@ -55,14 +55,29 @@ export default function HomeScreen() {
   }, []);
 
   async function handleCreateChallengePress() {
-    const uploadResult = await new Promise((resolve) => {
-      setUploadResolver(resolve); // resolver is stored globally
-      // navigation.navigate('upload');
-      router.push('/upload');
+    // Prepare to receive the message BEFORE navigating
+    const messagePromise = new Promise((resolve) => {
+      const { setMessageResolver } = require('../../lib/promiseStore');
+      setMessageResolver(resolve);
     });
   
-    await newChallenge(location, uploadResult);
+    // Navigate to upload and tell it what the next screen is
+    const uploadResult = await new Promise((resolve) => {
+      setUploadResolver(resolve);
+      router.push({ pathname: '/upload', params: { next: '/enter_message' } });
+    });
+  
+    // Wait for the message (enter_message will resolve it)
+    const message = await messagePromise;
+  
+    // Create the challenge with both pieces
+    await newChallenge(location, uploadResult, message);
+    router.replace('/');
   }
+
+
+
+
 
   // TODO: This logic is good, apply somewhere else
   async function viewPhotoChallenge(pin) {
