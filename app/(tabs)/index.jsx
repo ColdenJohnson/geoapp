@@ -1,7 +1,8 @@
 import { Image, StyleSheet, Platform, View, Pressable, Text } from 'react-native';import MapView from 'react-native-maps';
 import {Marker, Callout} from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
@@ -10,6 +11,10 @@ import { useRouter} from 'expo-router';
 import { newChallenge, addPhoto, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
 import { ImgFromUrl } from '../../components/ImgDisplay';
 
+import BottomBar from '../../components/ui/BottomBar';
+import { CTAButton } from '../../components/ui/Buttons';
+import { getDistance } from 'geolib';
+
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -17,19 +22,44 @@ export default function HomeScreen() {
   const [pins, setPins] = useState([]); // for all pins
   const [pinPhotoUrls, setPinPhotoUrls] = useState({});
   const router = useRouter();
+  const mapRef = useRef(null);
+  const [didCenter, setDidCenter] = useState(false);
 
-  
+  const NEAR_THRESHOLD_METERS = 5; // "very close" threshold
+  const [nearestDistance, setNearestDistance] = useState(null);
+  const [isNear, setIsNear] = useState(false);
+  const [nearestPin, setNearestPin ] = useState(null);
+
+  // TODO: If there were many more pins, we would need pinsArr to be relatively smaller (returned within a radius)
+  function computeNearestPin(currentLocation, pinsArr) {
+    if (!currentLocation?.coords || !Array.isArray(pinsArr) || pinsArr.length === 0) return null;
+    const { latitude, longitude } = currentLocation.coords;
+    let bestDist = Infinity;
+    let bestPin = null;
+    for (const p of pinsArr) {
+      if (!p?.location) continue;
+      const d = getDistance(
+        { latitude, longitude },
+        { latitude: p.location.latitude, longitude: p.location.longitude }
+      );
+      if (d < bestDist) {
+        bestDist = d;
+        bestPin = p;
+      }
+    }
+    return Number.isFinite(bestDist) ? {pin: bestPin, distance: bestDist} : null;
+  }
+
+  function handleTakePhoto() {
+    if (!isNear || !nearestPin) {
+      console.log(`Not within ${NEAR_THRESHOLD_METERS}, nearest pin is ${nearestDistance} meters away!`); // nearestPin
+      return;
+    }
+    viewPhotoChallenge(nearestPin);
+  }
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
-        return;
-      }
-      let currentLocation = await Location.getCurrentPositionAsync({});
-      setLocation(currentLocation);
-
       const allPins = await fetchAllLocationPins();
       setPins(allPins);
 
@@ -50,9 +80,59 @@ export default function HomeScreen() {
         }
       }
       setPinPhotoUrls(photoMap);
-
     })();
   }, []);
+
+  // TODO: To make location watcher run app-wide, put this into a LocationProvider at app root/some type of API (not sure, figure this out)
+  // TODO: UseFocusEffect vs UseEffect -- usefocuseffect stops when user navigates away from the screen
+  const watchRef = useRef(null);
+  useFocusEffect( 
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setErrorMsg('Permission to access location was denied');
+          return;
+        }
+        const sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
+          (loc) => { if (!cancelled) setLocation(loc); }
+        );
+        watchRef.current = sub;
+      })();
+      return () => {
+        cancelled = true;
+        if (watchRef.current) {
+          watchRef.current.remove();
+          watchRef.current = null;
+        }
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    const d = computeNearestPin(location, pins);
+    setNearestDistance(d);
+    setIsNear(typeof d === 'number' && d <= NEAR_THRESHOLD_METERS);
+
+    const nearest = computeNearestPin(location, pins);
+    setNearestDistance(nearest ? nearest.distance : null);
+    setNearestPin(nearest ? nearest.pin : null);
+    setIsNear(!!nearest && nearest.distance <= NEAR_THRESHOLD_METERS);
+    if (!didCenter && location?.coords && mapRef.current) {
+      mapRef.current.animateToRegion(
+        {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        },
+        500
+      );
+      setDidCenter(true);
+    }
+  }, [location, pins, didCenter]);
 
   async function handleCreateChallengePress() {
     // Prepare to receive the message BEFORE navigating
@@ -75,18 +155,7 @@ export default function HomeScreen() {
     router.replace('/');
   }
 
-
-
-
-
-  // TODO: This logic is good, apply somewhere else
   async function viewPhotoChallenge(pin) {
-    // const uploadResult = await new Promise((resolve) => {
-    //   setUploadResolver(resolve);
-    //   router.push('/upload');
-    // });
-  
-    // await addPhoto(pin._id, uploadResult);
     router.push({pathname: '/view_photochallenge', params: { pinId: pin._id } });
   }
 
@@ -113,37 +182,25 @@ export default function HomeScreen() {
         key={`map-${pins.length} > 0`} // This line fixes map loading in without pins. It forces a remount of the map when pins.length changes to greater than 0.
         style={styles.map}
         showsUserLocation={true}
-        
-        region={
-          location
-            ? {
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-                latitudeDelta: 1,
-                longitudeDelta: 1,
-              }
-            : {
-          latitude: 31.416077,
-          longitude: 120.901488,
-          latitudeDelta: 1,
-          longitudeDelta: 1,
-        }
-
-      
-      }
+        ref={mapRef}
+        initialRegion={{
+          latitude: location?.coords?.latitude ?? 31.416077,
+          longitude: location?.coords?.longitude ?? 120.901488,
+          latitudeDelta: location?.coords ? 0.01 : 0.5,
+          longitudeDelta: location?.coords ? 0.01 : 0.5,
+        }}
       >
 
-{/* user location: note error handling should be added in here in case no location exists */}
-{location?.coords && (
+{/* Optional explicit user marker (MapView already showsUserLocation) */}
+{false && location?.coords && (
   <Marker
     coordinate={{
-      latitude: location.coords.latitude + 1,
-      longitude: location.coords.longitude + 1,
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
     }}
     title="Your Location"
     description="You are here"
     pinColor="blue"
-    // onPress={() => create_new_challenge(location)}
   />
 )}
 
@@ -175,6 +232,15 @@ export default function HomeScreen() {
   ))}
 
       </MapView>
+      <BottomBar>
+        <CTAButton
+          title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}
+          onPress={handleTakePhoto}
+          // Gray when pin not near
+          style={!isNear ? { borderColor: '#E6E6E6', backgroundColor: '#F2F2F2' } : undefined}
+          textStyle={!isNear ? { color: '#9CA3AF' } : undefined}
+        />
+      </BottomBar>
     </View>
     </View>
   );
@@ -192,7 +258,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   map_container: {
-    height: '100%',
+    height: '90%',
     width: '100%',
   },
   button: {

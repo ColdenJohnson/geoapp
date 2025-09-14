@@ -1,15 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, Text, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { fetchPhotosByPinId, addPhoto } from '@/lib/api';
+import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId } from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
+import TopBar from '@/components/ui/TopBar';
 
 export default function ViewPhotoChallengeScreen() {
   const { pinId } = useLocalSearchParams();   // pinId comes from router params
   const [photos, setPhotos] = useState([]);
+  const [ challengeDetails, setChallengeDetails ] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -22,6 +24,8 @@ export default function ViewPhotoChallengeScreen() {
     try {
       const data = await fetchPhotosByPinId(pinId);
       setPhotos(Array.isArray(data) ? data : []);
+      const challengeData = await fetchChallengeByPinId(pinId);
+      setChallengeDetails(challengeData);
     } catch (e) {
       console.error('Failed to fetch photos for pin', pinId, e);
       setPhotos([]);
@@ -57,7 +61,7 @@ export default function ViewPhotoChallengeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ title: 'Photo Challenge' }} />
+      <TopBar title={`Photo Challenge ${pinId}`} subtitle={`Prompt: ${challengeDetails?.message}`} />
       <View style={styles.container}>
         {loading ? (
           <ActivityIndicator size="large" style={{ marginTop: 24 }} />
