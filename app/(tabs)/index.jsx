@@ -15,6 +15,8 @@ import BottomBar from '../../components/ui/BottomBar';
 import { CTAButton } from '../../components/ui/Buttons';
 import { getDistance } from 'geolib';
 
+import { Toast, useToast } from '../../components/ui/Toast';
+
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -25,10 +27,11 @@ export default function HomeScreen() {
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
 
-  const NEAR_THRESHOLD_METERS = 5; // "very close" threshold
+  const NEAR_THRESHOLD_METERS = 1; // "very close" threshold
   const [nearestDistance, setNearestDistance] = useState(null);
   const [isNear, setIsNear] = useState(false);
   const [nearestPin, setNearestPin ] = useState(null);
+  const { message: toastMessage, show: showToast} = useToast(3000);
 
   // TODO: If there were many more pins, we would need pinsArr to be relatively smaller (returned within a radius)
   function computeNearestPin(currentLocation, pinsArr) {
@@ -53,6 +56,7 @@ export default function HomeScreen() {
   function handleTakePhoto() {
     if (!isNear || !nearestPin) {
       console.log(`Not within ${NEAR_THRESHOLD_METERS}, nearest pin is ${nearestDistance} meters away!`); // nearestPin
+      showToast(nearestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! Currently ${nearestDistance}m away.` : `No challenge nearby!`);
       return;
     }
     viewPhotoChallenge(nearestPin);
@@ -232,6 +236,7 @@ export default function HomeScreen() {
   ))}
 
       </MapView>
+      <Toast message={toastMessage} bottomOffset={120} />
       <BottomBar>
         <CTAButton
           title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}
