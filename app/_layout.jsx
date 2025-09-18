@@ -41,10 +41,13 @@ export default function RootLayout() {
 
     const unsubToken = onIdTokenChanged(auth, async (fbUser) => {
       if (fbUser) {
-        const idToken = await fbUser.getIdToken();
-        setUser((u) => (u ? { ...u, idToken } : u));
-        await AsyncStorage.setItem('user_token', idToken);
-      }
+      const idToken = await fbUser.getIdToken();
+        setUser((prev) => {
+        const base = prev && prev.uid ? prev : { uid: fbUser.uid, email: fbUser.email ?? null }; // if prev (user) is null, then create new base from fbUser
+        return { ...base, idToken };
+      });
+      await AsyncStorage.setItem('user_token', idToken);
+    }
     });
 
     return () => {
@@ -58,8 +61,8 @@ export default function RootLayout() {
   useEffect(() => {
     (async function loadProfile() {
       if (!user?.uid) {
+        console.log('No UID, so no profile, ', user);
         setProfile(null);
-        console.log('No UID, so no profile')
         return;
       }
       try {
