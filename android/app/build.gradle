@@ -86,9 +86,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.coldenjohnson.geoapp'
+    namespace 'com.coldenjohnson.geode'
     defaultConfig {
-        applicationId 'com.coldenjohnson.geoapp'
+        applicationId 'com.coldenjohnson.geode'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

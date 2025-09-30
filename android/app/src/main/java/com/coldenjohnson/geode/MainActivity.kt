@@ -1,4 +1,4 @@
-package com.coldenjohnson.geoapp
+package com.coldenjohnson.geode
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

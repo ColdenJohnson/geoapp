@@ -1,4 +1,4 @@
-package com.coldenjohnson.geoapp
+package com.coldenjohnson.geode
 
 import android.app.Application
 import android.content.res.Configuration
