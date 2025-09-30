@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, Text, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId } from '@/lib/api';
+import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId, fetchDuelByPinId, voteDuel } from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
@@ -16,6 +16,8 @@ export default function ViewPhotoChallengeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState(null);
+  const [duelPhotos, setDuelPhotos] = useState([]);
+  const [duelLoading, setDuelLoading] = useState(false);
   const router = useRouter();
 
   async function load() {
@@ -35,6 +37,8 @@ export default function ViewPhotoChallengeScreen() {
   }
 
   useEffect(() => { load(); }, [pinId]);
+  // Auto-load a duel pair for the header section when pin changes
+  useEffect(() => { loadDuel(); }, [pinId]);
 
     useFocusEffect(
     useCallback(() => {
@@ -49,6 +53,22 @@ export default function ViewPhotoChallengeScreen() {
     await load();
     setRefreshing(false);
   };
+
+  async function loadDuel() {
+    if (!pinId) return;
+    setDuelLoading(true);
+    try {
+      const pair = await fetchDuelByPinId(pinId);
+      setDuelPhotos(Array.isArray(pair) ? pair : []);
+    } finally {
+      setDuelLoading(false);
+    }
+  }
+
+  async function choose(winnerId, loserId) {
+    await voteDuel({ pinId, winnerPhotoId: winnerId, loserPhotoId: loserId });
+    await loadDuel(); // get next pair
+  }
 
     async function uploadPhotoChallenge() {
     const uploadResult = await new Promise((resolve) => {
@@ -78,6 +98,31 @@ export default function ViewPhotoChallengeScreen() {
                 </Pressable>
               </View>
             )}
+            ListHeaderComponent={
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8, marginLeft: 4 }}>Quick Vote</Text>
+                <View style={{ padding: 8, backgroundColor: '#fff', borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ddd' }}>
+                  {duelPhotos?.length >= 2 ? (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <Pressable style={{ flex: 1 }} onPress={() => choose(duelPhotos[0]._id, duelPhotos[1]._id)}>
+                        <Image source={{ uri: duelPhotos[0].file_url }} style={{ width: '100%', height: 160, borderRadius: 8 }} />
+                        <Text style={{ textAlign: 'center', marginTop: 4 }}>Pick</Text>
+                        <Text style={{ textAlign: 'center', color: '#666' }}>Elo: {Number.isFinite(duelPhotos[0]?.elo) ? duelPhotos[0].elo : -1}</Text>
+                      </Pressable>
+                      <Pressable style={{ flex: 1 }} onPress={() => choose(duelPhotos[1]._id, duelPhotos[0]._id)}>
+                        <Image source={{ uri: duelPhotos[1].file_url }} style={{ width: '100%', height: 160, borderRadius: 8 }} />
+                        <Text style={{ textAlign: 'center', marginTop: 4 }}>Pick</Text>
+                        <Text style={{ textAlign: 'center', color: '#666' }}>Elo: {Number.isFinite(duelPhotos[1]?.elo) ? duelPhotos[1].elo : -1}</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={{ alignItems: 'center', padding: 16 }}>
+                      <Text style={{ color: '#666', marginBottom: 8 }}>{duelLoading ? 'Loading pair...' : 'Not enough photos to start a duel'}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            }
           />
         )}
       </View>
