@@ -1,20 +1,20 @@
 {
   "expo": {
-    "name": "geoapp",
-    "slug": "geoapp",
+    "name": "Geode",
+    "slug": "geode",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "geodeapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.coldenjohnson.geoapp",
+      "bundleIdentifier": "com.coldenjohnson.geode",
       "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
-      "package": "com.coldenjohnson.geoapp",
+      "package": "com.coldenjohnson.geode",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -30,8 +30,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "static"
     },
     "plugins": [
       "expo-router",
