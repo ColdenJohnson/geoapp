@@ -17,7 +17,8 @@
         "NSPhotoLibraryUsageDescription": "Geode needs access to your photos so you can select and upload challenge submissions and update your profile photo.",
         "NSPhotoLibraryAddUsageDescription": "Geode can save photos you capture back to your library if you choose.",
         "NSLocationWhenInUseUsageDescription": "Geode uses your location to show nearby photo challenges and enable on‑site submissions.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSHumanReadableCopyright": "Copyright © 2025 Colden Johnson. All rights reserved."
       }
     },
     "android": {
