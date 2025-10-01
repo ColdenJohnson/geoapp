@@ -13,6 +13,7 @@ import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 
 import { updateUserProfile } from '@/lib/api';
+import { getBaseUrl, pingBackend } from '@/lib/api';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
@@ -24,6 +25,7 @@ export default function UserProfileScreen() {
   const [formDisplayName, setFormDisplayName] = useState('');
   const [formBio, setFormBio] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [apiStatus, setApiStatus] = useState(null); // debug: show backend reachability
 
   const beginEdit = () => {
     if (!profile) return;
@@ -86,6 +88,19 @@ export default function UserProfileScreen() {
       setUploading(false);
     }
   };
+
+  // Debug banner to reveal API base URL and health
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await pingBackend();
+        setApiStatus(res);
+        console.log('API base URL:', getBaseUrl(), 'ping:', res);
+      } catch (e) {
+        setApiStatus({ ok: false, error: e?.message || String(e), baseUrl: getBaseUrl() });
+      }
+    })();
+  }, []);
 
   return (
     <ThemedView style={styles.container}>
@@ -154,6 +169,13 @@ export default function UserProfileScreen() {
           }
         }}
       />
+      </ThemedView>
+      {/* Temporary debug banner; safe to remove after verification */}
+      <ThemedView style={{ marginTop: 16, padding: 8, backgroundColor: '#FFF8E1', borderRadius: 6, borderWidth: 1, borderColor: '#EEE' }}>
+        <ThemedText style={{ fontSize: 12 }}>Base URL: {getBaseUrl()}</ThemedText>
+        <ThemedText style={{ fontSize: 12 }}>
+          Health: {apiStatus ? (apiStatus.ok ? `OK ${apiStatus.status}` : `ERROR ${apiStatus.error}`) : 'Checking...'}
+        </ThemedText>
       </ThemedView>
     </ThemedView>
   );
