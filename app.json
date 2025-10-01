@@ -11,7 +11,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coldenjohnson.geode",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Geode needs camera access to take and upload challenge photos.",
+        "NSPhotoLibraryUsageDescription": "Geode needs access to your photos so you can select and upload challenge submissions and update your profile photo.",
+        "NSPhotoLibraryAddUsageDescription": "Geode can save photos you capture back to your library if you choose.",
+        "NSLocationWhenInUseUsageDescription": "Geode uses your location to show nearby photo challenges and enable on‑site submissions."
+      }
     },
     "android": {
       "package": "com.coldenjohnson.geode",
@@ -22,7 +28,6 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_MEDIA_LOCATION"
@@ -46,17 +51,15 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone",
-          "recordAudioAndroid": true
+          "cameraPermission": "Geode needs camera access to take challenge photos.",
+          "recordAudioAndroid": false
         }
       ],
       [
         "react-native-vision-camera",
         {
-          "cameraPermissionText": "$(PRODUCT_NAME) needs access to your Camera.",
-          "enableMicrophonePermission": true,
-          "microphonePermissionText": "$(PRODUCT_NAME) needs access to your Microphone."
+          "cameraPermissionText": "Geode needs camera access to take challenge photos.",
+          "enableMicrophonePermission": false
         }
       ],
       [
@@ -68,8 +71,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
-          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
+          "photosPermission": "Geode needs access to your photos so you can select and upload submissions.",
+          "savePhotosPermission": "Geode can save photos you capture back to your library if you choose.",
           "isAccessMediaLocationEnabled": true
         }
       ],

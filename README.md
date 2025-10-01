@@ -38,3 +38,5 @@ npx expo run   (ios)
 npx expo run --device
 
 npx expo start
+
+## Publishing to app store process:
