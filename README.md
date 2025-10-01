@@ -20,7 +20,16 @@ In the output, you'll find options to open the app in a
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
 
-## NOTE: On restart, may need to edit .env.local file to get new EXPO_PUBLIC_BASE_URL. Instructions to do this located in .env.local file. This will resolve error with axios "Failed to fetch location pins"
+## Backend base URL configuration
+
+- Local/dev: set `EXPO_PUBLIC_BASE_URL` in `.env.local` (already present). Example: `http://192.168.x.x:3500`.
+- Production builds: set `EXPO_PUBLIC_BASE_URL` in `.env.production`. This value is embedded at build time. Example currently:
+
+```
+EXPO_PUBLIC_BASE_URL=https://geode-backend-834952308922.us-central1.run.app
+```
+
+If the backend address changes, update the respective file and restart the dev server (for dev) or rebuild the app (for production).
 
 ## When installing new packages:
 npx expo install __
