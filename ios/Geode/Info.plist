@@ -54,7 +54,7 @@
     <key>NSCameraUsageDescription</key>
     <string>Geode needs camera access to take and upload challenge photos.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Geode uses your location to show nearby photo challenges and enable on‑site submissions.</string>
+    <string>Geode uses your location to show nearby photo challenges and enable on site submissions.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Geode can save photos you capture back to your library if you choose.</string>
     <key>NSPhotoLibraryUsageDescription</key>
