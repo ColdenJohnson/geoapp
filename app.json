@@ -99,7 +99,8 @@
       },
       "eas": {
         "projectId": "989ab6c0-22dc-49e9-b645-317038eb89e9"
-      }
+      },
+      "apiBaseUrl": "https://geode-backend-834952308922.us-central1.run.app"
     },
     "owner": "coldenjohnson"
   }
