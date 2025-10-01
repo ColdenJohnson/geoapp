@@ -16,7 +16,8 @@
         "NSCameraUsageDescription": "Geode needs camera access to take and upload challenge photos.",
         "NSPhotoLibraryUsageDescription": "Geode needs access to your photos so you can select and upload challenge submissions and update your profile photo.",
         "NSPhotoLibraryAddUsageDescription": "Geode can save photos you capture back to your library if you choose.",
-        "NSLocationWhenInUseUsageDescription": "Geode uses your location to show nearby photo challenges and enable on‑site submissions."
+        "NSLocationWhenInUseUsageDescription": "Geode uses your location to show nearby photo challenges and enable on‑site submissions.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
