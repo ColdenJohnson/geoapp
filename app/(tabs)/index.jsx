@@ -27,7 +27,7 @@ export default function HomeScreen() {
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
 
-  const NEAR_THRESHOLD_METERS = 1; // "very close" threshold
+  const NEAR_THRESHOLD_METERS = 2; // "very close" threshold
   const [nearestDistance, setNearestDistance] = useState(null);
   const [isNear, setIsNear] = useState(false);
   const [nearestPin, setNearestPin ] = useState(null);
