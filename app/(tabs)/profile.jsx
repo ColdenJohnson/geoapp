@@ -6,13 +6,13 @@ import { ThemedView } from '@/components/ThemedView';
 import { useFirebaseImage } from '@/hooks/useFirebaseImage';
 import { ImgDisplay } from '@/components/ImgDisplay';
 
-import { Button } from 'react-native';
+import { Button, Alert } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 
-import { updateUserProfile } from '@/lib/api';
+import { updateUserProfile, deleteMyAccount } from '@/lib/api';
 import { getBaseUrl, pingBackend } from '@/lib/api';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
@@ -167,6 +167,33 @@ export default function UserProfileScreen() {
           } catch (error) {
             console.error('Sign out failed:', error);
           }
+        }}
+      />
+      <Button
+        color="#D9534F"
+        title="Delete Account"
+        onPress={() => {
+          Alert.alert(
+            'Delete Account',
+            'This will permanently delete your account. This cannot be undone.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: async () => {
+                  try {
+                    const resp = await deleteMyAccount();
+                    if (resp?.success) {
+                      await AsyncStorage.removeItem('user_token');
+                      setUser(null);
+                      console.log('Account deleted');
+                    } else {
+                      console.error('Delete failed:', resp?.error || 'Unknown');
+                    }
+                  } catch (e) {
+                    console.error('Delete account error:', e);
+                  }
+                } }
+            ]
+          );
         }}
       />
       </ThemedView>
