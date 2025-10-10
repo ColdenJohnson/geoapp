@@ -64,10 +64,10 @@ export default function Upload() {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>We need your permission to show the camera</Text>
-        <Button title="Grant Permission" onPress={requestPermission} />
+        <Text style={styles.message}>We need your permission to show the camera for Geode photo upload to work properly.</Text>
+        <Button title="Continue" onPress={requestPermission} />
       </View>
-    )
+    );
   }
 
   async function uploadImage(uri) {
