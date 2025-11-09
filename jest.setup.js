@@ -1,3 +1,8 @@
+import { config as loadEnv } from 'dotenv';
+
+loadEnv({ path: '.env' });
+loadEnv({ path: '.env.local', override: true });
+
 import '@testing-library/jest-native/extend-expect';
 
 // Ensure React and core primitives are available for mock implementations
