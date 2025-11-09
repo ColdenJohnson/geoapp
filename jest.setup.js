@@ -4,8 +4,6 @@ import '@testing-library/jest-native/extend-expect';
 import React from 'react';
 import { View } from 'react-native';
 
-console.log("Testing file imported successfully.");
-
 // Provide a lightweight router mock for navigation flows
 jest.mock('expo-router', () => {
   const routerMock = {
