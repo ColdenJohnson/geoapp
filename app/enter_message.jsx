@@ -63,7 +63,7 @@ export default function EnterMessageScreen() {
 
         <BottomBar>
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            {/* <SecondaryButton title="Cancel" onPress={onCancel} style={{ flex: 1 }} /> */}
+            <SecondaryButton title="Cancel" onPress={onCancel} style={{ flex: 1 }} />
             <CTAButton title="Save" onPress={onSave} style={{ flex: 1 }} />
           </View>
         </BottomBar>

@@ -31,6 +31,10 @@ export function CTAButton({ title, onPress, variant = 'primary', style, textStyl
   );
 }
 
+export function SecondaryButton(props) {
+  return <CTAButton {...props} variant="secondary" />;
+}
+
 const styles = StyleSheet.create({
   base: {
     alignItems: 'center',

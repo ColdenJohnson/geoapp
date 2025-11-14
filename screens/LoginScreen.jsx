@@ -3,11 +3,11 @@ import React, { useState } from 'react';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
 import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth } from '@/config/firebase';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react';
-import { AuthContext } from '../hooks/AuthContext';
+import { AuthContext } from '@/hooks/AuthContext';
 
 
 

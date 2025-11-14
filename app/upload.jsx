@@ -4,7 +4,6 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
-import * as ImageManipulator from "expo-image-manipulator";
 import { useState, useRef, useEffect } from 'react'
 import { Button, Pressable, StyleSheet, Text, View, Platform } from "react-native";
 import { AntDesign } from "@expo/vector-icons";
@@ -12,16 +11,17 @@ import { Feather } from "@expo/vector-icons";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import DeviceInfo from 'react-native-device-info';
-import storage from '@react-native-firebase/storage';
+// import storage from '@react-native-firebase/storage';
 // import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
-import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
+// import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
 import { resolveUpload } from '../lib/promiseStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { uploadImage } from '@/lib/uploadHelpers';
 
-export default function Upload() {
+export default function Upload({ initialUri = null }) {
   const [facing, setFacing] = useState ("back");
   const [permission, requestPermission] = useCameraPermissions()
-  const [uri, setUri] = useState(null);
+  const [uri, setUri] = useState(initialUri);
   const [mode, setMode] = useState("picture");
   const ref = useRef(null);
   const router = useRouter();
@@ -70,27 +70,6 @@ export default function Upload() {
     );
   }
 
-  async function uploadImage(uri) {
-    try {
-      const compressedUri = await compressImage(uri);
-
-      const response = await fetch(compressedUri);
-      const blob = await response.blob();
-
-      const fileName = `${Date.now()}_${uri.split('/').pop()}`; // Extract the file name from the URI
-      const ref = storage().ref(`images/${fileName}`);
-      await ref.put(blob);
-
-      const downloadURL = await ref.getDownloadURL();
-      console.log('Download URL:', downloadURL); 
-      return downloadURL;
-
-    } catch (err) {
-      console.error('Upload failed:', err);
-      throw err;
-    }
-  }
-
   const toggleFacing = () => {
     setFacing((prev) => (prev === "back" ? "front" : "back"));
   };
@@ -136,15 +115,6 @@ export default function Upload() {
       </View>
     );
   };
-
-  async function compressImage(uri) {
-    const result = await ImageManipulator.manipulateAsync(
-      uri,
-      [{resize: { width: 1024 }}],
-      { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG }
-    );
-    return result.uri;
-  }
 
   const renderCamera = () => {
   return (
