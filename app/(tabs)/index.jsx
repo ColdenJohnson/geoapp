@@ -1,7 +1,8 @@
-import { Image, StyleSheet, Platform, View, Pressable, Text } from 'react-native';import MapView from 'react-native-maps';
+import { Image, StyleSheet, Platform, View, Pressable, Text } from 'react-native';
+import MapView from 'react-native-maps';
 import {Marker, Callout} from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 
@@ -9,6 +10,7 @@ import { setUploadResolver } from '../../lib/promiseStore'; // for upload promis
 import { useRouter} from 'expo-router';
 
 import { newChallenge, addPhoto, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
+import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
 import { ImgFromUrl } from '../../components/ImgDisplay';
 
 import BottomBar from '../../components/ui/BottomBar';
@@ -26,6 +28,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
+  const [userIsInMainland, setUserIsInMainland] = useState(false);
 
   const NEAR_THRESHOLD_METERS = 2; // "very close" threshold
   const [nearestDistance, setNearestDistance] = useState(null);
@@ -86,6 +89,57 @@ export default function HomeScreen() {
       setPinPhotoUrls(photoMap);
     })();
   }, []);
+
+  const userCoords = useMemo(() => {
+    if (
+      typeof location?.coords?.latitude === 'number' &&
+      typeof location?.coords?.longitude === 'number'
+    ) {
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+    }
+    return null;
+  }, [location]);
+
+  useEffect(() => {
+    if (userCoords) {
+      setUserIsInMainland(
+        isInMainlandChina(userCoords.latitude, userCoords.longitude)
+      );
+    } else {
+      setUserIsInMainland(false);
+    }
+  }, [userCoords]);
+
+  const pinsForDisplay = useMemo(() => {
+    if (!Array.isArray(pins)) {
+      return [];
+    }
+
+    return pins.map((pin) => {
+      const baseCoords = pin?.location;
+      if (!baseCoords) {
+        return pin;
+      }
+
+      const needsConversion = shouldConvertToGcj02(userCoords, pin, {
+        userIsInMainland,
+        pinIsInMainland:
+          typeof pin?.pinIsInMainland === 'boolean'
+            ? pin.pinIsInMainland
+            : undefined,
+      });
+
+      return {
+        ...pin,
+        displayCoords: needsConversion
+          ? wgs84ToGcj02(baseCoords.latitude, baseCoords.longitude)
+          : baseCoords,
+      };
+    });
+  }, [pins, userCoords, userIsInMainland]);
 
   // TODO: To make location watcher run app-wide, put this into a LocationProvider at app root/some type of API (not sure, figure this out)
   // TODO: UseFocusEffect vs UseEffect -- usefocuseffect stops when user navigates away from the screen
@@ -209,13 +263,13 @@ export default function HomeScreen() {
 )}
 
 
-  {pins.map((pin) => (
+  {pinsForDisplay.map((pin) => (
     pin?.location ? (
     <Marker
       key={pin._id}
       coordinate={{
-        latitude: pin.location.latitude,
-        longitude: pin.location.longitude,
+        latitude: pin.displayCoords?.latitude ?? pin.location.latitude,
+        longitude: pin.displayCoords?.longitude ?? pin.location.longitude,
       }}
       title={"Photo Challenge"}
       description={pin.message || 'Geo Pin'}
