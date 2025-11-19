@@ -39,3 +39,4 @@ app-example
 
 geoapp/google-services.json
 geoapp/GoogleService-Info.plist
+*.diff
