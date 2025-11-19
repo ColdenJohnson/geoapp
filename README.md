@@ -40,3 +40,5 @@ npx expo run --device
 npx expo start
 
 ## Publishing to app store process:
+Set device to iOS device (arm 64)
+Do Product -> Archive
