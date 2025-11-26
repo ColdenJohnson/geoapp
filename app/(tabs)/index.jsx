@@ -298,7 +298,7 @@ export default function HomeScreen() {
 
       </MapView>
       <Toast message={toastMessage} bottomOffset={120} />
-      // TODO: BottomBar pushed off screen, no longer visible. Need to add dynamic scaling for devices
+      {/* TODO: BottomBar pushed off screen, no longer visible. Need to add dynamic scaling for devices */}
       <BottomBar>
         <CTAButton
           title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}
