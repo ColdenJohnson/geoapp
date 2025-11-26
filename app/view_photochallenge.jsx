@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, Text, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId, fetchDuelByPinId, voteDuel } from '@/lib/api';
@@ -7,6 +7,7 @@ import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
 import TopBar from '@/components/ui/TopBar';
+import { usePalette } from '@/hooks/usePalette';
 
 export default function ViewPhotoChallengeScreen() {
   const { pinId } = useLocalSearchParams();   // pinId comes from router params
@@ -19,6 +20,8 @@ export default function ViewPhotoChallengeScreen() {
   const [duelPhotos, setDuelPhotos] = useState([]);
   const [duelLoading, setDuelLoading] = useState(false);
   const router = useRouter();
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   async function load() {
     if (!pinId) return;
@@ -84,7 +87,7 @@ export default function ViewPhotoChallengeScreen() {
       <TopBar title={`Photo Challenge ${pinId}`} subtitle={`Prompt: ${challengeDetails?.message}`} />
       <View style={styles.container}>
         {loading ? (
-          <ActivityIndicator size="large" style={{ marginTop: 24 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 24 }} />
         ) : (
           <FlatList
             data={photos}
@@ -100,24 +103,24 @@ export default function ViewPhotoChallengeScreen() {
             )}
             ListHeaderComponent={
               <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8, marginLeft: 4 }}>Quick Vote</Text>
-                <View style={{ padding: 8, backgroundColor: '#fff', borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ddd' }}>
+                <Text style={[styles.quickVoteTitle, { marginLeft: 4 }]}>Quick Vote</Text>
+                <View style={styles.quickVoteCard}>
                   {duelPhotos?.length >= 2 ? (
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <Pressable style={{ flex: 1 }} onPress={() => choose(duelPhotos[0]._id, duelPhotos[1]._id)}>
                         <Image source={{ uri: duelPhotos[0].file_url }} style={{ width: '100%', height: 160, borderRadius: 8 }} />
-                        <Text style={{ textAlign: 'center', marginTop: 4 }}>Pick</Text>
-                        <Text style={{ textAlign: 'center', color: '#666' }}>Elo: {Number.isFinite(duelPhotos[0]?.elo) ? duelPhotos[0].elo : -1}</Text>
+                        <Text style={[styles.quickVoteAction, { marginTop: 4 }]}>Pick</Text>
+                        <Text style={styles.quickVoteMeta}>Elo: {Number.isFinite(duelPhotos[0]?.elo) ? duelPhotos[0].elo : -1}</Text>
                       </Pressable>
                       <Pressable style={{ flex: 1 }} onPress={() => choose(duelPhotos[1]._id, duelPhotos[0]._id)}>
                         <Image source={{ uri: duelPhotos[1].file_url }} style={{ width: '100%', height: 160, borderRadius: 8 }} />
-                        <Text style={{ textAlign: 'center', marginTop: 4 }}>Pick</Text>
-                        <Text style={{ textAlign: 'center', color: '#666' }}>Elo: {Number.isFinite(duelPhotos[1]?.elo) ? duelPhotos[1].elo : -1}</Text>
+                        <Text style={[styles.quickVoteAction, { marginTop: 4 }]}>Pick</Text>
+                        <Text style={styles.quickVoteMeta}>Elo: {Number.isFinite(duelPhotos[1]?.elo) ? duelPhotos[1].elo : -1}</Text>
                       </Pressable>
                     </View>
                   ) : (
                     <View style={{ alignItems: 'center', padding: 16 }}>
-                      <Text style={{ color: '#666', marginBottom: 8 }}>{duelLoading ? 'Loading pair...' : 'Not enough photos to start a duel'}</Text>
+                      <Text style={{ color: colors.textMuted, marginBottom: 8 }}>{duelLoading ? 'Loading pair...' : 'Not enough photos to start a duel'}</Text>
                     </View>
                   )}
                 </View>
@@ -142,26 +145,38 @@ export default function ViewPhotoChallengeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F7F7' },
-  container: { flex: 1, backgroundColor: 'white' },
-  listContent: { padding: 12, gap: 12, paddingBottom: 96 },
-  card: {
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
-  },
-  image: { width: '100%', height: 220 },
-  viewerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  viewerImage: {
-    width: '100%',
-    height: '100%',
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: colors.bg },
+    container: { flex: 1, backgroundColor: colors.surface },
+    listContent: { padding: 12, gap: 12, paddingBottom: 96 },
+    card: {
+      borderRadius: 10,
+      overflow: 'hidden',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+    },
+    image: { width: '100%', height: 220 },
+    quickVoteTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8, color: colors.text },
+    quickVoteCard: {
+      padding: 8,
+      backgroundColor: colors.bg,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    quickVoteAction: { textAlign: 'center', color: colors.text },
+    quickVoteMeta: { textAlign: 'center', color: colors.textMuted },
+    viewerBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    viewerImage: {
+      width: '100%',
+      height: '100%',
+    },
+  });
+}

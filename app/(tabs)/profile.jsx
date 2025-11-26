@@ -9,7 +9,7 @@ import { ImgDisplay } from '@/components/ImgDisplay';
 import { Button, Alert } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 
 import { updateUserProfile, deleteMyAccount } from '@/lib/api';
@@ -17,6 +17,7 @@ import { updateUserProfile, deleteMyAccount } from '@/lib/api';
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
+import { usePalette } from '@/hooks/usePalette';
 
 export default function UserProfileScreen() {
   const { user, setUser, profile, setProfile } = useContext(AuthContext);
@@ -24,6 +25,8 @@ export default function UserProfileScreen() {
   const [formDisplayName, setFormDisplayName] = useState('');
   const [formBio, setFormBio] = useState('');
   const [uploading, setUploading] = useState(false);
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const beginEdit = () => {
     if (!profile) return;
@@ -103,6 +106,9 @@ export default function UserProfileScreen() {
           placeholder={profile?.display_name || "Enter display name"}
           value={formDisplayName}
           onChangeText={setFormDisplayName}
+          placeholderTextColor={colors.textMuted}
+          selectionColor={colors.primary}
+          cursorColor={colors.text}
         />
       ) : (
         <ThemedText type="title">{profile?.display_name || 'No Display Name set'}</ThemedText>
@@ -121,6 +127,9 @@ export default function UserProfileScreen() {
             onChangeText={setFormBio}
             multiline
             numberOfLines={4}
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.primary}
+            cursorColor={colors.text}
           />
         ) : (
           <ThemedText>
@@ -186,38 +195,43 @@ export default function UserProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 5,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 16,
-  },
-  details: {
-    marginBottom: 24,
-  },
-  actions: {
-    marginTop: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignSelf: 'stretch',
-    marginTop: 8,
-  },
-  multiline: {
-    textAlignVertical: 'top',
-    minHeight: 100,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 5,
+      backgroundColor: colors.bg,
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    profileImage: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      marginBottom: 16,
+    },
+    details: {
+      marginBottom: 24,
+    },
+    actions: {
+      marginTop: 16,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      alignSelf: 'stretch',
+      marginTop: 8,
+      color: colors.text,
+      backgroundColor: colors.surface,
+    },
+    multiline: {
+      textAlignVertical: 'top',
+      minHeight: 100,
+    },
+  });
+}

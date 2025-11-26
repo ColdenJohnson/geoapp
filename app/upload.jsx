@@ -1,22 +1,18 @@
 import {
-  CameraMode,
-  CameraType,
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
-import { useState, useRef, useEffect } from 'react'
-import { Button, Pressable, StyleSheet, Text, View, Platform } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
-import { Feather } from "@expo/vector-icons";
+import { useState, useRef, useMemo } from 'react'
+import { Button, Pressable, StyleSheet, Text, View } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import DeviceInfo from 'react-native-device-info';
 // import storage from '@react-native-firebase/storage';
 // import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
 // import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
 import { resolveUpload } from '../lib/promiseStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { uploadImage } from '@/lib/uploadHelpers';
+import { usePalette } from '@/hooks/usePalette';
 
 export default function Upload({ initialUri = null }) {
   const [facing, setFacing] = useState ("back");
@@ -26,6 +22,8 @@ export default function Upload({ initialUri = null }) {
   const ref = useRef(null);
   const router = useRouter();
   const { next } = useLocalSearchParams();
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
 
   // For Dev
@@ -144,18 +142,13 @@ export default function Upload({ initialUri = null }) {
               ]}
             >
               <View
-                style={[
-                  styles.shutterBtnInner,
-                  {
-                    backgroundColor: "black",
-                  },
-                ]}
+                style={styles.shutterBtnInner}
               />
             </View>
           )}
         </Pressable>
         <Pressable onPress={toggleFacing}>
-          <FontAwesome6 name="rotate-left" size={32} color="black" />
+          <FontAwesome6 name="rotate-left" size={32} color={colors.text} />
         </Pressable>
       </View>
     </View>
@@ -169,45 +162,50 @@ return (
 );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cameraContainer: {
-    width: "100%",
-    aspectRatio: 3 / 4,
-    overflow: "hidden", // clip anything outside 4:3
-    backgroundColor: "black", // optional, prevents weird edges
-  },
-  camera: {
-    flex: 1,
-  },
-  shutterContainer: {
-    position: "absolute",
-    bottom: 90,
-    left: 0,
-    width: "100%",
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 30,
-  },
-  shutterBtn: {
-    backgroundColor: "transparent",
-    borderWidth: 5,
-    borderColor: "black",
-    width: 85,
-    height: 85,
-    borderRadius: 45,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shutterBtnInner: {
-    width: 70,
-    height: 70,
-    borderRadius: 50,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+    },
+    message: { color: colors.text, textAlign: 'center', marginBottom: 12 },
+    cameraContainer: {
+      width: "100%",
+      aspectRatio: 3 / 4,
+      overflow: "hidden", // clip anything outside 4:3
+      backgroundColor: "black", // optional, prevents weird edges
+    },
+    camera: {
+      flex: 1,
+    },
+    shutterContainer: {
+      position: "absolute",
+      bottom: 90,
+      left: 0,
+      width: "100%",
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: 30,
+    },
+    shutterBtn: {
+      backgroundColor: "transparent",
+      borderWidth: 5,
+      borderColor: colors.text,
+      width: 85,
+      height: 85,
+      borderRadius: 45,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    shutterBtnInner: {
+      width: 70,
+      height: 70,
+      borderRadius: 50,
+      backgroundColor: colors.bg,
+    },
+  });
+}

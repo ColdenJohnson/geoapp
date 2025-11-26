@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Platform, View, Pressable, Text } from 'react-native';
+import { Image, StyleSheet, Platform, View, Pressable, Text, SafeAreaView, useWindowDimensions } from 'react-native';
 import MapView from 'react-native-maps';
 import {Marker, Callout} from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -18,6 +18,7 @@ import { CTAButton } from '../../components/ui/Buttons';
 import { getDistance } from 'geolib';
 
 import { Toast, useToast } from '../../components/ui/Toast';
+import { usePalette } from '@/hooks/usePalette';
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
@@ -35,6 +36,8 @@ export default function HomeScreen() {
   const [isNear, setIsNear] = useState(false);
   const [nearestPin, setNearestPin ] = useState(null);
   const { message: toastMessage, show: showToast} = useToast(3000);
+  const { height: screenHeight } = useWindowDimensions();
+  const isSmallScreen = screenHeight < 700;
 
   // TODO: If there were many more pins, we would need pinsArr to be relatively smaller (returned within a radius)
   function computeNearestPin(currentLocation, pinsArr) {
@@ -217,16 +220,20 @@ export default function HomeScreen() {
     router.push({pathname: '/view_photochallenge', params: { pinId: pin._id } });
   }
 
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   
   return (
     <View
       headerBackgroundColor={{ light: '#DCDCDC', dark: '#1D3D47' }}
+      style={{ flex: 1, backgroundColor: colors.bg }}
       >
 
     {/* If breaking during deployment, it is because it needs an API https://docs.expo.dev/versions/latest/sdk/map-view/ 
     Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps
     */}
-    <View style={styles.map_container}>
+    <View style={[styles.map_container, isSmallScreen && styles.map_containerSmall]}>
     <Pressable // button to create new challenge
         style={({ pressed }) => [
           styles.button, 
@@ -278,7 +285,7 @@ export default function HomeScreen() {
         tooltip
         onPress={() => viewPhotoChallenge(pin)}
       >
-        <View style={{ width: 150, height: 150, padding: 5, backgroundColor: 'white', borderRadius: 10, alignItems: 'center' }}>
+        <View style={{ width: 150, height: 150, padding: 5, backgroundColor: colors.bg, borderRadius: 10, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
           <ImgFromUrl 
             url={pinPhotoUrls[pin._id]}
             style={{ width: '100%', height: '100%' }}
@@ -296,8 +303,8 @@ export default function HomeScreen() {
           title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}
           onPress={handleTakePhoto}
           // Gray when pin not near
-          style={!isNear ? { borderColor: '#E6E6E6', backgroundColor: '#F2F2F2' } : undefined}
-          textStyle={!isNear ? { color: '#9CA3AF' } : undefined}
+          style={!isNear ? { borderColor: colors.border, backgroundColor: colors.surface } : undefined}
+          textStyle={!isNear ? { color: colors.textMuted } : undefined}
         />
       </BottomBar>
     </View>
@@ -305,38 +312,59 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 32
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  map_container: {
-    height: '90%',
-    width: '100%',
-  },
-  button: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    width: 50,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'white',
-    borderRadius: 25,
-    padding: 10,
-    zIndex: 10,
-    elevation: 10,
-  },
-  buttonText: {
-    fontSize: 34,
-    lineHeight: 34,
-    fontWeight: 'bold',
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    titleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      padding: 32
+    },
+    map: {
+      width: '100%',
+      height: '100%',
+    },
+    map_container: {
+      flex: 1,
+      width: '100%',
+      backgroundColor: colors.bg,
+    },
+    map_containerSmall: {
+      paddingHorizontal: 8,
+      paddingTop: 6,
+      paddingBottom: 6,
+    },
+    button: {
+      position: 'absolute',
+      top: 20,
+      right: 20,
+      width: 50,
+      height: 50,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+      borderRadius: 25,
+      padding: 10,
+      zIndex: 10,
+      elevation: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    buttonText: {
+      fontSize: 34,
+      lineHeight: 34,
+      fontWeight: 'bold',
+      color: colors.text,
+    },
+    takePhotoButton: { width: '100%' },
+    bottomBarSmall: {
+      paddingHorizontal: 10,
+      paddingTop: 6,
+      paddingBottom: 10,
+    },
+  });
+}

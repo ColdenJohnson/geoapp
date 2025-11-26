@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -6,12 +6,15 @@ import TopBar from '@/components/ui/TopBar';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
 import { fetchGlobalDuel, voteGlobalDuel } from '@/lib/api';
+import { usePalette } from '@/hooks/usePalette';
 
 export default function GlobalVoteScreen() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const isActiveRef = useRef(false);
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const loadPair = useCallback(async () => {
     if (!isActiveRef.current) return;
@@ -71,7 +74,7 @@ export default function GlobalVoteScreen() {
       <View style={styles.container}>
         {loading ? (
           <View style={styles.centered}>
-            <ActivityIndicator size="large" />
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : photos.length < 2 ? (
           <View style={styles.centered}>
@@ -121,23 +124,25 @@ export default function GlobalVoteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F7F7F7' },
-  container: { flex: 1, padding: 16 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: '#666', fontSize: 16, textAlign: 'center', paddingHorizontal: 12 },
-  duelRow: { flexDirection: 'row', gap: 12, flex: 1 },
-  photoCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#ddd',
-    overflow: 'hidden',
-  },
-  photoPressed: { opacity: 0.9 },
-  photo: { width: '100%', height: undefined, aspectRatio: 3 / 4 },
-  meta: { padding: 12, gap: 4 },
-  metaTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  metaDetail: { fontSize: 14, color: '#555', textAlign: 'center' },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: colors.bg },
+    container: { flex: 1, padding: 16, backgroundColor: colors.surface },
+    centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    emptyText: { color: colors.textMuted, fontSize: 16, textAlign: 'center', paddingHorizontal: 12 },
+    duelRow: { flexDirection: 'row', gap: 12, flex: 1 },
+    photoCard: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    photoPressed: { opacity: 0.9 },
+    photo: { width: '100%', height: undefined, aspectRatio: 3 / 4 },
+    meta: { padding: 12, gap: 4 },
+    metaTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center', color: colors.text },
+    metaDetail: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
+  });
+}

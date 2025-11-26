@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
 import { View, TextInput, Button, Text, StyleSheet } from 'react-native';
@@ -8,6 +8,7 @@ import { auth } from '@/config/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react';
 import { AuthContext } from '@/hooks/AuthContext';
+import { usePalette } from '@/hooks/usePalette';
 
 
 
@@ -17,6 +18,8 @@ export default function LoginScreen() {
   const [errorMsg, setErrorMsg] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const { setUser } = useContext(AuthContext);
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleLogin = async () => {
     try {
@@ -55,6 +58,9 @@ export default function LoginScreen() {
         autoCapitalize="none"
         keyboardType="email-address"
         style={styles.input}
+        placeholderTextColor={colors.textMuted}
+        selectionColor={colors.primary}
+        cursorColor={colors.text}
       />
       <TextInput
         placeholder="Password"
@@ -62,6 +68,9 @@ export default function LoginScreen() {
         onChangeText={setPassword}
         secureTextEntry
         style={styles.input}
+        placeholderTextColor={colors.textMuted}
+        selectionColor={colors.primary}
+        cursorColor={colors.text}
       />
       {isRegistering ? (
         <Button title="Register" onPress={handleRegister} />
@@ -70,7 +79,7 @@ export default function LoginScreen() {
       )}
             <Text
         onPress={() => setIsRegistering(!isRegistering)}
-        style={{ color: 'blue', marginTop: 16 }}
+        style={{ color: colors.primary, marginTop: 16 }}
       >
         {isRegistering ? 'Already have an account? Log in' : 'No account? Register'}
       </Text>
@@ -80,19 +89,24 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    padding: 24,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  input: {
-    height: 40,
-    borderBottomWidth: 1,
-    marginBottom: 20,
-  },
-  error: {
-    color: 'red',
-    marginTop: 8,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      padding: 24,
+      flex: 1,
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+    },
+    input: {
+      height: 44,
+      borderBottomWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 20,
+      color: colors.text,
+    },
+    error: {
+      color: colors.danger,
+      marginTop: 8,
+    },
+  });
+}

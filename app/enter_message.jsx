@@ -6,17 +6,18 @@ import { useRouter } from 'expo-router';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
 
-import * as Palette from '@/theme/palette';              // light only (no provider yet)
+import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii } from '@/theme/tokens';
 
 import { resolveMessage } from '../lib/promiseStore';
 
-const colors = Palette.light;
 const MAX_LEN = 200;
 
 export default function EnterMessageScreen() {
   const [message, setMessage] = useState('');
   const router = useRouter();
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const remaining = useMemo(() => MAX_LEN - message.length, [message]); // character counter
 
@@ -72,32 +73,33 @@ export default function EnterMessageScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { flex: 1, padding: spacing.lg },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  input: {
-    height: 120,
-    // flex: 1,
-    fontSize: 16,
-    lineHeight: 22,
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.text,
-  },
-  counter: {
-    marginTop: spacing.sm,
-    alignSelf: 'flex-end',
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  counterOver: { color: colors.danger },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    content: { flex: 1, padding: spacing.lg },
+    title: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: spacing.md,
+    },
+    input: {
+      height: 120,
+      fontSize: 16,
+      lineHeight: 22,
+      backgroundColor: colors.surface,
+      borderRadius: radii.md,
+      padding: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.text,
+    },
+    counter: {
+      marginTop: spacing.sm,
+      alignSelf: 'flex-end',
+      fontSize: 12,
+      color: colors.textMuted,
+    },
+    counterOver: { color: colors.danger },
+  });
+}
