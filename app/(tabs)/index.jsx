@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useRouter} from 'expo-router';
@@ -221,6 +222,22 @@ export default function HomeScreen() {
   }
 
   const colors = usePalette();
+  const handleCenterOnUser = useCallback(() => {
+    if (!userCoords || !mapRef.current) return;
+    const centerCoords = userIsInMainland
+      ? wgs84ToGcj02(userCoords.latitude, userCoords.longitude)
+      : userCoords;
+
+    mapRef.current.animateToRegion(
+      {
+        latitude: centerCoords.latitude,
+        longitude: centerCoords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      },
+      300
+    );
+  }, [userCoords, userIsInMainland]);
   const styles = useMemo(
     () => createStyles(colors, isSmallScreen),
     [colors, isSmallScreen]
@@ -242,6 +259,16 @@ export default function HomeScreen() {
       >
         <Text style={styles.buttonText}>+</Text>
         </Pressable>
+    <Pressable
+        style={({ pressed }) => [
+          styles.button,
+          styles.locateButton,
+          { opacity: pressed ? 0.5 : 1 }
+        ]}
+        onPress={handleCenterOnUser}
+      >
+        <MaterialIcons name="my-location" size={26} color={colors.text} />
+      </Pressable>
     <MapView
         key={`map-${pins.length} > 0`} // This line fixes map loading in without pins. It forces a remount of the map when pins.length changes to greater than 0.
         style={styles.map}
@@ -347,6 +374,9 @@ function createStyles(colors, isSmallScreen) {
       elevation: 10,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+    },
+    locateButton: {
+      top: 80,
     },
     buttonText: {
       fontSize: 34,
