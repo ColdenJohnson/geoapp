@@ -221,19 +221,18 @@ export default function HomeScreen() {
   }
 
   const colors = usePalette();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(
+    () => createStyles(colors, isSmallScreen),
+    [colors, isSmallScreen]
+  );
 
   
   return (
-    <View
-      headerBackgroundColor={{ light: '#DCDCDC', dark: '#1D3D47' }}
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      >
 
     {/* If breaking during deployment, it is because it needs an API https://docs.expo.dev/versions/latest/sdk/map-view/ 
     Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps
-    */}
-    <View style={[styles.map_container, isSmallScreen && styles.map_containerSmall]}>
+    */},
+    <View style={styles.map_container}>
     <Pressable // button to create new challenge
         style={({ pressed }) => [
           styles.button, 
@@ -298,7 +297,6 @@ export default function HomeScreen() {
 
       </MapView>
       <Toast message={toastMessage} bottomOffset={120} />
-      {/* TODO: BottomBar pushed off screen, no longer visible. Need to add dynamic scaling for devices */}
       <BottomBar>
         <CTAButton
           title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}
@@ -309,11 +307,10 @@ export default function HomeScreen() {
         />
       </BottomBar>
     </View>
-    </View>
   );
 }
 
-function createStyles(colors) {
+function createStyles(colors, isSmallScreen) {
   return StyleSheet.create({
     safeArea: {
       flex: 1,
@@ -327,17 +324,13 @@ function createStyles(colors) {
     },
     map: {
       width: '100%',
-      height: '100%',
+      // on small screens, let the map take up more space
+      flex: isSmallScreen ? 0.91 : 0.885,
     },
     map_container: {
       flex: 1,
       width: '100%',
       backgroundColor: colors.bg,
-    },
-    map_containerSmall: {
-      paddingHorizontal: 8,
-      paddingTop: 6,
-      paddingBottom: 6,
     },
     button: {
       position: 'absolute',
@@ -361,7 +354,6 @@ function createStyles(colors) {
       fontWeight: 'bold',
       color: colors.text,
     },
-    takePhotoButton: { width: '100%' },
     bottomBarSmall: {
       paddingHorizontal: 10,
       paddingTop: 6,

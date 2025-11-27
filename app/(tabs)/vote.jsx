@@ -127,7 +127,7 @@ export default function GlobalVoteScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.bg },
-    container: { flex: 1, padding: 16, backgroundColor: colors.surface },
+    container: { flex: 0.9, padding: 16, backgroundColor: colors.surface },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     emptyText: { color: colors.textMuted, fontSize: 16, textAlign: 'center', paddingHorizontal: 12 },
     duelRow: { flexDirection: 'row', gap: 12, flex: 1 },
