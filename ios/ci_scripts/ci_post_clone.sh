@@ -1,4 +1,4 @@
-#!/bin.bash
+#!/bin/sh
 set -euo pipefail
 
 echo "===== [CI] post-clone: install Node, npm deps, and CocoaPods ====="
