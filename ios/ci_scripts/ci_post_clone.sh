@@ -21,6 +21,10 @@ else
   npm install
 fi
 
+# Explicitly apply patch-package (even though postinstall should do it)
+echo "➡️ Applying patch-package patches..."
+npx patch-package
+
 echo "📦 [CI] Installing CocoaPods dependencies..."
 
 cd ios
