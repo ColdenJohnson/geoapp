@@ -1,7 +1,7 @@
 #!/bin/sh
 set -euo pipefail
 
-echo "🔧 [CI] Installing JS dependencies..."
+echo "[CI] Installing JS dependencies..."
 
 if [ -f yarn.lock ]; then
   echo "Using yarn..."
@@ -14,8 +14,8 @@ else
   npm install
 fi
 
-echo "📦 [CI] Installing CocoaPods dependencies..."
+echo "[CI] Installing CocoaPods dependencies..."
 cd ios
 pod install
 
-echo "✅ [CI] Dependencies ready for Xcode build."
+echo "[CI] Dependencies ready for Xcode build."
