@@ -32,12 +32,14 @@ EXPO_PUBLIC_BASE_URL=https://geode-backend-834952308922.us-central1.run.app
 If the backend address changes, update the respective file and restart the dev server (for dev) or rebuild the app (for production).
 
 ## When installing new packages:
-npx expo install __
-npx pod-install ios
-npx expo run   (ios)
-npx expo run --device
+`npx expo install __`
 
-npx expo start
+`npx pod-install ios`
+
+`npx expo run` & select `(ios)` or
+`npx expo run --device`
+
+After this process, the app can be started normally using `npx expo start`
 
 ## Publishing to app store process:
 Set device to iOS device (arm 64)
