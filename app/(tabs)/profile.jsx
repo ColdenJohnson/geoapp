@@ -191,19 +191,6 @@ export default function UserProfileScreen() {
           );
         }}
       />
-      {(__DEV__ || process.env.EXPO_PUSH_DEBUG === 'true') && (
-        <Button
-          title="Send test notification (dev only)"
-          color="#6C8CFF"
-          onPress={() =>
-            scheduleLocalTestNotification({
-              seconds: 10,
-              title: 'Local test notification',
-              body: 'This is a temporary dev-only push test. Remove when backend is live.',
-            })
-          }
-        />
-      )}
       </ThemedView>
     </ThemedView>
   );

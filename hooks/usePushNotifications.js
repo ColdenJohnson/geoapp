@@ -37,56 +37,66 @@ export function usePushNotifications(user) {
     let cancelled = false;
 
     async function registerAsync() {
-      if (!user?.uid) {
-        lastRegisteredToken.current = null;
-        return;
-      }
+      try {
+        if (!user?.uid) {
+          lastRegisteredToken.current = null;
+          return;
+        }
+        console.log('[push][client] Starting registration for uid=', user.uid);
 
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'default',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: '#FF231F7C',
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF231F7C',
+          });
+        }
+
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        if (finalStatus !== 'granted' || cancelled) {
+          console.log('Push notification permission not granted; skipping registration.');
+          return;
+        }
+        console.log('[push][client] Permission granted');
+
+        const projectId = resolveProjectId();
+        console.log('[push][client] Resolved projectId=', projectId);
+        const tokenResult = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
+        const expoPushToken = tokenResult?.data;
+        console.log('[push][client] Expo push token=', expoPushToken);
+        if (!expoPushToken || cancelled) return;
+
+        if (lastRegisteredToken.current === expoPushToken) return;
+
+        console.log('[push][client] Posting token to backend /register_push_token');
+        await registerPushToken({
+          token: expoPushToken,
+          platform: Platform.OS,
+          timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+          uid: user.uid,
         });
-      }
+        console.log('[push][client] Backend registration complete');
+        lastRegisteredToken.current = expoPushToken;
 
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus !== 'granted' || cancelled) {
-        console.log('Push notification permission not granted; skipping registration.');
-        return;
-      }
-
-      const projectId = resolveProjectId();
-      const tokenResult = await Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined
-      );
-      const expoPushToken = tokenResult?.data;
-      if (!expoPushToken || cancelled) return;
-
-      if (lastRegisteredToken.current === expoPushToken) return;
-
-      await registerPushToken({
-        token: expoPushToken,
-        platform: Platform.OS,
-        timezoneOffsetMinutes: new Date().getTimezoneOffset(),
-        uid: user.uid,
-      });
-      lastRegisteredToken.current = expoPushToken;
-
-      // Temporary local notification to validate UI without backend. Remove after backend wiring is verified.
-      if (shouldDebugSchedule() && !debugScheduledRef.current) {
-        debugScheduledRef.current = true;
-        await scheduleLocalTestNotification({
-          seconds: debugDelaySeconds,
-          title: 'Geode (local dev ping)',
-          body: 'This is a local-only test notification. Remove when backend pushes are live.',
-        });
+        // Temporary local notification to validate UI without backend. Remove after backend wiring is verified.
+        if (shouldDebugSchedule() && !debugScheduledRef.current) {
+          debugScheduledRef.current = true;
+          await scheduleLocalTestNotification({
+            seconds: debugDelaySeconds,
+            title: 'Geode (local dev ping)',
+            body: 'This is a local-only test notification. Remove when backend pushes are live.',
+          });
+        }
+      } catch (err) {
+        console.log('Push registration failed', err?.message || err, err?.stack);
       }
     }
 
