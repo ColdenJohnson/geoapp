@@ -66,6 +66,35 @@ jest.mock('expo-location', () => {
   };
 });
 
+// Notifications mock: prevent native calls while exposing listeners for assertions
+jest.mock('expo-notifications', () => {
+  const receivedListeners = [];
+  const responseListeners = [];
+
+  return {
+    setNotificationHandler: jest.fn(),
+    getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+    requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+    getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExpoPushToken-mock' })),
+    setNotificationChannelAsync: jest.fn(async () => {}),
+    addNotificationReceivedListener: jest.fn((cb) => {
+      receivedListeners.push(cb);
+      return { remove: jest.fn() };
+    }),
+    addNotificationResponseReceivedListener: jest.fn((cb) => {
+      responseListeners.push(cb);
+      return { remove: jest.fn() };
+    }),
+    scheduleNotificationAsync: jest.fn(async () => ({ id: 'local-debug-id' })),
+    AndroidImportance: { MAX: 'max' },
+    __mocks__: { receivedListeners, responseListeners },
+  };
+});
+
+jest.mock('expo-constants', () => ({
+  expoConfig: { extra: { eas: { projectId: 'mock-project-id' } } },
+}));
+
 // Use the recommended mock for Reanimated to avoid native dependency issues
 jest.mock('react-native-reanimated', () => {
   const Reanimated = require('react-native-reanimated/mock');

@@ -11,6 +11,7 @@ import { auth } from '../config/firebase';
 import LoginScreen from '../screens/LoginScreen';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { fetchUsersByUID } from '@/lib/api';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -73,6 +74,9 @@ export default function RootLayout() {
       }
     })();
   }, [user?.uid]);
+
+  // Register and refresh push notifications whenever a user is signed in.
+  usePushNotifications(user);
 
   // Show splash screen while loading / not authorized
   if (!loaded || loadingAuth) {
