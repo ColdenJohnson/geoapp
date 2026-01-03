@@ -12,6 +12,7 @@ import LoginScreen from '../screens/LoginScreen';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { fetchUsersByUID } from '@/lib/api';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -88,19 +89,21 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, profile, setProfile, loadingAuth }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        {user ? (
-          <>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </>
-        ) : (
-          <LoginScreen />
-        )}
-      </ThemeProvider>
-    </AuthContext.Provider>
+    <GestureHandlerRootView>
+      <AuthContext.Provider value={{ user, setUser, profile, setProfile, loadingAuth }}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          {user ? (
+            <>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              </Stack>
+              <StatusBar style="auto" />
+            </>
+          ) : (
+            <LoginScreen />
+          )}
+        </ThemeProvider>
+      </AuthContext.Provider>
+    </GestureHandlerRootView>
   );
 }
