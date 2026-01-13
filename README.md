@@ -19,6 +19,7 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+Note that both the host and device must both be connected to a VPN. The app will not load if the device cannot connect, and it will not populate pins if the host is not connected.
 
 ## Backend base URL configuration
 
