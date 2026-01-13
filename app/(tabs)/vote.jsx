@@ -21,13 +21,16 @@ export default function GlobalVoteScreen() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [animating, setAnimating] = useState(false);
   const [selectedCard, setSelectedCard] = useState(0);
   const isActiveRef = useRef(false);
-  const selectedRef = useRef(0);
 
   const selectedIndex = useSharedValue(0);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const dismissProgress = useSharedValue(0);
+  const winnerIndex = useSharedValue(-1);
+  const animatingVote = useSharedValue(false);
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -65,7 +68,6 @@ export default function GlobalVoteScreen() {
   const setActiveCard = useCallback(
     (index) => {
       const next = Math.max(0, Math.min(index, 1));
-      selectedRef.current = next;
       setSelectedCard(next);
       selectedIndex.value = next;
     },
@@ -74,7 +76,14 @@ export default function GlobalVoteScreen() {
 
   useEffect(() => {
     setActiveCard(0);
-  }, [photos, setActiveCard]);
+    selectedIndex.value = 0;
+    translateX.value = 0;
+    translateY.value = 0;
+    dismissProgress.value = 0;
+    winnerIndex.value = -1;
+    animatingVote.value = false;
+    setAnimating(false);
+  }, [photos, setActiveCard, selectedIndex, translateX, translateY, dismissProgress, winnerIndex, animatingVote]);
 
   const choose = useCallback(
     async (winnerId, loserId) => {
@@ -123,15 +132,31 @@ export default function GlobalVoteScreen() {
 
   const handleVote = useCallback(
     (idx) => {
-      if (loading || submitting) return;
-      const target = typeof idx === 'number' ? idx : selectedRef.current;
-      chooseByIndex(target);
+      if (loading || submitting || animating) return;
+      const target = typeof idx === 'number' ? idx : selectedIndex.value;
+      animatingVote.value = true;
+      setAnimating(true);
+      winnerIndex.value = target;
+      dismissProgress.value = 0;
+      dismissProgress.value = withTiming(
+        1,
+        { duration: 450 },
+        (finished) => {
+          if (finished) {
+            runOnJS(chooseByIndex)(target);
+          }
+          animatingVote.value = false;
+          winnerIndex.value = -1;
+          dismissProgress.value = 0;
+          runOnJS(setAnimating)(false);
+        }
+      );
     },
-    [chooseByIndex, loading, submitting]
+    [animating, animatingVote, chooseByIndex, dismissProgress, loading, selectedIndex, submitting, winnerIndex]
   );
 
   const panGesture = Gesture.Pan()
-    .enabled(photos.length >= 2 && !loading && !submitting)
+    .enabled(photos.length >= 2 && !loading && !submitting && !animating)
     .onUpdate((event) => {
       translateX.value = event.translationX;
       translateY.value = event.translationY;
@@ -142,7 +167,7 @@ export default function GlobalVoteScreen() {
       const absY = Math.abs(translationY);
 
       if (translationY < -SWIPE_VERTICAL_THRESHOLD && absY > absX) {
-        runOnJS(handleVote)(selectedRef.current);
+        runOnJS(handleVote)(selectedIndex.value);
       } else if (translationX > SWIPE_HORIZONTAL_THRESHOLD) {
         runOnJS(handleHorizontalSwitch)('left');
       } else if (translationX < -SWIPE_HORIZONTAL_THRESHOLD) {
@@ -150,6 +175,7 @@ export default function GlobalVoteScreen() {
       }
     })
     .onFinalize(() => {
+      if (animatingVote.value) return;
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
     });
@@ -187,6 +213,8 @@ export default function GlobalVoteScreen() {
                       selectedIndex={selectedIndex}
                       translateX={translateX}
                       translateY={translateY}
+                      winnerIndex={winnerIndex}
+                      dismissProgress={dismissProgress}
                     />
                   ))}
                 </View>
@@ -213,7 +241,7 @@ export default function GlobalVoteScreen() {
   );
 }
 
-function AnimatedPhotoCard({ photo, index, selectedIndex, translateX, translateY, styles }) {
+function AnimatedPhotoCard({ photo, index, selectedIndex, translateX, translateY, winnerIndex, dismissProgress, styles }) {
   const focus = useDerivedValue(
     () => withTiming(selectedIndex.value === index ? 1 : 0, { duration: 220 }),
     [selectedIndex, index]
@@ -227,8 +255,12 @@ function AnimatedPhotoCard({ photo, index, selectedIndex, translateX, translateY
       const restingOffsetX = index === 0 ? -50 : 50;
       const translateCardX =
         (isActive ? translateX.value * 0.35 : 0) + activeOffsetX * active + restingOffsetX * (1 - active);
-      const translateCardY = (isActive ? translateY.value * 0.3 : 0) + (1 - active) * 18;
-      const scale = 0.77 + active * 0.15;
+      const baseTranslateY = (isActive ? translateY.value * 0.3 : 0) + (1 - active) * 18;
+      const flyUp = winnerIndex.value === index ? -900 * dismissProgress.value : 0;
+      const translateCardY = baseTranslateY + flyUp;
+      const baseScale = 0.77 + active * 0.15;
+      const scale = winnerIndex.value === index ? baseScale + 0.05 * dismissProgress.value : baseScale;
+      const fadeOut = winnerIndex.value === -1 ? 1 : winnerIndex.value === index ? 1 : 1 - dismissProgress.value;
 
       return {
         zIndex: isActive ? 2 : 1,
@@ -238,6 +270,7 @@ function AnimatedPhotoCard({ photo, index, selectedIndex, translateX, translateY
           { translateY: translateCardY },
           { scale },
         ],
+        opacity: fadeOut,
       };
     },
     [index]
