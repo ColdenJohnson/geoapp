@@ -18,7 +18,6 @@ import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
 import { usePalette } from '@/hooks/usePalette';
-import { scheduleLocalTestNotification } from '@/hooks/usePushNotifications';
 
 export default function UserProfileScreen() {
   const { user, setUser, profile, setProfile } = useContext(AuthContext);

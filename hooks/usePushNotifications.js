@@ -5,11 +5,6 @@ import Constants from 'expo-constants';
 
 import { registerPushToken } from '@/lib/api';
 
-function shouldDebugSchedule() {
-  const dev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
-  return (dev && process.env.EXPO_PUSH_DEBUG !== 'false') || process.env.EXPO_PUSH_DEBUG === 'true';
-}
-
 // Show alerts/sounds/badges when a notification arrives in the foreground.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -30,8 +25,6 @@ function resolveProjectId() {
 
 export function usePushNotifications(user) {
   const lastRegisteredToken = useRef(null);
-  const debugScheduledRef = useRef(false);
-  const debugDelaySeconds = 10;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,16 +78,6 @@ export function usePushNotifications(user) {
         });
         console.log('[push][client] Backend registration complete');
         lastRegisteredToken.current = expoPushToken;
-
-        // Temporary local notification to validate UI without backend. Remove after backend wiring is verified.
-        if (shouldDebugSchedule() && !debugScheduledRef.current) {
-          debugScheduledRef.current = true;
-          await scheduleLocalTestNotification({
-            seconds: debugDelaySeconds,
-            title: 'Geode (local dev ping)',
-            body: 'This is a local-only test notification. Remove when backend pushes are live.',
-          });
-        }
       } catch (err) {
         console.log('Push registration failed', err?.message || err, err?.stack);
       }
@@ -120,19 +103,4 @@ export function usePushNotifications(user) {
       responseSub.remove();
     };
   }, []);
-}
-
-export async function scheduleLocalTestNotification({
-  seconds = 5,
-  title = 'Test notification',
-  body = 'Local-only notification for debugging',
-} = {}) {
-  return Notifications.scheduleNotificationAsync({
-    content: {
-      title,
-      body,
-      sound: 'default',
-    },
-    trigger: { seconds },
-  });
 }

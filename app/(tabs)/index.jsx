@@ -30,7 +30,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
-  const [userIsInMainland, setUserIsInMainland] = useState(false);
 
   const NEAR_THRESHOLD_METERS = 2; // "very close" threshold
   const [nearestDistance, setNearestDistance] = useState(null);
@@ -107,15 +106,17 @@ export default function HomeScreen() {
     return null;
   }, [location]);
 
-  useEffect(() => {
-    if (userCoords) {
-      setUserIsInMainland(
-        isInMainlandChina(userCoords.latitude, userCoords.longitude)
-      );
-    } else {
-      setUserIsInMainland(false);
-    }
+  const userIsInMainland = useMemo(() => {
+    if (!userCoords) return false;
+    return isInMainlandChina(userCoords.latitude, userCoords.longitude);
   }, [userCoords]);
+
+  const derivedUserCenter = useMemo(() => {
+    if (!userCoords) return null;
+    return userIsInMainland
+      ? wgs84ToGcj02(userCoords.latitude, userCoords.longitude)
+      : userCoords;
+  }, [userCoords, userIsInMainland]);
 
   const pinsForDisplay = useMemo(() => {
     if (!Array.isArray(pins)) {
@@ -182,19 +183,11 @@ export default function HomeScreen() {
     setNearestDistance(nearest ? nearest.distance : null);
     setNearestPin(nearest ? nearest.pin : null);
     setIsNear(!!nearest && nearest.distance <= NEAR_THRESHOLD_METERS);
-    if (!didCenter && location?.coords && mapRef.current) {
-      mapRef.current.animateToRegion(
-        {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        },
-        500
-      );
+    if (!didCenter && userCoords && mapRef.current) {
+      handleCenterOnUser();
       setDidCenter(true);
     }
-  }, [location, pins, didCenter]);
+  }, [location, pins, didCenter, userCoords, handleCenterOnUser]);
 
   async function handleCreateChallengePress() {
     // Prepare to receive the message BEFORE navigating
@@ -223,21 +216,18 @@ export default function HomeScreen() {
 
   const colors = usePalette();
   const handleCenterOnUser = useCallback(() => {
-    if (!userCoords || !mapRef.current) return;
-    const centerCoords = userIsInMainland
-      ? wgs84ToGcj02(userCoords.latitude, userCoords.longitude)
-      : userCoords;
+    if (!derivedUserCenter || !mapRef.current) return;
 
     mapRef.current.animateToRegion(
       {
-        latitude: centerCoords.latitude,
-        longitude: centerCoords.longitude,
+        latitude: derivedUserCenter.latitude,
+        longitude: derivedUserCenter.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       },
       300
     );
-  }, [userCoords, userIsInMainland]);
+  }, [derivedUserCenter]);
   const styles = useMemo(
     () => createStyles(colors, isSmallScreen),
     [colors, isSmallScreen]
@@ -275,10 +265,10 @@ export default function HomeScreen() {
         showsUserLocation={true}
         ref={mapRef}
         initialRegion={{
-          latitude: location?.coords?.latitude ?? 31.416077,
-          longitude: location?.coords?.longitude ?? 120.901488,
-          latitudeDelta: location?.coords ? 0.01 : 0.5,
-          longitudeDelta: location?.coords ? 0.01 : 0.5,
+          latitude: derivedUserCenter?.latitude ?? 31.416077,
+          longitude: derivedUserCenter?.longitude ?? 120.901488,
+          latitudeDelta: derivedUserCenter ? 0.01 : 0.5,
+          longitudeDelta: derivedUserCenter ? 0.01 : 0.5,
         }}
       >
 
