@@ -108,8 +108,10 @@ export default function GlobalVoteScreen() {
   );
 
   useEffect(() => {
-    setActiveCard(0);
-    selectedIndex.value = 0;
+    const hasPair = Array.isArray(photos) && photos.length >= 2;
+    const nextIdx = hasPair ? (Math.random() < 0.5 ? 0 : 1) : 0;
+    setActiveCard(nextIdx);
+    selectedIndex.value = nextIdx;
     translateX.value = 0;
     translateY.value = 0;
     dismissProgress.value = 0;
