@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Image } from 'expo-image';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -11,11 +12,19 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { fetchGlobalDuel, voteGlobalDuel } from '@/lib/api';
+import { voteGlobalDuel } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
+import {
+  advanceGlobalDuelQueue,
+  DEFAULT_PRELOAD_COUNT,
+  ensurePreloadedGlobalDuels,
+  getCurrentGlobalDuelPair,
+  getOrLoadGlobalDuelPair,
+} from '@/lib/globalDuelQueue';
 
 const SWIPE_HORIZONTAL_THRESHOLD = 60;
 const SWIPE_VERTICAL_THRESHOLD = 90;
+const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
 
 export default function GlobalVoteScreen() {
   const [photos, setPhotos] = useState([]);
@@ -35,34 +44,49 @@ export default function GlobalVoteScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const loadPair = useCallback(async () => {
-    if (!isActiveRef.current) return;
-    setLoading(true);
-    try {
-      const pair = await fetchGlobalDuel();
-      if (isActiveRef.current) {
-        setPhotos(Array.isArray(pair) ? pair : []);
-      }
-    } catch (error) {
-      console.error('Failed to refresh global duel', error);
-      if (isActiveRef.current) {
-        setPhotos([]);
-      }
-    } finally {
-      if (isActiveRef.current) {
-        setLoading(false);
-      }
+  const syncFromQueue = useCallback(async () => {
+    const head = getCurrentGlobalDuelPair();
+    if (Array.isArray(head) && head.length >= 2) {
+      setPhotos(head);
+      setLoading(false);
+      ensurePreloadedGlobalDuels(PRELOADED_PAIR_COUNT).catch((error) =>
+        console.error('Failed to keep preloading queue', error)
+      );
+      return;
     }
-  }, []);
+
+    setLoading(true);
+    const next = await getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT);
+    if (!isActiveRef.current) return;
+    setPhotos(Array.isArray(next) ? next : []);
+    setLoading(Array.isArray(next) && next.length >= 2 ? false : true);
+  }, [setLoading, setPhotos, ensurePreloadedGlobalDuels, getCurrentGlobalDuelPair, getOrLoadGlobalDuelPair]);
+
+  const advanceQueue = useCallback(() => {
+    const nextPair = advanceGlobalDuelQueue(PRELOADED_PAIR_COUNT);
+    setPhotos(Array.isArray(nextPair) ? nextPair : []);
+    if (!Array.isArray(nextPair) || nextPair.length < 2) {
+      setLoading(true);
+      getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT).then((pair) => {
+        if (!isActiveRef.current) return;
+        if (Array.isArray(pair) && pair.length >= 2) {
+          setPhotos(pair);
+          setLoading(false);
+        }
+      });
+    } else {
+      setLoading(false);
+    }
+  }, [advanceGlobalDuelQueue, getOrLoadGlobalDuelPair, setLoading, setPhotos]);
 
   useFocusEffect(
     useCallback(() => {
       isActiveRef.current = true;
-      loadPair();
+      syncFromQueue();
       return () => {
         isActiveRef.current = false;
       };
-    }, [loadPair])
+    }, [syncFromQueue])
   );
 
   const setActiveCard = useCallback(
@@ -86,15 +110,18 @@ export default function GlobalVoteScreen() {
   }, [photos, setActiveCard, selectedIndex, translateX, translateY, dismissProgress, winnerIndex, animatingVote]);
 
   const choose = useCallback(
-    async (winnerId, loserId) => {
+    async (winnerId, loserId, { advanceImmediately = false } = {}) => {
       if (!winnerId || !loserId || submitting) return;
       if (isActiveRef.current) {
         setSubmitting(true);
       }
+      if (advanceImmediately) {
+        advanceQueue();
+      }
       try {
         const result = await voteGlobalDuel({ winnerPhotoId: winnerId, loserPhotoId: loserId });
-        if (result?.success) {
-          await loadPair();
+        if (result?.success && !advanceImmediately) {
+          advanceQueue();
         }
       } catch (error) {
         console.error('Failed to submit global vote', error);
@@ -104,16 +131,17 @@ export default function GlobalVoteScreen() {
         }
       }
     },
-    [loadPair, submitting]
+    [advanceQueue, submitting]
   );
 
   const chooseByIndex = useCallback(
-    (winnerIndex) => {
-      if (!Array.isArray(photos) || photos.length < 2) return;
-      const winner = photos[winnerIndex];
-      const loser = photos[winnerIndex === 0 ? 1 : 0];
+    (winnerIndex, pairOverride) => {
+      const pair = Array.isArray(pairOverride) ? pairOverride : photos;
+      if (!Array.isArray(pair) || pair.length < 2) return;
+      const winner = pair[winnerIndex];
+      const loser = pair[winnerIndex === 0 ? 1 : 0];
       if (!winner?._id || !loser?._id) return;
-      choose(winner._id, loser._id);
+      choose(winner._id, loser._id, { advanceImmediately: true });
     },
     [choose, photos]
   );
@@ -134,6 +162,7 @@ export default function GlobalVoteScreen() {
     (idx) => {
       if (loading || submitting || animating) return;
       const target = typeof idx === 'number' ? idx : selectedIndex.value;
+      const pairSnapshot = photos.slice(0, 2);
       animatingVote.value = true;
       setAnimating(true);
       winnerIndex.value = target;
@@ -143,7 +172,7 @@ export default function GlobalVoteScreen() {
         { duration: 450 },
         (finished) => {
           if (finished) {
-            runOnJS(chooseByIndex)(target);
+            runOnJS(chooseByIndex)(target, pairSnapshot);
           }
           animatingVote.value = false;
           winnerIndex.value = -1;
@@ -152,7 +181,7 @@ export default function GlobalVoteScreen() {
         }
       );
     },
-    [animating, animatingVote, chooseByIndex, dismissProgress, loading, selectedIndex, submitting, winnerIndex]
+    [animating, animatingVote, chooseByIndex, dismissProgress, loading, photos, selectedIndex, submitting, winnerIndex]
   );
 
   const panGesture = Gesture.Pan()
@@ -278,7 +307,7 @@ function AnimatedPhotoCard({ photo, index, selectedIndex, translateX, translateY
 
   return (
     <Animated.View style={[styles.card, animatedStyle]}>
-      <Image source={{ uri: photo?.file_url }} style={styles.photo} resizeMode="cover" />
+      <Image source={{ uri: photo?.file_url }} style={styles.photo} resizeMode="cover" cachePolicy="memory-disk" />
       <View style={styles.meta}>
         <Text style={styles.metaTitle}>Global Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}</Text>
         <Text style={styles.metaDetail}>

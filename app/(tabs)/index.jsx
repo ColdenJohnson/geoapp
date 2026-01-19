@@ -13,6 +13,7 @@ import { useRouter} from 'expo-router';
 import { newChallenge, addPhoto, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
 import { ImgFromUrl } from '../../components/ImgDisplay';
+import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
 
 import BottomBar from '../../components/ui/BottomBar';
 import { CTAButton } from '../../components/ui/Buttons';
@@ -173,6 +174,12 @@ export default function HomeScreen() {
       };
     }, [])
   );
+
+  useEffect(() => {
+    ensurePreloadedGlobalDuels(DEFAULT_PRELOAD_COUNT).catch((error) =>
+      console.error('Failed to warm global duel queue', error)
+    );
+  }, []);
 
   useEffect(() => {
     const d = computeNearestPin(location, pins);
