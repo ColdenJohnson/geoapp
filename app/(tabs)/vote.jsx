@@ -89,6 +89,15 @@ export default function GlobalVoteScreen() {
     }, [syncFromQueue])
   );
 
+  const bannerStyle = useAnimatedStyle(
+    () => {
+      const pullUp = Math.max(0, -translateY.value);
+      const progress = Math.min(1, pullUp / 300);
+      return { opacity: withTiming(progress, { duration: 120 }) };
+    },
+    [translateY]
+  );
+
   const setActiveCard = useCallback(
     (index) => {
       const next = Math.max(0, Math.min(index, 1));
@@ -219,6 +228,12 @@ export default function GlobalVoteScreen() {
           <Text style={styles.subtitle}>Swipe through the pair, then fling up to crown the winner.</Text>
         </View>
 
+        <View pointerEvents="none" style={styles.bannerContainer}>
+          <Animated.View style={[styles.banner, bannerStyle]}>
+            <Text style={styles.bannerText}>👑 WINNER SELECTED 👑</Text>
+          </Animated.View>
+        </View>
+
         <View style={styles.body}>
           {loading ? (
             <View style={styles.centered}>
@@ -248,20 +263,6 @@ export default function GlobalVoteScreen() {
                   ))}
                 </View>
               </GestureDetector>
-
-              <View style={styles.helperBar}>
-                <Text style={styles.helperText}>
-                  {submitting
-                    ? 'Submitting your vote...'
-                    : 'Swipe left/right to preview · Swipe up to pick'}
-                </Text>
-                {selectedPhoto ? (
-                  <Text style={styles.selectionText}>
-                    Selected card: Elo {Number.isFinite(selectedPhoto?.global_elo) ? selectedPhoto.global_elo : 1000} · W{' '}
-                    {selectedPhoto?.global_wins ?? 0} · L {selectedPhoto?.global_losses ?? 0}
-                  </Text>
-                ) : null}
-              </View>
             </>
           )}
         </View>
@@ -283,8 +284,8 @@ function AnimatedPhotoCard({ photo, index, selectedIndex, translateX, translateY
       const activeOffsetX = index === 0 ? -16 : 16; // keep selected card slightly off center
       const restingOffsetX = index === 0 ? -50 : 50;
       const translateCardX =
-        (isActive ? translateX.value * 0.35 : 0) + activeOffsetX * active + restingOffsetX * (1 - active);
-      const baseTranslateY = (isActive ? translateY.value * 0.3 : 0) + (1 - active) * 18;
+        (isActive ? translateX.value * 0.45 : 0) + activeOffsetX * active + restingOffsetX * (1 - active);
+      const baseTranslateY = (isActive ? translateY.value * 0.55 : 0) + (1 - active) * 18;
       const flyUp = winnerIndex.value === index ? -900 * dismissProgress.value : 0;
       const translateCardY = baseTranslateY + flyUp;
       const baseScale = 0.77 + active * 0.15;
@@ -361,16 +362,37 @@ function createStyles(colors) {
     },
     metaTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
     metaDetail: { fontSize: 14, color: '#F3F4F6' },
-    helperBar: {
-      padding: 12,
-      borderRadius: 12,
-      backgroundColor: colors.bg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      gap: 6,
-    },
     helperText: { color: colors.textMuted, textAlign: 'center', fontSize: 14 },
-    selectionText: { color: colors.text, textAlign: 'center', fontWeight: '600' },
     cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
+    bannerContainer: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: '10%',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 5,
+    },
+    banner: {
+      width: '100%',
+      height: '100%',
+      paddingHorizontal: 12,
+      backgroundColor: 'rgba(255, 215, 0, 0.92)',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: '#B8860B',
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      justifyContent: 'center',
+    },
+    bannerText: {
+      color: '#3B2F05',
+      fontWeight: '900',
+      letterSpacing: 0.2,
+      textAlign: 'center',
+      fontSize: 22,
+    },
   });
 }
