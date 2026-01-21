@@ -34,6 +34,12 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>com.googleusercontent.apps.834952308922-e5lv276g6a7pbenu8sp7pp2fs3ddovfl</string>
+        </array>
+      </dict>
+      <dict>
+        <key>CFBundleURLSchemes</key>
+        <array>
           <string>exp+geoapp</string>
         </array>
       </dict>
