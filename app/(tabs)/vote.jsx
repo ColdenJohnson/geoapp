@@ -92,7 +92,7 @@ export default function GlobalVoteScreen() {
   const bannerStyle = useAnimatedStyle(
     () => {
       const pullUp = Math.max(0, -translateY.value);
-      const progress = Math.min(1, pullUp / 300);
+      const progress = Math.min(1, pullUp / 150);
       return { opacity: withTiming(progress, { duration: 120 }) };
     },
     [translateY]
@@ -180,15 +180,12 @@ export default function GlobalVoteScreen() {
       dismissProgress.value = 0;
       dismissProgress.value = withTiming(
         1,
-        { duration: 450 },
+        { duration: 250 },
         (finished) => {
           if (finished) {
             runOnJS(chooseByIndex)(target, pairSnapshot);
           }
           animatingVote.value = false;
-          winnerIndex.value = -1;
-          dismissProgress.value = 0;
-          runOnJS(setAnimating)(false);
         }
       );
     },
@@ -226,8 +223,8 @@ export default function GlobalVoteScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Global Vote</Text>
-          <Text style={styles.subtitle}>Swipe through the pair, then fling up to crown the winner.</Text>
+          <Text style={styles.title}>Vote for the best photo</Text>
+          <Text style={styles.subtitle}>Swipe ⬅️➡️ to select, then up to choose the winner.</Text>
         </View>
 
         <View pointerEvents="none" style={styles.bannerContainer}>
