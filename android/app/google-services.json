@@ -7,25 +7,12 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:834952308922:android:e8ae594f350ab35303fa83",
+        "mobilesdk_app_id": "1:834952308922:android:3112403ffcbb21db03fa83",
         "android_client_info": {
-          "package_name": "com.coldenjohnson.geode"
+          "package_name": "com.coldenjohnson.geoapp"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "834952308922-qj0c0ljbigeg1fhkgk0kbefps3p7rend.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.coldenjohnson.geode",
-            "certificate_hash": "546ac36d40f031efba698c55887b8ecbe7956355"
-          }
-        },
-        {
-          "client_id": "834952308922-7jv6etms6epf8oo9b4cm5s0pnob84css.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
           "current_key": "AIzaSyD1iY87iPXEjwNPUpcfmB8IuNSmjp_4S84"
@@ -33,19 +20,26 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "834952308922-7jv6etms6epf8oo9b4cm5s0pnob84css.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "834952308922-e5lv276g6a7pbenu8sp7pp2fs3ddovfl.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.coldenjohnson.geode"
-              }
-            }
-          ]
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:834952308922:android:e8ae594f350ab35303fa83",
+        "android_client_info": {
+          "package_name": "com.coldenjohnson.geode"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1iY87iPXEjwNPUpcfmB8IuNSmjp_4S84"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
         }
       }
     }
