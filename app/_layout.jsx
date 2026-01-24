@@ -6,6 +6,7 @@ import React, { useContext } from 'react';
 import { Image, View } from 'react-native';
 import { AuthContext, AuthProvider } from '../hooks/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
+import '../config/logging';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
