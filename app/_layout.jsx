@@ -7,7 +7,7 @@ import { Image, View } from 'react-native';
 import { AuthContext, AuthProvider } from '../hooks/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import {  Notifications } from '@/hooks/usePushNotifications';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 function RootLayoutContent({ loaded }) {
