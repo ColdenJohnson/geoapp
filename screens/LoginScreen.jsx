@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
-import { View, TextInput, Button, Text, StyleSheet, Alert } from 'react-native';
+import { View, TextInput, Button, Text, StyleSheet, Alert, Pressable } from 'react-native';
 import auth from '@react-native-firebase/auth';
+import CountryPicker from 'react-native-country-picker-modal';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react';
@@ -20,6 +21,9 @@ export default function LoginScreen() {
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
   const [isPhoneMode, setIsPhoneMode] = useState(false);
+  const [countryCode, setCountryCode] = useState('US');
+  const [callingCode, setCallingCode] = useState('1');
+  const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const { setUser } = useContext(AuthContext);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -53,13 +57,15 @@ export default function LoginScreen() {
   const handleSendSms = async () => {
     try {
       setErrorMsg('');
-      if (!phoneNumber) {
-        Alert.alert('Missing phone number', 'Please enter a phone number in E.164 format, e.g. +15551234567');
+      const nationalDigits = phoneNumber.replace(/\D/g, '');
+      if (!nationalDigits) {
+        Alert.alert('Missing phone number', 'Please enter your phone number.');
         return;
       }
 
       // This triggers app verification (silent APNs / reCAPTCHA) and sends the SMS.
-      const confirm = await auth().signInWithPhoneNumber(phoneNumber);
+      const e164 = `+${callingCode}${nationalDigits}`;
+      const confirm = await auth().signInWithPhoneNumber(e164);
       setConfirmation(confirm);
     } catch (err) {
       setErrorMsg(err?.message || String(err));
@@ -140,17 +146,41 @@ export default function LoginScreen() {
         </>
       ) : (
         <>
-          <TextInput
-            placeholder="Phone number (e.g. +15551234567)"
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            autoCapitalize="none"
-            keyboardType="phone-pad"
-            style={styles.input}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.primary}
-            cursorColor={colors.text}
-          />
+          <View style={styles.phoneRow}>
+            <Pressable
+              onPress={() => setCountryPickerVisible(true)}
+              style={styles.countryButton}
+            >
+              <CountryPicker
+                withFilter
+                withFlag
+                withCallingCode
+                withCallingCodeButton
+                countryCode={countryCode}
+                visible={countryPickerVisible}
+                onClose={() => setCountryPickerVisible(false)}
+                onSelect={(country) => {
+                  setCountryCode(country.cca2);
+                  const nextCallingCode = country.callingCode?.[0];
+                  if (nextCallingCode) {
+                    setCallingCode(nextCallingCode);
+                  }
+                  setCountryPickerVisible(false);
+                }}
+              />
+            </Pressable>
+            <TextInput
+              placeholder="Phone number"
+              value={phoneNumber}
+              onChangeText={(text) => setPhoneNumber(text.replace(/\D/g, ''))}
+              autoCapitalize="none"
+              keyboardType="phone-pad"
+              style={[styles.input, styles.phoneInput]}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+              cursorColor={colors.text}
+            />
+          </View>
 
           {confirmation ? (
             <>
@@ -193,6 +223,18 @@ function createStyles(colors) {
       borderColor: colors.border,
       marginBottom: 20,
       color: colors.text,
+    },
+    phoneRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    countryButton: {
+      marginRight: 12,
+    },
+    phoneInput: {
+      flex: 1,
+      marginBottom: 0,
     },
     error: {
       color: colors.danger,
