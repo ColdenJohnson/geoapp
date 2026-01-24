@@ -10,9 +10,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useRouter} from 'expo-router';
 
-import { newChallenge, addPhoto, fetchAllLocationPins, fetchPhotosByPinId } from '../../lib/api';
+import { newChallenge, fetchAllLocationPins } from '../../lib/api';
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
-import { ImgFromUrl } from '../../components/ImgDisplay';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
 
 import BottomBar from '../../components/ui/BottomBar';
@@ -27,7 +26,6 @@ export default function HomeScreen() {
   const [errorMsg, setErrorMsg] = useState(null);
   const PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL // from .env file
   const [pins, setPins] = useState([]); // for all pins
-  const [pinPhotoUrls, setPinPhotoUrls] = useState({});
   const router = useRouter();
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
@@ -73,24 +71,6 @@ export default function HomeScreen() {
     (async () => {
       const allPins = await fetchAllLocationPins();
       setPins(allPins);
-
-      // Fetch first photo for each pin
-      // TODO: this probably should be its own function for clarity
-      // this will also eventually be limited to a certain user radius, or only on click/something similar
-      // this is a bit fucked because /view_photo_for_each_pin/:pin_id actually returns an array of photo urls of exactly length 1 (filtered in the backend)
-      const photoMap = {};
-      for (const pin of allPins) {
-        // if (pin?._id) {
-        //   const photos = await fetchPhotosByPinId(pin._id);
-        //   if (photos.length > 0) {
-        //     photoMap[pin._id] = photos[0].file_url; // currently just displays the first photo in the array. should do other logic.
-        //   }
-        // }
-        if (pin?._id && pin.most_recent_photo_url) {
-          photoMap[pin._id] = pin.most_recent_photo_url;
-        }
-      }
-      setPinPhotoUrls(photoMap);
     })();
   }, []);
 
@@ -308,12 +288,15 @@ export default function HomeScreen() {
         tooltip
         onPress={() => viewPhotoChallenge(pin)}
       >
-        <View style={{ width: 150, height: 150, padding: 5, backgroundColor: colors.bg, borderRadius: 10, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }}>
-          <ImgFromUrl 
-            url={pinPhotoUrls[pin._id]}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-          />
+        <View style={styles.calloutCard}>
+          <Text style={styles.calloutLabel}>Challenge</Text>
+          <Text style={styles.calloutPrompt} numberOfLines={3}>
+            {pin.message || '???'}
+          </Text>
+          <View style={styles.calloutDivider} />
+          <Text style={styles.calloutMeta}>
+            Photos: {Number.isFinite(pin?.photo_count) ? pin.photo_count : 0}
+          </Text>
         </View>
       </Callout>
     </Marker> ) : null
@@ -380,6 +363,42 @@ function createStyles(colors, isSmallScreen) {
       lineHeight: 34,
       fontWeight: 'bold',
       color: colors.text,
+    },
+    calloutCard: {
+      width: 200,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
+    },
+    calloutLabel: {
+      fontSize: 11,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      color: colors.textMuted,
+      marginBottom: 6,
+    },
+    calloutPrompt: {
+      fontSize: 14,
+      lineHeight: 18,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    calloutDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginVertical: 10,
+    },
+    calloutMeta: {
+      fontSize: 12,
+      color: colors.textMuted,
     },
     bottomBarSmall: {
       paddingHorizontal: 10,

@@ -3,7 +3,7 @@ import { useFirebaseImage } from '@/hooks/useFirebaseImage';
 import { ActivityIndicator, View } from 'react-native';
 
 export function ImgFromUrl({ url, style, resizeMode = "contain" }) {
-  // TODO: this is likely where we're not calling firebase (just getting from a general URL), and thus not displaying image until reload
+  console.log("Img from URL loaded now!")
   if (!url) {
     return null;
   }
