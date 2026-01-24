@@ -1,10 +1,11 @@
 import { StyleSheet, Image, TextInput, TouchableOpacity, View, Text, Alert } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 
-import { updateUserProfile, deleteMyAccount } from '@/lib/api';
+import { updateUserProfile, deleteMyAccount, fetchUserStats } from '@/lib/api';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +21,7 @@ export default function UserProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [formDisplayName, setFormDisplayName] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [stats, setStats] = useState(null);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
@@ -35,6 +37,24 @@ export default function UserProfileScreen() {
     setFormDisplayName(profile?.display_name || '');
     setEditing(true);
   };
+
+  const loadStats = useCallback(() => {
+    let isActive = true;
+    async function run() {
+      if (!user?.uid) {
+        setStats(null);
+        return;
+      }
+      const data = await fetchUserStats(user.uid);
+      if (isActive) setStats(data);
+    }
+    run();
+    return () => {
+      isActive = false;
+    };
+  }, [user?.uid]);
+
+  useFocusEffect(loadStats);
 
   const saveEdits = async () => {
     if (!user?.uid) return;
@@ -122,9 +142,8 @@ export default function UserProfileScreen() {
         {/* Profile Details */}
         <View style={[formStyles.card, styles.statsCard]}>
           <Text style={styles.sectionTitle}>Stats</Text>
-          <Text style={styles.statsText}>
-            Coming soon: total photos posted, highest ELO photo, win streak, and more.
-          </Text>
+          <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? profile?.pin_count ?? 0}</Text>
+          <Text style={styles.statsText}>Photos posted: {stats?.photo_count ?? profile?.photo_count ?? 0}</Text>
         </View>
 
         {/* Actions */}
