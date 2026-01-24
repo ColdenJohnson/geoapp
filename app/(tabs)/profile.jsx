@@ -155,15 +155,16 @@ export default function UserProfileScreen() {
 
           {/* Sign Out button, theoretically. */}
           <View style={styles.actionRow}>
-            <SecondaryButton
-              title="Sign Out"
-              onPress={async () => {
-                try {
-                  await AsyncStorage.removeItem('user_token');
-                  setUser(null); // clear user state, automatically rerun RootLayout
+          <SecondaryButton
+            title="Sign Out"
+            onPress={async () => {
+              try {
+                await auth().signOut();
+                await AsyncStorage.removeItem('user_token');
+                setUser(null); // clear user state, automatically rerun RootLayout
 
-                  console.log('User signed out');
-                } catch (error) {
+                console.log('User signed out');
+              } catch (error) {
                   console.error('Sign out failed:', error);
                 }
               }}

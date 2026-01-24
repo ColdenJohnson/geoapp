@@ -2,6 +2,19 @@ import React from 'react';
 import { renderHook, act } from '@testing-library/react-native';
 import { AuthContext, AuthProvider } from '../AuthContext';
 
+jest.mock('@react-native-firebase/auth', () => () => ({
+  onAuthStateChanged: (callback) => {
+    callback(null);
+    return jest.fn();
+  },
+  onIdTokenChanged: () => jest.fn(),
+}));
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+}));
+
 jest.mock('@/lib/api', () => ({
   fetchUsersByUID: jest.fn(),
 }));
