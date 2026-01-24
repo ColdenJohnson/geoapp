@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
-import { View, TextInput, Text, StyleSheet, Alert, Pressable, Image } from 'react-native';
+import { View, TextInput, Text, StyleSheet, Alert, Pressable, Image, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import CountryPicker from 'react-native-country-picker-modal';
 
@@ -133,9 +133,10 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.heroGlow} />
-      <View style={styles.content}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        <View style={styles.heroGlow} />
+        <View style={styles.content}>
         <View style={styles.brandBlock}>
           <Image source={require('../assets/images/icon.png')} style={styles.logo} />
           <Text style={styles.brand}>SideQuest</Text>
@@ -288,8 +289,9 @@ export default function LoginScreen() {
         </View>
 
         {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
+        </View>
       </View>
-    </View>
+    </TouchableWithoutFeedback>
   );
 }
 
