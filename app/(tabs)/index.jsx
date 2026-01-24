@@ -315,7 +315,7 @@ export default function HomeScreen() {
   ))}
 
       </MapView>
-      <Toast message={toastMessage} bottomOffset={140} />
+      <Toast message={toastMessage} bottomOffset={160} />
       <BottomBar>
         <CTAButton
           title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}

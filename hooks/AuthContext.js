@@ -1,4 +1,5 @@
 import { createContext, useEffect, useState } from 'react';
+import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';  // TODO: for production prefer expo-secure-store for tokens, or similar -- asyncstorage is plain key-value
 import auth from '@react-native-firebase/auth';
 import { fetchUsersByUID } from '@/lib/api';
@@ -53,6 +54,11 @@ export function AuthProvider({ children }) {
     async function loadProfile() {
       if (user?.uid) {
         const p = await fetchUsersByUID(user.uid);
+        if (p?.photo_url) {
+          Image.prefetch(p.photo_url).catch((error) => {
+            console.warn('Failed to prefetch profile photo', error);
+          });
+        }
         setProfile(p);
       } else {
         setProfile(null);

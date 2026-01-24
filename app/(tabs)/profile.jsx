@@ -1,4 +1,5 @@
-import { StyleSheet, Image, TextInput, TouchableOpacity, View, Text, Alert } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, View, Text, Alert, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useCallback, useContext, useMemo, useState } from 'react';
@@ -118,10 +119,23 @@ export default function UserProfileScreen() {
         {/* Profile Header -- could have a different profile picture */}
         <View style={[formStyles.card, styles.headerCard]}>
           <TouchableOpacity onPress={pickAndUploadPhoto} disabled={uploading}>
-            <Image
-              source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
-              style={styles.profileImage}
-            />
+            <View style={styles.profileImageWrap}>
+              <Image
+                source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
+                style={styles.profileImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+              {uploading ? (
+                <View style={styles.profileOverlay}>
+                  <View style={styles.profileOverlayBackdrop} />
+                  <View style={styles.profileOverlayContent}>
+                    <ActivityIndicator size="small" color={colors.text} />
+                    <Text style={styles.profileOverlayText}>Uploading...</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
           </TouchableOpacity>
           {editing ? (
             <TextInput
@@ -256,11 +270,38 @@ function createStyles(colors) {
       paddingTop: spacing.xl,
       paddingBottom: spacing.lg,
     },
-    profileImage: {
+    profileImageWrap: {
       width: 96,
       height: 96,
       borderRadius: 48,
       marginBottom: spacing.md,
+      overflow: 'hidden',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileImage: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+    },
+    profileOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileOverlayBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.bg,
+      opacity: 0.75,
+    },
+    profileOverlayContent: {
+      alignItems: 'center',
+      gap: 6,
+    },
+    profileOverlayText: {
+      color: colors.text,
+      fontSize: fontSizes.sm,
+      fontWeight: '600',
     },
     nameInput: {
       alignSelf: 'stretch',
