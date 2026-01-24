@@ -1,15 +1,7 @@
-import { StyleSheet, Image, TextInput, TouchableOpacity } from 'react-native';
-
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-
-import { useFirebaseImage } from '@/hooks/useFirebaseImage';
-import { ImgDisplay } from '@/components/ImgDisplay';
-
-import { Button, Alert } from 'react-native';
+import { StyleSheet, Image, TextInput, TouchableOpacity, View, Text, Alert } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 
 import { updateUserProfile, deleteMyAccount } from '@/lib/api';
@@ -17,27 +9,36 @@ import { updateUserProfile, deleteMyAccount } from '@/lib/api';
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
+import auth from '@react-native-firebase/auth';
 import { usePalette } from '@/hooks/usePalette';
+import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
+import { createFormStyles } from '@/components/ui/FormStyles';
+import { spacing, fontSizes } from '@/theme/tokens';
 
 export default function UserProfileScreen() {
   const { user, setUser, profile, setProfile } = useContext(AuthContext);
   const [editing, setEditing] = useState(false);
   const [formDisplayName, setFormDisplayName] = useState('');
-  const [formBio, setFormBio] = useState('');
   const [uploading, setUploading] = useState(false);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const formStyles = useMemo(() => createFormStyles(colors), [colors]);
+  const authUser = auth().currentUser;
+  const contactValue =
+    user?.email ||
+    authUser?.phoneNumber ||
+    profile?.email ||
+    profile?.phone_number ||
+    'No contact info on file';
 
   const beginEdit = () => {
-    if (!profile) return;
-    setFormDisplayName(profile.display_name || '');
-    setFormBio(profile.bio || '');
+    setFormDisplayName(profile?.display_name || '');
     setEditing(true);
   };
 
   const saveEdits = async () => {
     if (!user?.uid) return;
-    const updates = { display_name: formDisplayName, bio: formBio };
+    const updates = { display_name: formDisplayName };
     const updated = await updateUserProfile(user.uid, updates); // Actually save updates to backend
     if (updated) {
       setProfile(updated);
@@ -91,107 +92,116 @@ export default function UserProfileScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      {/* Profile Header -- could have a different profile picture */}
-      <ThemedView style={styles.header}>
-      <TouchableOpacity onPress={pickAndUploadPhoto} disabled={uploading}>
-        <Image
-          source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
-          style={styles.profileImage}
-        />
-      </TouchableOpacity>
-      {editing ? (
-        <TextInput
-          style={styles.input}
-          placeholder={profile?.display_name || "Enter display name"}
-          value={formDisplayName}
-          onChangeText={setFormDisplayName}
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.primary}
-          cursorColor={colors.text}
-        />
-      ) : (
-        <ThemedText type="title">{profile?.display_name || 'No Display Name set'}</ThemedText>
-      )}
-      <ThemedText type="subtitle">{profile?.email || "noemail"}</ThemedText> 
-      </ThemedView>
+    <View style={styles.container}>
+      <View style={styles.heroGlow} />
+      <View style={styles.content}>
+        {/* Profile Header -- could have a different profile picture */}
+        <View style={[formStyles.card, styles.headerCard]}>
+          <TouchableOpacity onPress={pickAndUploadPhoto} disabled={uploading}>
+            <Image
+              source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
+              style={styles.profileImage}
+            />
+          </TouchableOpacity>
+          {editing ? (
+            <TextInput
+              style={[formStyles.input, styles.nameInput]}
+              placeholder={profile?.display_name || "Enter display name"}
+              value={formDisplayName}
+              onChangeText={setFormDisplayName}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+              cursorColor={colors.text}
+            />
+          ) : (
+            <Text style={styles.displayName}>{profile?.display_name || 'No Display Name set'}</Text>
+          )}
+          <Text style={styles.contactText}>{contactValue}</Text>
+        </View>
 
-      {/* Profile Details */}
-      <ThemedView style={styles.details}>
-        <ThemedText type="defaultSemiBold">About Me</ThemedText>
-        {editing ? (
-          <TextInput
-            style={[styles.input, styles.multiline]}
-            placeholder="Bio"
-            value={formBio}
-            onChangeText={setFormBio}
-            multiline
-            numberOfLines={4}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.primary}
-            cursorColor={colors.text}
-          />
-        ) : (
-          <ThemedText>
-            {profile?.bio || 'No bio set.'}
-          </ThemedText>
-        )}
-      </ThemedView>
+        {/* Profile Details */}
+        <View style={[formStyles.card, styles.statsCard]}>
+          <Text style={styles.sectionTitle}>Stats</Text>
+          <Text style={styles.statsText}>
+            Coming soon: total photos posted, highest ELO photo, win streak, and more.
+          </Text>
+        </View>
 
-      {/* Actions */}
-      <ThemedView style={styles.actions}>
-        {editing ? (
-          <>
-            <ThemedText type="link" onPress={saveEdits}>Save</ThemedText>
-            <ThemedText type="link" onPress={() => setEditing(false)}>Cancel</ThemedText>
-          </>
-        ) : (
-          <ThemedText type="link" onPress={beginEdit}>Edit Settings</ThemedText>
-        )}
+        {/* Actions */}
+        <View style={styles.actions}>
+          {editing ? (
+            <>
+              <View style={styles.actionRow}>
+                <CTAButton
+                  title="Save"
+                  onPress={saveEdits}
+                  variant="filled"
+                  style={styles.actionButton}
+                />
+                <SecondaryButton
+                  title="Cancel"
+                  onPress={() => setEditing(false)}
+                  style={styles.actionButtonLast}
+                />
+              </View>
+            </>
+          ) : (
+            <CTAButton
+              title="Edit Profile"
+              onPress={beginEdit}
+              variant="secondary"
+            />
+          )}
 
-        {/* Sign Out button, theoretically. */}
-      <Button
-        title="Sign Out"
-        onPress={async () => {
-          try {
-            await AsyncStorage.removeItem('user_token');
-            setUser(null); // clear user state, automatically rerun RootLayout
+          {/* Sign Out button, theoretically. */}
+          <View style={styles.actionRow}>
+            <SecondaryButton
+              title="Sign Out"
+              onPress={async () => {
+                try {
+                  await AsyncStorage.removeItem('user_token');
+                  setUser(null); // clear user state, automatically rerun RootLayout
 
-            console.log('User signed out');
-          } catch (error) {
-            console.error('Sign out failed:', error);
-          }
-        }}
-      />
-      <Button
-        color="#D9534F"
-        title="Delete Account"
-        onPress={() => {
-          Alert.alert(
-            'Delete Account',
-            'This will permanently delete your account. This cannot be undone.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete', style: 'destructive', onPress: async () => {
-                  try {
-                    const resp = await deleteMyAccount();
-                    if (resp?.success) {
-                      await AsyncStorage.removeItem('user_token');
-                      setUser(null);
-                      console.log('Account deleted');
-                    } else {
-                      console.error('Delete failed:', resp?.error || 'Unknown');
-                    }
-                  } catch (e) {
-                    console.error('Delete account error:', e);
-                  }
-                } }
-            ]
-          );
-        }}
-      />
-      </ThemedView>
-    </ThemedView>
+                  console.log('User signed out');
+                } catch (error) {
+                  console.error('Sign out failed:', error);
+                }
+              }}
+              style={styles.actionButton}
+            />
+            <CTAButton
+              title="Delete Account"
+              variant="secondary"
+              style={[styles.actionButtonLast, styles.dangerButton]}
+              textStyle={styles.dangerText}
+              onPress={() => {
+                Alert.alert(
+                  'Delete Account',
+                  'This will permanently delete your account. This cannot be undone.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: async () => {
+                        try {
+                          const resp = await deleteMyAccount();
+                          if (resp?.success) {
+                            await AsyncStorage.removeItem('user_token');
+                            setUser(null);
+                            console.log('Account deleted');
+                          } else {
+                            console.error('Delete failed:', resp?.error || 'Unknown');
+                          }
+                        } catch (e) {
+                          console.error('Delete account error:', e);
+                        }
+                      } }
+                  ]
+                );
+              }}
+            />
+          </View>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -199,39 +209,88 @@ function createStyles(colors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      padding: 5,
       backgroundColor: colors.bg,
     },
-    header: {
+    heroGlow: {
+      position: 'absolute',
+      top: -140,
+      right: -100,
+      width: 260,
+      height: 260,
+      borderRadius: 130,
+      backgroundColor: colors.primary,
+      opacity: 0.07,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing['2xl'],
+      paddingBottom: spacing['2xl'],
+      width: '100%',
+      maxWidth: 520,
+      alignSelf: 'center',
+    },
+    headerCard: {
       alignItems: 'center',
-      marginBottom: 24,
+      marginBottom: spacing.lg,
+      paddingTop: spacing.xl,
+      paddingBottom: spacing.lg,
     },
     profileImage: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      marginBottom: 16,
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      marginBottom: spacing.md,
     },
-    details: {
-      marginBottom: 24,
+    nameInput: {
+      alignSelf: 'stretch',
+      textAlign: 'center',
+    },
+    displayName: {
+      fontSize: fontSizes.xl,
+      fontWeight: '700',
+      color: colors.text,
+      fontFamily: 'SpaceMono',
+      textAlign: 'center',
+    },
+    contactText: {
+      color: colors.textMuted,
+      marginTop: spacing.xs,
+      textAlign: 'center',
+    },
+    statsCard: {
+      marginBottom: spacing.lg,
+    },
+    sectionTitle: {
+      fontSize: fontSizes.lg,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: spacing.sm,
+    },
+    statsText: {
+      color: colors.textMuted,
+      lineHeight: 22,
     },
     actions: {
-      marginTop: 16,
+      marginTop: spacing.md,
     },
-    input: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 6,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      alignSelf: 'stretch',
-      marginTop: 8,
-      color: colors.text,
-      backgroundColor: colors.surface,
+    actionRow: {
+      flexDirection: 'row',
+      marginTop: spacing.md,
     },
-    multiline: {
-      textAlignVertical: 'top',
-      minHeight: 100,
+    actionButton: {
+      flex: 1,
+      marginRight: spacing.sm,
+    },
+    actionButtonLast: {
+      flex: 1,
+      marginRight: 0,
+    },
+    dangerButton: {
+      borderColor: colors.danger,
+    },
+    dangerText: {
+      color: colors.danger,
     },
   });
 }
