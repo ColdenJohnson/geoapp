@@ -1,5 +1,4 @@
 import { storage } from '@/config/firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
 import { useState, useEffect } from 'react';
 
 export function useFirebaseImage(filename) {
@@ -8,8 +7,8 @@ export function useFirebaseImage(filename) {
     useEffect(() => {
       async function fetchImage() {
         try {
-          const imageRef = ref(storage, `images/${filename}`);
-          const url = await getDownloadURL(imageRef);
+          const imageRef = storage.ref(`images/${filename}`);
+          const url = await imageRef.getDownloadURL();
           setImageUrl(url);
         } catch (error) {
           console.error("Failed to fetch image from Firebase:", error);

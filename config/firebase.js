@@ -1,7 +1,6 @@
 
 // Import the functions you need from the SDKs you need
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getStorage } from "firebase/storage";
+import storage from '@react-native-firebase/storage';
 
 
 
@@ -16,11 +15,9 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp(); // if no apps are initialized, initialize one
-
-const storage = getStorage(app);
-export { storage };
+const storageInstance = storage();
+export { storageInstance as storage };
 
 
 console.log('Initializing Firebase...');
-console.log('app:', app);
+console.log('storage:', storageInstance);
