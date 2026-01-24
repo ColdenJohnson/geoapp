@@ -57,6 +57,8 @@ describe('LoginScreen', () => {
 
     const { getByPlaceholderText, getByText, contextValue } = renderWithContext(<LoginScreen />);
 
+    fireEvent.press(getByText('Email'));
+    fireEvent.press(getByText('Log in'));
     fireEvent.changeText(getByPlaceholderText(/Email/i), 'user@example.com');
     fireEvent.changeText(getByPlaceholderText(/Password/i), 'secret');
     fireEvent.press(getByText('Login'));
@@ -72,6 +74,8 @@ describe('LoginScreen', () => {
 
     const { getByPlaceholderText, getByText, findByText } = renderWithContext(<LoginScreen />);
 
+    fireEvent.press(getByText('Email'));
+    fireEvent.press(getByText('Log in'));
     fireEvent.changeText(getByPlaceholderText(/Email/i), 'user@example.com');
     fireEvent.changeText(getByPlaceholderText(/Password/i), 'bad');
     fireEvent.press(getByText('Login'));

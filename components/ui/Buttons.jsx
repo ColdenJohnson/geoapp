@@ -1,20 +1,21 @@
 // components/ui/CTAButton.jsx
 // Call-to-action button (currently placed in bottombar container)
 import React, { useMemo } from 'react';
-import { Pressable, Text, StyleSheet } from 'react-native';
+import { Pressable, Text, StyleSheet, View } from 'react-native';
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii, fontSizes, shadows } from '@/theme/tokens';
 
 export function CTAButton({ title, onPress, variant = 'primary', style, textStyle }) {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const isFilled = variant === 'filled';
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        variant === 'primary' ? styles.primary : styles.secondary,
+        isFilled ? styles.filled : variant === 'primary' ? styles.primary : styles.secondary,
         pressed && styles.pressed,
         style,
       ]}
@@ -22,7 +23,7 @@ export function CTAButton({ title, onPress, variant = 'primary', style, textStyl
       <Text
         style={[
           styles.text,
-          variant === 'primary' ? styles.textPrimary : styles.textSecondary,
+          isFilled ? styles.textFilled : variant === 'primary' ? styles.textPrimary : styles.textSecondary,
           textStyle,
         ]}
       >
@@ -34,6 +35,23 @@ export function CTAButton({ title, onPress, variant = 'primary', style, textStyl
 
 export function SecondaryButton(props) {
   return <CTAButton {...props} variant="secondary" />;
+}
+
+export function OutlineIconButton({ title, onPress, icon = null, style, textStyle }) {
+  const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed, style]}
+    >
+      <View style={styles.outlineContent}>
+        {icon ? <View style={styles.iconWrap}>{icon}</View> : null}
+        <Text style={[styles.outlineText, textStyle]}>{title}</Text>
+      </View>
+    </Pressable>
+  );
 }
 
 function createStyles(colors) {
@@ -55,6 +73,10 @@ function createStyles(colors) {
       backgroundColor: colors.surface,
       borderColor: colors.border,
     },
+    filled: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
     pressed: { opacity: 0.9 },
     text: {
       fontSize: fontSizes.lg,
@@ -63,5 +85,28 @@ function createStyles(colors) {
     },
     textPrimary: { color: colors.primary },
     textSecondary: { color: colors.text },
+    textFilled: { color: colors.primaryTextOn },
+    outlineButton: {
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    outlineContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    iconWrap: {
+      marginRight: spacing.sm,
+    },
+    outlineText: {
+      fontSize: fontSizes.md,
+      fontWeight: '600',
+      color: colors.text,
+    },
   });
 }
