@@ -1,14 +1,44 @@
 // components/ui/Toast.jsx
-import React, { useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { Text, StyleSheet, Animated } from 'react-native';
 import { spacing, radii, shadows, fontSizes } from '../../theme/tokens';
+import { usePalette } from '@/hooks/usePalette';
 
 export function Toast({ message, bottomOffset = 96 }) {
+  const colors = usePalette();
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!message) return;
+    anim.setValue(0);
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [message, anim]);
+
   if (!message) return null;
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [8, 0],
+  });
   return (
-    <View style={[styles.toast, { bottom: bottomOffset }]} pointerEvents="none">
-      <Text style={styles.toastText}>{message}</Text>
-    </View>
+    <Animated.View
+      style={[
+        styles.toast,
+        {
+          bottom: bottomOffset,
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          opacity: anim,
+          transform: [{ translateY }],
+        },
+      ]}
+      pointerEvents="none"
+    >
+      <Text style={[styles.toastText, { color: colors.text }]}>{message}</Text>
+    </Animated.View>
   );
 }
 
@@ -47,16 +77,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.lg,
     right: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignSelf: 'center',
+    maxWidth: 420,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     zIndex: 20,
     ...shadows.chip,
   },
   toastText: {
-    color: '#FFFFFF',
     fontSize: fontSizes.sm,
     fontWeight: '600',
     textAlign: 'center',

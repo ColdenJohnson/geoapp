@@ -30,11 +30,11 @@ export default function HomeScreen() {
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
 
-  const NEAR_THRESHOLD_METERS = 2; // "very close" threshold
+  const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
   const [nearestDistance, setNearestDistance] = useState(null);
   const [isNear, setIsNear] = useState(false);
   const [nearestPin, setNearestPin ] = useState(null);
-  const { message: toastMessage, show: showToast} = useToast(3000);
+  const { message: toastMessage, show: showToast} = useToast(3500);
   const { height: screenHeight } = useWindowDimensions();
   const isSmallScreen = screenHeight < 700;
 
@@ -198,6 +198,18 @@ export default function HomeScreen() {
   }
 
   async function viewPhotoChallenge(pin) {
+    if (!userCoords || !pin?.location) {
+      showToast('Location unavailable. Unable to open this challenge.');
+      return;
+    }
+    const distanceToPin = getDistance(userCoords, {
+      latitude: pin.location.latitude,
+      longitude: pin.location.longitude,
+    });
+    if (!Number.isFinite(distanceToPin) || distanceToPin > NEAR_THRESHOLD_METERS) {
+      showToast(`Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`);
+      return;
+    }
     router.push({pathname: '/view_photochallenge', params: { pinId: pin._id } });
   }
 
@@ -303,7 +315,7 @@ export default function HomeScreen() {
   ))}
 
       </MapView>
-      <Toast message={toastMessage} bottomOffset={120} />
+      <Toast message={toastMessage} bottomOffset={140} />
       <BottomBar>
         <CTAButton
           title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}
