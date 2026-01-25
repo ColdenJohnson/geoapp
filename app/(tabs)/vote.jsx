@@ -22,7 +22,7 @@ import {
   getOrLoadGlobalDuelPair,
 } from '@/lib/globalDuelQueue';
 
-const SWIPE_HORIZONTAL_THRESHOLD = 60;
+const SWIPE_HORIZONTAL_THRESHOLD = 30;
 const SWIPE_VERTICAL_THRESHOLD = 90;
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
 
