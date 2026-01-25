@@ -7,7 +7,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Geode</string>
+    <string>SideQuest</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -60,7 +60,7 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Geode needs camera access to take challenge photos.</string>
+    <string>SideQuest needs camera access to take challenge photos.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>NSHumanReadableCopyright</key>
@@ -70,13 +70,13 @@
     <key>NSLocationAlwaysUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Geode uses your location to show nearby photo challenges and enable on‑site submissions.</string>
+    <string>SideQuest uses your location to show nearby photo challenges and enable on‑site submissions.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Geode can save photos you capture back to your library if you choose.</string>
+    <string>SideQuest can save photos you capture back to your library if you choose.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Geode needs access to your photos so you can select and upload submissions.</string>
+    <string>SideQuest needs access to your photos so you can select and upload submissions.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
