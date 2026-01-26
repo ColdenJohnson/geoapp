@@ -1,7 +1,3 @@
-# AGENTS
-
-When starting work, always print: AGENT_OK_FRONT in the first response.
-
 ## Principles
 - Make the smallest change that solves the problem; avoid large refactors unless asked.
 - Prefer minimum-complexity solutions and avoid unnecessary abstractions.
