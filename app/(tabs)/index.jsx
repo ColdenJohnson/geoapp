@@ -176,25 +176,34 @@ export default function HomeScreen() {
     }
   }, [location, pins, didCenter, userCoords, handleCenterOnUser]);
 
-  async function handleCreateChallengePress() {
-    // Prepare to receive the message BEFORE navigating
+  function handleCreateChallengePress() {
+    if (!location) {
+      showToast('Location unavailable. Try again once we have your position.');
+      return;
+    }
+
+    const uploadPromise = new Promise((resolve) => {
+      setUploadResolver(resolve);
+    });
     const messagePromise = new Promise((resolve) => {
       const { setMessageResolver } = require('../../lib/promiseStore');
       setMessageResolver(resolve);
     });
-  
-    // Navigate to upload and tell it what the next screen is
-    const uploadResult = await new Promise((resolve) => {
-      setUploadResolver(resolve);
-      router.push({ pathname: '/upload', params: { next: '/enter_message' } });
-    });
-  
-    // Wait for the message (enter_message will resolve it)
-    const message = await messagePromise;
-  
-    // Create the challenge with both pieces
-    await newChallenge(location, uploadResult, message);
-    router.replace('/');
+
+    router.push('/enter_message');
+
+    Promise.all([uploadPromise, messagePromise])
+      .then(async ([fileUrl, message]) => {
+        if (!fileUrl) {
+          console.warn('Upload did not return a file url; skipping challenge creation');
+          return;
+        }
+        await newChallenge(location, fileUrl, message);
+        router.replace('/');
+      })
+      .catch((error) => {
+        console.error('Failed to create challenge after upload', error);
+      });
   }
 
   async function viewPhotoChallenge(pin) {

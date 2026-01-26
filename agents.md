@@ -9,6 +9,15 @@
 .
 |-- geoapp/                  # Expo/React Native app (frontend)
 |   |-- app/                 # Expo Router routes (primary screens)
+|   |   |-- _layout.jsx
+|   |   |-- (tabs)
+|   |   |   |-- _layout.jsx
+|   |   |   |-- index.jsx
+|   |   |   |-- profile.jsx
+|   |   |   `-- vote.jsx
+|   |   |-- enter_message.jsx
+|   |   |-- upload.jsx
+|   |   `-- view_photochallenge.jsx
 |   |-- screens/             # Legacy screens
 |   |-- components/          # Shared UI
 |   |-- hooks/               # React hooks (Auth, etc.)
@@ -26,5 +35,8 @@
 |   `-- package.json
 ```
 
+When accessing files in (tabs), file paths need to be escaped. For example: `cd "app/(tabs)/"`
+
 ## Workflow
 - Expo Router is file-based; new routes belong in `geoapp/app`.
+- You may run tests with `npx jest`

@@ -26,6 +26,20 @@ jest.mock('expo-router', () => {
   };
 });
 
+// Lightweight image mock to avoid native module errors
+jest.mock('expo-image', () => {
+  const { Image } = require('react-native');
+  return { Image };
+});
+
+// Mock vector icons to avoid font loading
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { View, Text } = require('react-native');
+  const Icon = ({ name }) => <View><Text>{name}</Text></View>;
+  return { FontAwesome6: Icon };
+});
+
 // Camera mocks: grant permissions by default and expose a stub ref API
 
 jest.mock('expo-camera', () => {

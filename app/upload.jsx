@@ -3,7 +3,7 @@ import {
   useCameraPermissions,
 } from "expo-camera";
 import { useState, useRef, useMemo } from 'react'
-import { Button, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { Image } from "expo-image";
 // import storage from '@react-native-firebase/storage';
@@ -13,6 +13,7 @@ import { resolveUpload } from '../lib/promiseStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { uploadImage } from '@/lib/uploadHelpers';
 import { usePalette } from '@/hooks/usePalette';
+import { CTAButton } from '@/components/ui/Buttons';
 
 export default function Upload({ initialUri = null }) {
   const [facing, setFacing] = useState ("back");
@@ -63,7 +64,7 @@ export default function Upload({ initialUri = null }) {
     return (
       <View style={styles.container}>
         <Text style={styles.message}>We need your permission to show the camera for Geode photo upload to work properly.</Text>
-        <Button title="Continue" onPress={requestPermission} />
+        <CTAButton title="Continue" onPress={requestPermission} />
       </View>
     );
   }
@@ -90,26 +91,30 @@ export default function Upload({ initialUri = null }) {
           contentFit="contain"
           style={{ width: '100%', aspectRatio: 3/4 }}
         />
-        <Button onPress={() => setUri(null)} title="Take another picture" />
-        <Button 
-  onPress={async () => {
-    try {
-      const downloadURL = await uploadImage(uri); 
-      resolveUpload(downloadURL); // fulfill the original Promise
-      if (next) {
-        console.log('Navigating to next:', next);
-        router.push(String(next));
-      } else {
-        console.log('No next specified, going back');
-        router.back();
-      }
-    } catch (err) {
-      console.error('Error uploading image:', err);
-    }
-    // TODO: make this loading screen not slow
-  }}
-  title="Upload picture"
-/>
+        <View style={styles.actionRow}>
+          <CTAButton style={[styles.actionButton, { marginRight: 12 }]} onPress={() => setUri(null)} title="Retake Picture" />
+          <CTAButton
+            style={styles.actionButton}
+            variant="filled"
+            onPress={async () => {
+              try {
+                const downloadURL = await uploadImage(uri);
+                resolveUpload(downloadURL); // fulfill the original Promise
+                if (next) {
+                  console.log('Navigating to next:', next);
+                  router.push(String(next));
+                } else {
+                  console.log('No next specified, going back');
+                  router.back();
+                }
+              } catch (err) {
+                console.error('Error uploading image:', err);
+              }
+              // TODO: make this loading screen not slow
+            }}
+            title="Upload"
+          />
+        </View>
       </View>
     );
   };
@@ -181,6 +186,12 @@ function createStyles(colors) {
     camera: {
       flex: 1,
     },
+    actionRow: {
+      flexDirection: 'row',
+      width: '100%',
+      marginTop: 12,
+    },
+    actionButton: { flex: 1 },
     shutterContainer: {
       position: "absolute",
       bottom: 90,
