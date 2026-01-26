@@ -5,7 +5,7 @@ import { Pressable, Text, StyleSheet, View } from 'react-native';
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii, fontSizes, shadows } from '@/theme/tokens';
 
-export function CTAButton({ title, onPress, variant = 'primary', style, textStyle, disabled = false }) {
+export function CTAButton({ title, onPress, variant = 'primary', style, textStyle }) {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isFilled = variant === 'filled';
@@ -13,12 +13,10 @@ export function CTAButton({ title, onPress, variant = 'primary', style, textStyl
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
       style={({ pressed }) => [
         styles.base,
         isFilled ? styles.filled : variant === 'primary' ? styles.primary : styles.secondary,
-        disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
+        pressed && styles.pressed,
         style,
       ]}
     >
@@ -26,7 +24,6 @@ export function CTAButton({ title, onPress, variant = 'primary', style, textStyl
         style={[
           styles.text,
           isFilled ? styles.textFilled : variant === 'primary' ? styles.textPrimary : styles.textSecondary,
-          disabled && styles.textDisabled,
           textStyle,
         ]}
       >
@@ -80,12 +77,6 @@ function createStyles(colors) {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
-    disabled: {
-      backgroundColor: colors.border,
-      borderColor: colors.border,
-      shadowOpacity: 0,
-      elevation: 0,
-    },
     pressed: { opacity: 0.9 },
     text: {
       fontSize: fontSizes.lg,
@@ -95,7 +86,6 @@ function createStyles(colors) {
     textPrimary: { color: colors.primary },
     textSecondary: { color: colors.text },
     textFilled: { color: colors.primaryTextOn },
-    textDisabled: { color: colors.textMuted },
     outlineButton: {
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
