@@ -32,4 +32,3 @@ When starting work, always print: AGENT_OK_FRONT in the first response.
 
 ## Workflow
 - Expo Router is file-based; new routes belong in `geoapp/app`.
-- Use npm (package-locks exist in both apps).
