@@ -3,13 +3,18 @@ import { useColorScheme } from 'react-native';
 import { useMemo } from 'react';
 import * as Palette from '@/theme/palette';
 
-export function usePalette() {
+export function useIsDarkMode() {
   const scheme = useColorScheme();
+  return scheme === 'dark';
+}
+
+export function usePalette() {
+  const isDarkMode = useIsDarkMode();
 
   return useMemo(() => {
-    if (scheme === 'dark') return Palette.dark;
+    if (isDarkMode) return Palette.dark;
     return Palette.light;
-  }, [scheme]);
+  }, [isDarkMode]);
 }
 
 export function getPalette(mode) {

@@ -1,14 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useContext } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
 import { View, TextInput, Text, StyleSheet, Alert, Pressable, Image, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import auth from '@react-native-firebase/auth';
-import CountryPicker from 'react-native-country-picker-modal';
+import CountryPicker, { DARK_THEME, DEFAULT_THEME } from 'react-native-country-picker-modal';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useContext } from 'react';
 import { AuthContext } from '@/hooks/AuthContext';
-import { usePalette } from '@/hooks/usePalette';
+import { useIsDarkMode, usePalette } from '@/hooks/usePalette';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton, OutlineIconButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
@@ -25,14 +24,34 @@ export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [isPhoneMode, setIsPhoneMode] = useState(true);
   const [countryCode, setCountryCode] = useState('US');
   const [callingCode, setCallingCode] = useState('1');
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const { setUser } = useContext(AuthContext);
   const colors = usePalette();
+  const isDarkMode = useIsDarkMode();
+  const countryPickerTheme = useMemo(() => (
+    isDarkMode ? DARK_THEME : DEFAULT_THEME
+  ), [isDarkMode]);
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
 
   const handleLogin = async () => {
     try {
@@ -63,6 +82,7 @@ export default function LoginScreen() {
   const handleSendSms = async () => {
     try {
       setErrorMsg('');
+      if (cooldownSeconds > 0) return;
       const nationalDigits = phoneNumber.replace(/\D/g, '');
       if (!nationalDigits) {
         Alert.alert('Missing phone number', 'Please enter your phone number.');
@@ -71,9 +91,13 @@ export default function LoginScreen() {
 
       // This triggers app verification (silent APNs / reCAPTCHA) and sends the SMS.
       const e164 = `+${callingCode}${nationalDigits}`;
+      setSmsCode('');
+      setConfirmation({ pending: true });
+      setCooldownSeconds(30);
       const confirm = await auth().signInWithPhoneNumber(e164);
       setConfirmation(confirm);
     } catch (err) {
+      setConfirmation(null);
       setErrorMsg(err?.message || String(err));
     }
   };
@@ -81,8 +105,8 @@ export default function LoginScreen() {
   const handleConfirmCode = async () => {
     try {
       setErrorMsg('');
-      if (!confirmation) {
-        Alert.alert('No verification in progress', 'Tap the button above to send a code first.');
+      if (!confirmation || typeof confirmation.confirm !== 'function') {
+        Alert.alert('Starting verification', 'Please wait a moment for the code request to finish.');
         return;
       }
       if (!smsCode) {
@@ -104,6 +128,8 @@ export default function LoginScreen() {
   };
 
   const authTitle = isRegistering ? 'Sign Up' : 'Login';
+  const isConfirmationPending = isPhoneMode && confirmation && typeof confirmation.confirm !== 'function';
+  const isSmsCooldown = isPhoneMode && !confirmation && cooldownSeconds > 0;
   const primaryAction = isPhoneMode
     ? confirmation
       ? handleConfirmCode
@@ -112,6 +138,7 @@ export default function LoginScreen() {
       ? handleRegister
       : handleLogin;
   const primaryLabel = isPhoneMode && confirmation ? 'Confirm code' : authTitle;
+  const primaryDisabled = isPhoneMode ? (isSmsCooldown || isConfirmationPending) : false;
 
   const switchToPhone = () => {
     setErrorMsg('');
@@ -183,6 +210,7 @@ export default function LoginScreen() {
                       withCallingCode
                       withCallingCodeButton
                       countryCode={countryCode}
+                      theme={countryPickerTheme}
                       visible={countryPickerVisible}
                       onClose={() => setCountryPickerVisible(false)}
                       onSelect={(country) => {
@@ -221,14 +249,27 @@ export default function LoginScreen() {
                     selectionColor={colors.primary}
                     cursorColor={colors.text}
                   />
-                  <Pressable onPress={handleSendSms} style={styles.resendLink}>
-                    <Text style={styles.resendText}>Resend code</Text>
-                  </Pressable>
+                  {cooldownSeconds > 0 ? (
+                    <Text style={styles.cooldownText}>
+                      Resend available in {cooldownSeconds}s
+                    </Text>
+                  ) : (
+                    <Pressable onPress={handleSendSms} style={styles.resendLink}>
+                      <Text style={styles.resendText}>Resend code</Text>
+                    </Pressable>
+                  )}
                 </>
               ) : (
-                <Text style={formStyles.helperText}>
-                  We will text a 6-digit code to finish {authTitle.toLowerCase()}.
-                </Text>
+                <>
+                  <Text style={formStyles.helperText}>
+                    We will text a 6-digit code to finish {authTitle.toLowerCase()}.
+                  </Text>
+                  {cooldownSeconds > 0 ? (
+                    <Text style={styles.cooldownText}>
+                      Request another code in {cooldownSeconds}s
+                    </Text>
+                  ) : null}
+                </>
               )}
             </>
           )}
@@ -252,6 +293,7 @@ export default function LoginScreen() {
               onPress={primaryAction}
               variant="filled"
               style={styles.primaryButton}
+              disabled={primaryDisabled}
             />
           </View>
         </BottomBar>
@@ -384,6 +426,10 @@ function createStyles(colors) {
     resendText: {
       color: colors.primary,
       fontWeight: '600',
+    },
+    cooldownText: {
+      color: colors.textMuted,
+      marginTop: spacing.xs,
     },
     toggleRow: {
       flexDirection: 'row',
