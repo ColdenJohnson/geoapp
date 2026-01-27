@@ -1,6 +1,6 @@
-<?xml version="1.1" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.1">
+<plist version="1.0">
   <dict>
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.1</string>
+    <string>1.1.2</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -27,7 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>geodeapp</string>
+          <string>sidequest</string>
           <string>com.coldenjohnson.geode</string>
         </array>
       </dict>
@@ -80,11 +80,6 @@
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
-    </array>
-    <key>UIBackgroundModes</key>
-    <array>
-      <string>fetch</string>
-      <string>remote-notification</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>

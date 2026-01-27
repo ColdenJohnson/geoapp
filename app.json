@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Geode",
+    "name": "SideQuest",
     "slug": "geoapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "geodeapp",
+    "scheme": "sidequest",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -13,10 +13,10 @@
       "bundleIdentifier": "com.coldenjohnson.geode",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSCameraUsageDescription": "Geode needs camera access to take and upload challenge photos.",
-        "NSPhotoLibraryUsageDescription": "Geode needs access to your photos so you can select and upload challenge submissions and update your profile photo.",
-        "NSPhotoLibraryAddUsageDescription": "Geode can save photos you capture back to your library if you choose.",
-        "NSLocationWhenInUseUsageDescription": "Geode uses your location to show nearby photo challenges and enable on‑site submissions.",
+        "NSCameraUsageDescription": "SideQuest needs camera access to take and upload challenge photos.",
+        "NSPhotoLibraryUsageDescription": "SideQuest needs access to your photos so you can select and upload challenge submissions and update your profile photo.",
+        "NSPhotoLibraryAddUsageDescription": "SideQuest can save photos you capture back to your library if you choose.",
+        "NSLocationWhenInUseUsageDescription": "SideQuest uses your location to show nearby photo challenges and enable on‑site submissions.",
         "ITSAppUsesNonExemptEncryption": false,
         "NSHumanReadableCopyright": "Copyright © 2025 Colden Johnson. All rights reserved."
       }
@@ -53,14 +53,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Geode needs camera access to take challenge photos.",
+          "cameraPermission": "SideQuest needs camera access to take challenge photos.",
           "recordAudioAndroid": false
         }
       ],
       [
         "react-native-vision-camera",
         {
-          "cameraPermissionText": "Geode needs camera access to take challenge photos.",
+          "cameraPermissionText": "SideQuest needs camera access to take challenge photos.",
           "enableMicrophonePermission": false
         }
       ],
@@ -73,8 +73,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Geode needs access to your photos so you can select and upload submissions.",
-          "savePhotosPermission": "Geode can save photos you capture back to your library if you choose.",
+          "photosPermission": "SideQuest needs access to your photos so you can select and upload submissions.",
+          "savePhotosPermission": "SideQuest can save photos you capture back to your library if you choose.",
           "isAccessMediaLocationEnabled": true
         }
       ],

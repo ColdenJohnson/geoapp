@@ -63,7 +63,7 @@ export default function Upload({ initialUri = null }) {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>We need your permission to show the camera for Geode photo upload to work properly.</Text>
+        <Text style={styles.message}>We need your permission to show the camera for SideQuest photo upload to work properly.</Text>
         <CTAButton title="Continue" onPress={requestPermission} />
       </View>
     );

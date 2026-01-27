@@ -21,7 +21,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   }
 }
 
-rootProject.name = 'Geode'
+rootProject.name = 'SideQuest'
 
 dependencyResolutionManagement {
   versionCatalogs {
