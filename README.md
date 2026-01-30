@@ -67,6 +67,8 @@ Do Product -> Archive
 
 
 ## Gource File
+https://github.com/acaudwell/Gource
+
 gource /Users/colden/Documents/VSCode/Geo/geoapp \
   --start-date "2026-01-05" \
   --auto-skip-seconds 0.2 \

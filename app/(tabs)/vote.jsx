@@ -38,6 +38,7 @@ export default function GlobalVoteScreen() {
   const dismissProgress = useSharedValue(0);
   const winnerIndex = useSharedValue(-1);
   const animatingVote = useSharedValue(false);
+  const skipSpringReset = useSharedValue(false);
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -104,8 +105,9 @@ export default function GlobalVoteScreen() {
     dismissProgress.value = 0;
     winnerIndex.value = -1;
     animatingVote.value = false;
+    skipSpringReset.value = false;
     setAnimating(false);
-  }, [photos, setActiveCard, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote]);
+  }, [photos, setActiveCard, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote, skipSpringReset]);
 
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
@@ -192,11 +194,17 @@ export default function GlobalVoteScreen() {
         runOnJS(handleVote)(targetIndex);
       } else if (absX >= FOCUS_SWIPE_THRESHOLD) {
         const targetIndex = translationX > 0 ? 0 : 1;
-        runOnJS(setActiveCard)(targetIndex);
+        selectedIndex.value = targetIndex;
+        skipSpringReset.value = true;
+        translateX.value = withTiming(0, { duration: 180 });
       }
     })
     .onFinalize(() => {
       if (animatingVote.value) return;
+      if (skipSpringReset.value) {
+        skipSpringReset.value = false;
+        return;
+      }
       translateX.value = withSpring(0);
     });
 
