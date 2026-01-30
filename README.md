@@ -64,3 +64,16 @@ After this process, the app can be started normally using `npx expo start`
 ## Publishing to app store process:
 Set device to iOS device (arm 64)
 Do Product -> Archive
+
+
+## Gource File
+gource /Users/colden/Documents/VSCode/Geo/geoapp \
+  --start-date "2026-01-05" \
+  --auto-skip-seconds 0.2 \
+  --hide date \
+  -1280x720 \
+  -o - \
+| ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i - \
+  -vcodec libx264 -preset medium -crf 18 \
+  -pix_fmt yuv420p \
+  gource.mp4
