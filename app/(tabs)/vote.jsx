@@ -22,8 +22,8 @@ import {
   getOrLoadGlobalDuelPair,
 } from '@/lib/globalDuelQueue';
 
-const SWIPE_HORIZONTAL_THRESHOLD = 30;
-const SWIPE_VERTICAL_THRESHOLD = 90;
+const FOCUS_SWIPE_THRESHOLD = 24;
+const VOTE_SWIPE_THRESHOLD = 140;
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
 
 export default function GlobalVoteScreen() {
@@ -31,12 +31,10 @@ export default function GlobalVoteScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [animating, setAnimating] = useState(false);
-  const [selectedCard, setSelectedCard] = useState(0);
   const isActiveRef = useRef(false);
 
   const selectedIndex = useSharedValue(0);
   const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
   const dismissProgress = useSharedValue(0);
   const winnerIndex = useSharedValue(-1);
   const animatingVote = useSharedValue(false);
@@ -89,19 +87,9 @@ export default function GlobalVoteScreen() {
     }, [syncFromQueue])
   );
 
-  const bannerStyle = useAnimatedStyle(
-    () => {
-      const pullUp = Math.max(0, -translateY.value);
-      const progress = Math.min(1, pullUp / 150);
-      return { opacity: withTiming(progress, { duration: 120 }) };
-    },
-    [translateY]
-  );
-
   const setActiveCard = useCallback(
     (index) => {
       const next = Math.max(0, Math.min(index, 1));
-      setSelectedCard(next);
       selectedIndex.value = next;
     },
     [selectedIndex]
@@ -113,12 +101,11 @@ export default function GlobalVoteScreen() {
     setActiveCard(nextIdx);
     selectedIndex.value = nextIdx;
     translateX.value = 0;
-    translateY.value = 0;
     dismissProgress.value = 0;
     winnerIndex.value = -1;
     animatingVote.value = false;
     setAnimating(false);
-  }, [photos, setActiveCard, selectedIndex, translateX, translateY, dismissProgress, winnerIndex, animatingVote]);
+  }, [photos, setActiveCard, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote]);
 
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
@@ -157,18 +144,6 @@ export default function GlobalVoteScreen() {
     [choose, photos]
   );
 
-  const handleHorizontalSwitch = useCallback(
-    (direction) => {
-      if (!Array.isArray(photos) || photos.length < 2) return;
-      if (direction === 'left') {
-        setActiveCard(0);
-      } else if (direction === 'right') {
-        setActiveCard(1);
-      }
-    },
-    [photos, setActiveCard]
-  );
-
   const handleVote = useCallback(
     (idx) => {
       if (loading || submitting || animating) return;
@@ -192,45 +167,44 @@ export default function GlobalVoteScreen() {
     [animating, animatingVote, chooseByIndex, dismissProgress, loading, photos, selectedIndex, submitting, winnerIndex]
   );
 
+  const focusIndex = useDerivedValue(() => {
+    if (Math.abs(translateX.value) > FOCUS_SWIPE_THRESHOLD) {
+      return translateX.value > 0 ? 0 : 1;
+    }
+    return selectedIndex.value;
+  });
+
+  const swipeProgress = useDerivedValue(() => {
+    const distance = Math.abs(translateX.value);
+    return Math.min(distance / VOTE_SWIPE_THRESHOLD, 1);
+  });
+
   const panGesture = Gesture.Pan()
     .enabled(photos.length >= 2 && !loading && !submitting && !animating)
     .onUpdate((event) => {
       translateX.value = event.translationX;
-      translateY.value = event.translationY;
     })
     .onEnd((event) => {
-      const { translationX, translationY } = event;
+      const { translationX } = event;
       const absX = Math.abs(translationX);
-      const absY = Math.abs(translationY);
-
-      if (translationY < -SWIPE_VERTICAL_THRESHOLD && absY > absX) {
-        runOnJS(handleVote)(selectedIndex.value);
-      } else if (translationX > SWIPE_HORIZONTAL_THRESHOLD) {
-        runOnJS(handleHorizontalSwitch)('left');
-      } else if (translationX < -SWIPE_HORIZONTAL_THRESHOLD) {
-        runOnJS(handleHorizontalSwitch)('right');
+      if (absX >= VOTE_SWIPE_THRESHOLD) {
+        const targetIndex = translationX > 0 ? 0 : 1;
+        runOnJS(handleVote)(targetIndex);
+      } else if (absX >= FOCUS_SWIPE_THRESHOLD) {
+        const targetIndex = translationX > 0 ? 0 : 1;
+        runOnJS(setActiveCard)(targetIndex);
       }
     })
     .onFinalize(() => {
       if (animatingVote.value) return;
       translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
     });
-
-  const selectedPhoto = photos[selectedCard];
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Vote for the best photo</Text>
-          <Text style={styles.subtitle}>Swipe ⬅️➡️ to select, then up to choose the winner.</Text>
-        </View>
-
-        <View pointerEvents="none" style={styles.bannerContainer}>
-          <Animated.View style={[styles.banner, bannerStyle]}>
-            <Text style={styles.bannerText}>👑 WINNER SELECTED 👑</Text>
-          </Animated.View>
         </View>
 
         <View style={styles.body}>
@@ -253,9 +227,9 @@ export default function GlobalVoteScreen() {
                       index={idx}
                       photo={photo}
                       styles={styles}
-                      selectedIndex={selectedIndex}
                       translateX={translateX}
-                      translateY={translateY}
+                      focusIndex={focusIndex}
+                      swipeProgress={swipeProgress}
                       winnerIndex={winnerIndex}
                       dismissProgress={dismissProgress}
                     />
@@ -270,34 +244,46 @@ export default function GlobalVoteScreen() {
   );
 }
 
-function AnimatedPhotoCard({ photo, index, selectedIndex, translateX, translateY, winnerIndex, dismissProgress, styles }) {
+function AnimatedPhotoCard({
+  photo,
+  index,
+  translateX,
+  focusIndex,
+  swipeProgress,
+  winnerIndex,
+  dismissProgress,
+  styles,
+}) {
   const focus = useDerivedValue(
-    () => withTiming(selectedIndex.value === index ? 1 : 0, { duration: 220 }),
-    [selectedIndex, index]
+    () => withTiming(focusIndex.value === index ? 1 : 0, { duration: 180 }),
+    [focusIndex, index]
   );
 
   const animatedStyle = useAnimatedStyle(
     () => {
       const active = focus.value;
-      const isActive = selectedIndex.value === index;
-      const activeOffsetX = index === 0 ? -16 : 16; // keep selected card slightly off center
-      const restingOffsetX = index === 0 ? -50 : 50;
-      const translateCardX =
-        (isActive ? translateX.value * 0.45 : 0) + activeOffsetX * active + restingOffsetX * (1 - active);
-      const baseTranslateY = (isActive ? translateY.value * 0.55 : 0) + (1 - active) * 18;
-      const flyUp = winnerIndex.value === index ? -900 * dismissProgress.value : 0;
-      const translateCardY = baseTranslateY + flyUp;
-      const baseScale = 0.77 + active * 0.15;
-      const scale = winnerIndex.value === index ? baseScale + 0.05 * dismissProgress.value : baseScale;
+      const progress = swipeProgress.value;
+      const swipeActive = Math.abs(translateX.value) > 1;
+      const targetIndex = swipeActive ? (translateX.value > 0 ? 0 : 1) : focusIndex.value;
+      const isTarget = swipeActive && targetIndex === index;
+      const baseOffsetX = index === 0 ? -120 : 120;
+      const focusNudge = (index === 0 ? -1 : 1) * active * 14;
+      const pullToCenter = isTarget ? baseOffsetX * (1 - progress) : baseOffsetX + focusNudge;
+      const pushAway = !isTarget && swipeActive ? baseOffsetX + (index === 0 ? -18 : 18) * progress : pullToCenter;
+      const translateCardX = isTarget ? pullToCenter : pushAway;
+      const lift = winnerIndex.value === index ? -40 * dismissProgress.value : 0;
+      const baseScale = 0.82 + active * 0.06;
+      const scale = isTarget ? baseScale + 0.22 * progress : baseScale - 0.04 * progress;
+      const winnerBoost = winnerIndex.value === index ? 0.05 * dismissProgress.value : 0;
       const fadeOut = winnerIndex.value === -1 ? 1 : winnerIndex.value === index ? 1 : 1 - dismissProgress.value;
 
       return {
-        zIndex: isActive ? 2 : 1,
-        shadowOpacity: 0.18 + 0.25 * active,
+        zIndex: isTarget ? 3 : focusIndex.value === index ? 2 : 1,
+        shadowOpacity: 0.16 + 0.3 * active + (isTarget ? 0.2 * progress : 0),
         transform: [
           { translateX: translateCardX },
-          { translateY: translateCardY },
-          { scale },
+          { translateY: lift },
+          { scale: scale + winnerBoost },
         ],
         opacity: fadeOut,
       };
@@ -325,7 +311,6 @@ function createStyles(colors) {
     container: { flex: 1, paddingHorizontal: 16, paddingTop: 12, gap: 16, backgroundColor: colors.surface },
     header: { gap: 4 },
     title: { fontSize: 24, fontWeight: '700', color: colors.text },
-    subtitle: { fontSize: 15, color: colors.textMuted },
     body: { flex: 1, gap: 16 },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     emptyText: { color: colors.textMuted, fontSize: 16, textAlign: 'center', paddingHorizontal: 12 },
@@ -363,35 +348,5 @@ function createStyles(colors) {
     metaDetail: { fontSize: 14, color: '#F3F4F6' },
     helperText: { color: colors.textMuted, textAlign: 'center', fontSize: 14 },
     cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
-    bannerContainer: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      height: '10%',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 5,
-    },
-    banner: {
-      width: '100%',
-      height: '100%',
-      paddingHorizontal: 12,
-      backgroundColor: 'rgba(255, 215, 0, 0.92)',
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: '#B8860B',
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
-      justifyContent: 'center',
-    },
-    bannerText: {
-      color: '#3B2F05',
-      fontWeight: '900',
-      letterSpacing: 0.2,
-      textAlign: 'center',
-      fontSize: 22,
-    },
   });
 }
