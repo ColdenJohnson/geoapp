@@ -8,6 +8,7 @@ import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
 import TopBar from '@/components/ui/TopBar';
 import { usePalette } from '@/hooks/usePalette';
+import DuelDeck from '@/components/vote/DuelDeck';
 
 export default function ViewPhotoChallengeScreen() {
   const { pinId } = useLocalSearchParams();   // pinId comes from router params
@@ -69,9 +70,26 @@ export default function ViewPhotoChallengeScreen() {
   }
 
   async function choose(winnerId, loserId) {
-    await voteDuel({ pinId, winnerPhotoId: winnerId, loserPhotoId: loserId });
-    await loadDuel(); // get next pair
+    try {
+      await voteDuel({ pinId, winnerPhotoId: winnerId, loserPhotoId: loserId });
+    } catch (error) {
+      console.error('Failed to submit duel vote', error);
+    } finally {
+      await loadDuel(); // get next pair
+    }
   }
+
+  const handleDuelVote = useCallback(
+    (winnerIndex, pairOverride) => {
+      const pair = Array.isArray(pairOverride) ? pairOverride : duelPhotos;
+      if (!Array.isArray(pair) || pair.length < 2) return;
+      const winner = pair[winnerIndex];
+      const loser = pair[winnerIndex === 0 ? 1 : 0];
+      if (!winner?._id || !loser?._id) return;
+      choose(winner._id, loser._id);
+    },
+    [choose, duelPhotos]
+  );
 
     async function uploadPhotoChallenge() {
     const uploadResult = await new Promise((resolve) => {
@@ -102,22 +120,24 @@ export default function ViewPhotoChallengeScreen() {
               </View>
             )}
             ListHeaderComponent={
-              <View style={{ marginBottom: 12 }}>
+              <View style={{ marginBottom: 20 }}>
                 <Text style={[styles.quickVoteTitle, { marginLeft: 4 }]}>Quick Vote</Text>
                 <View style={styles.quickVoteCard}>
                   {duelPhotos?.length >= 2 ? (
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <Pressable style={{ flex: 1 }} onPress={() => choose(duelPhotos[0]._id, duelPhotos[1]._id)}>
-                        <Image source={{ uri: duelPhotos[0].file_url }} style={{ width: '100%', height: 160, borderRadius: 8 }} />
-                        <Text style={[styles.quickVoteAction, { marginTop: 4 }]}>Pick</Text>
-                        <Text style={styles.quickVoteMeta}>Elo: {Number.isFinite(duelPhotos[0]?.elo) ? duelPhotos[0].elo : -1}</Text>
-                      </Pressable>
-                      <Pressable style={{ flex: 1 }} onPress={() => choose(duelPhotos[1]._id, duelPhotos[0]._id)}>
-                        <Image source={{ uri: duelPhotos[1].file_url }} style={{ width: '100%', height: 160, borderRadius: 8 }} />
-                        <Text style={[styles.quickVoteAction, { marginTop: 4 }]}>Pick</Text>
-                        <Text style={styles.quickVoteMeta}>Elo: {Number.isFinite(duelPhotos[1]?.elo) ? duelPhotos[1].elo : -1}</Text>
-                      </Pressable>
-                    </View>
+                    <DuelDeck
+                      pair={duelPhotos}
+                      disabled={duelLoading}
+                      onVote={handleDuelVote}
+                      deckStyle={styles.quickVoteDeck}
+                      cardAspectRatio={16 / 12}
+                      renderMeta={(photo) => (
+                        <View style={styles.quickVoteMetaOverlay}>
+                          <Text style={styles.quickVoteMetaText}>
+                            Elo {Number.isFinite(photo?.elo) ? photo.elo : 1000}
+                          </Text>
+                        </View>
+                      )}
+                    />
                   ) : (
                     <View style={{ alignItems: 'center', padding: 16 }}>
                       <Text style={{ color: colors.textMuted, marginBottom: 8 }}>{duelLoading ? 'Loading pair...' : 'Not enough photos to start a duel'}</Text>
@@ -166,8 +186,20 @@ function createStyles(colors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
     },
-    quickVoteAction: { textAlign: 'center', color: colors.text },
-    quickVoteMeta: { textAlign: 'center', color: colors.textMuted },
+    quickVoteDeck: {
+      height: 200,
+      maxWidth: 520,
+    },
+    quickVoteMetaOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+    },
+    quickVoteMetaText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
     viewerBackdrop: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.9)',

@@ -1,19 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Image } from 'expo-image';
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useDerivedValue,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { voteGlobalDuel } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
+import DuelDeck from '@/components/vote/DuelDeck';
 import {
   advanceGlobalDuelQueue,
   DEFAULT_PRELOAD_COUNT,
@@ -22,23 +13,13 @@ import {
   getOrLoadGlobalDuelPair,
 } from '@/lib/globalDuelQueue';
 
-const FOCUS_SWIPE_THRESHOLD = 24;
-const VOTE_SWIPE_THRESHOLD = 140;
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
 
 export default function GlobalVoteScreen() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [animating, setAnimating] = useState(false);
   const isActiveRef = useRef(false);
-
-  const selectedIndex = useSharedValue(0);
-  const translateX = useSharedValue(0);
-  const dismissProgress = useSharedValue(0);
-  const winnerIndex = useSharedValue(-1);
-  const animatingVote = useSharedValue(false);
-  const skipSpringReset = useSharedValue(false);
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -88,27 +69,6 @@ export default function GlobalVoteScreen() {
     }, [syncFromQueue])
   );
 
-  const setActiveCard = useCallback(
-    (index) => {
-      const next = Math.max(0, Math.min(index, 1));
-      selectedIndex.value = next;
-    },
-    [selectedIndex]
-  );
-
-  useEffect(() => {
-    const hasPair = Array.isArray(photos) && photos.length >= 2;
-    const nextIdx = hasPair ? (Math.random() < 0.5 ? 0 : 1) : 0;
-    setActiveCard(nextIdx);
-    selectedIndex.value = nextIdx;
-    translateX.value = 0;
-    dismissProgress.value = 0;
-    winnerIndex.value = -1;
-    animatingVote.value = false;
-    skipSpringReset.value = false;
-    setAnimating(false);
-  }, [photos, setActiveCard, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote, skipSpringReset]);
-
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
       if (!winnerId || !loserId || submitting) return;
@@ -146,68 +106,6 @@ export default function GlobalVoteScreen() {
     [choose, photos]
   );
 
-  const handleVote = useCallback(
-    (idx) => {
-      if (loading || submitting || animating) return;
-      const target = typeof idx === 'number' ? idx : selectedIndex.value;
-      const pairSnapshot = photos.slice(0, 2);
-      animatingVote.value = true;
-      setAnimating(true);
-      winnerIndex.value = target;
-      dismissProgress.value = 0;
-      dismissProgress.value = withTiming(
-        1,
-        { duration: 250 },
-        (finished) => {
-          if (finished) {
-            runOnJS(chooseByIndex)(target, pairSnapshot);
-          }
-          animatingVote.value = false;
-        }
-      );
-    },
-    [animating, animatingVote, chooseByIndex, dismissProgress, loading, photos, selectedIndex, submitting, winnerIndex]
-  );
-
-  const focusIndex = useDerivedValue(() => {
-    if (Math.abs(translateX.value) > FOCUS_SWIPE_THRESHOLD) {
-      return translateX.value > 0 ? 0 : 1;
-    }
-    return selectedIndex.value;
-  });
-
-  const swipeProgress = useDerivedValue(() => {
-    const distance = Math.abs(translateX.value);
-    return Math.min(distance / VOTE_SWIPE_THRESHOLD, 1);
-  });
-
-  const panGesture = Gesture.Pan()
-    .enabled(photos.length >= 2 && !loading && !submitting && !animating)
-    .onUpdate((event) => {
-      translateX.value = event.translationX;
-    })
-    .onEnd((event) => {
-      const { translationX } = event;
-      const absX = Math.abs(translationX);
-      if (absX >= VOTE_SWIPE_THRESHOLD) {
-        const targetIndex = translationX > 0 ? 0 : 1;
-        runOnJS(handleVote)(targetIndex);
-      } else if (absX >= FOCUS_SWIPE_THRESHOLD) {
-        const targetIndex = translationX > 0 ? 0 : 1;
-        selectedIndex.value = targetIndex;
-        skipSpringReset.value = true;
-        translateX.value = withTiming(0, { duration: 180 });
-      }
-    })
-    .onFinalize(() => {
-      if (animatingVote.value) return;
-      if (skipSpringReset.value) {
-        skipSpringReset.value = false;
-        return;
-      }
-      translateX.value = withSpring(0);
-    });
-
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -226,90 +124,26 @@ export default function GlobalVoteScreen() {
               <Text style={styles.emptyText}>Need at least two photos to start global voting.</Text>
             </View>
           ) : (
-            <>
-              <GestureDetector gesture={panGesture}>
-                <View style={styles.deckArea}>
-                  {photos.slice(0, 2).map((photo, idx) => (
-                    <AnimatedPhotoCard
-                      key={photo._id ?? idx}
-                      index={idx}
-                      photo={photo}
-                      styles={styles}
-                      translateX={translateX}
-                      focusIndex={focusIndex}
-                      swipeProgress={swipeProgress}
-                      winnerIndex={winnerIndex}
-                      dismissProgress={dismissProgress}
-                    />
-                  ))}
+            <DuelDeck
+              pair={photos}
+              disabled={loading || submitting}
+              onVote={chooseByIndex}
+              deckStyle={styles.deckArea}
+              renderMeta={(photo) => (
+                <View style={styles.meta}>
+                  <Text style={styles.metaTitle}>
+                    Global Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
+                  </Text>
+                  <Text style={styles.metaDetail}>
+                    W {photo?.global_wins ?? 0} · L {photo?.global_losses ?? 0}
+                  </Text>
                 </View>
-              </GestureDetector>
-            </>
+              )}
+            />
           )}
         </View>
       </View>
     </SafeAreaView>
-  );
-}
-
-function AnimatedPhotoCard({
-  photo,
-  index,
-  translateX,
-  focusIndex,
-  swipeProgress,
-  winnerIndex,
-  dismissProgress,
-  styles,
-}) {
-  const focus = useDerivedValue(
-    () => withTiming(focusIndex.value === index ? 1 : 0, { duration: 180 }),
-    [focusIndex, index]
-  );
-
-  const animatedStyle = useAnimatedStyle(
-    () => {
-      const active = focus.value;
-      const progress = swipeProgress.value;
-      const swipeActive = Math.abs(translateX.value) > 1;
-      const targetIndex = swipeActive ? (translateX.value > 0 ? 0 : 1) : focusIndex.value;
-      const isTarget = swipeActive && targetIndex === index;
-      const baseOffsetX = index === 0 ? -120 : 120;
-      const focusNudge = (index === 0 ? -1 : 1) * active * 14;
-      const pullToCenter = isTarget ? baseOffsetX * (1 - progress) : baseOffsetX + focusNudge;
-      const pushAway = !isTarget && swipeActive ? baseOffsetX + (index === 0 ? -18 : 18) * progress : pullToCenter;
-      const translateCardX = isTarget ? pullToCenter : pushAway;
-      const lift = winnerIndex.value === index ? -40 * dismissProgress.value : 0;
-      const baseScale = 0.82 + active * 0.06;
-      const scale = isTarget ? baseScale + 0.22 * progress : baseScale - 0.04 * progress;
-      const winnerBoost = winnerIndex.value === index ? 0.05 * dismissProgress.value : 0;
-      const fadeOut = winnerIndex.value === -1 ? 1 : winnerIndex.value === index ? 1 : 1 - dismissProgress.value;
-
-      return {
-        zIndex: isTarget ? 3 : focusIndex.value === index ? 2 : 1,
-        shadowOpacity: 0.16 + 0.3 * active + (isTarget ? 0.2 * progress : 0),
-        transform: [
-          { translateX: translateCardX },
-          { translateY: lift },
-          { scale: scale + winnerBoost },
-        ],
-        opacity: fadeOut,
-      };
-    },
-    [index]
-  );
-
-  return (
-    <Animated.View style={[styles.card, animatedStyle]}>
-      <Image source={{ uri: photo?.file_url }} style={styles.photo} resizeMode="cover" cachePolicy="memory-disk" />
-      <View style={styles.meta}>
-        <Text style={styles.metaTitle}>Global Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}</Text>
-        <Text style={styles.metaDetail}>
-          W {photo?.global_wins ?? 0} · L {photo?.global_losses ?? 0}
-        </Text>
-      </View>
-      <View style={[StyleSheet.absoluteFill, styles.cardOverlay]} pointerEvents="none" />
-    </Animated.View>
   );
 }
 
