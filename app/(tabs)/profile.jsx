@@ -288,25 +288,26 @@ export default function UserProfileScreen() {
           <CTAButton
             title="Edit Profile"
             onPress={() => router.push('/edit_profile')}
-            variant="secondary"
+            variant="primary"
           />
 
           {/* Sign Out button, theoretically. */}
           <View style={styles.actionRow}>
-          <SecondaryButton
-            title="Sign Out"
-            onPress={async () => {
-              try {
-                await auth().signOut();
-                await AsyncStorage.removeItem('user_token');
-                setUser(null); // clear user state, automatically rerun RootLayout
+            <CTAButton
+              title="Sign Out"
+              onPress={async () => {
+                try {
+                  await auth().signOut();
+                  await AsyncStorage.removeItem('user_token');
+                  setUser(null); // clear user state, automatically rerun RootLayout
 
-                console.log('User signed out');
-              } catch (error) {
+                  console.log('User signed out');
+                } catch (error) {
                   console.error('Sign out failed:', error);
                 }
               }}
               style={styles.actionButton}
+              variant="primary"
             />
             <CTAButton
               title="Delete Account"

@@ -8,7 +8,7 @@ import { AuthContext } from '../hooks/AuthContext';
 import { updateUserProfile, setUserHandle } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import { createFormStyles } from '@/components/ui/FormStyles';
-import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
+import { CTAButton } from '@/components/ui/Buttons';
 import { spacing, fontSizes } from '@/theme/tokens';
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
@@ -201,10 +201,11 @@ export default function EditProfileScreen() {
         </View>
 
         <View style={[styles.actionRow, styles.actionRowBottom]}>
-          <SecondaryButton
+          <CTAButton
             title="Cancel"
             onPress={() => router.back()}
             style={styles.actionButton}
+            variant="primary"
           />
           <CTAButton
             title={saving ? 'Saving...' : 'Save'}

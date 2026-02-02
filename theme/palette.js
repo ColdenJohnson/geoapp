@@ -3,7 +3,7 @@
 // TODO: currently, no dark mode is set up. Need to enable. May entail creating an index.js in theme that somehow exports these vals..
 export const light = {
   // brand
-  primary: '#1DA1F2',
+  primary: '#6247AA',
   primaryTextOn: '#FFFFFF',
 
   // text
