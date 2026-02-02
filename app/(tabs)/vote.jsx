@@ -12,14 +12,19 @@ import {
   getCurrentGlobalDuelPair,
   getOrLoadGlobalDuelPair,
   ensureFreshTokensForQueue,
+  getRemainingGlobalVotes,
+  setRemainingGlobalVotes,
+  clearGlobalDuelQueue,
 } from '@/lib/globalDuelQueue';
 
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
+const VOTE_LIMIT_WINDOW_MINUTES = 60;
 
 export default function GlobalVoteScreen() {
   const [duel, setDuel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [remainingVotes, setRemainingVotes] = useState(null);
   const isActiveRef = useRef(false);
   const isDevEnv = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 
@@ -35,9 +40,14 @@ export default function GlobalVoteScreen() {
       isTokenFresh(pkg?.expiresAt),
     [isTokenFresh]
   );
+  const syncRemainingVotes = useCallback(() => {
+    const current = getRemainingGlobalVotes();
+    setRemainingVotes(Number.isFinite(current) ? current : null);
+  }, [setRemainingVotes]);
 
   const syncFromQueue = useCallback(async () => {
     await ensureFreshTokensForQueue('global');
+    syncRemainingVotes();
     const head = getCurrentGlobalDuelPair();
     if (duelReady(head)) {
       setDuel(head);
@@ -48,9 +58,21 @@ export default function GlobalVoteScreen() {
       return;
     }
 
+    if (getRemainingGlobalVotes() === 0) {
+      setDuel(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const next = await getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT);
     await ensureFreshTokensForQueue('global');
+    syncRemainingVotes();
+    if (getRemainingGlobalVotes() === 0) {
+      setDuel(null);
+      setLoading(false);
+      return;
+    }
     const refreshed = getCurrentGlobalDuelPair();
     const candidate = duelReady(refreshed) ? refreshed : next;
     if (!isActiveRef.current) return;
@@ -61,10 +83,23 @@ export default function GlobalVoteScreen() {
       setDuel(null);
       setLoading(true);
     }
-  }, [duelReady, ensureFreshTokensForQueue, ensurePreloadedGlobalDuels, getCurrentGlobalDuelPair, getOrLoadGlobalDuelPair]);
+  }, [
+    duelReady,
+    ensureFreshTokensForQueue,
+    ensurePreloadedGlobalDuels,
+    getCurrentGlobalDuelPair,
+    getOrLoadGlobalDuelPair,
+    syncRemainingVotes,
+  ]);
 
   const advanceQueue = useCallback(() => {
     const next = advanceGlobalDuelQueue(PRELOADED_PAIR_COUNT);
+    syncRemainingVotes();
+    if (getRemainingGlobalVotes() === 0) {
+      setDuel(null);
+      setLoading(false);
+      return;
+    }
     if (duelReady(next)) {
       setDuel(next);
       setLoading(false);
@@ -76,6 +111,12 @@ export default function GlobalVoteScreen() {
         ensureFreshTokensForQueue('global').then(() => {
           const current = getCurrentGlobalDuelPair();
           const candidate = duelReady(current) ? current : pkg;
+          syncRemainingVotes();
+          if (getRemainingGlobalVotes() === 0) {
+            setDuel(null);
+            setLoading(false);
+            return;
+          }
           if (duelReady(candidate)) {
             setDuel(candidate);
             setLoading(false);
@@ -83,7 +124,15 @@ export default function GlobalVoteScreen() {
         });
       });
     }
-  }, [advanceGlobalDuelQueue, duelReady, ensureFreshTokensForQueue, getCurrentGlobalDuelPair, getOrLoadGlobalDuelPair]);
+  }, [
+    advanceGlobalDuelQueue,
+    duelReady,
+    ensureFreshTokensForQueue,
+    getCurrentGlobalDuelPair,
+    getOrLoadGlobalDuelPair,
+    getRemainingGlobalVotes,
+    syncRemainingVotes,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -98,6 +147,10 @@ export default function GlobalVoteScreen() {
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
       if (!winnerId || !loserId || submitting) return;
+      if (remainingVotes === 0) {
+        setLoading(false);
+        return;
+      }
       let activeDuel = duel;
       if (!duelReady(activeDuel) || !isTokenFresh(activeDuel?.expiresAt)) {
         await ensureFreshTokensForQueue('global');
@@ -114,6 +167,12 @@ export default function GlobalVoteScreen() {
       if (isActiveRef.current) {
         setSubmitting(true);
       }
+      if (Number.isFinite(remainingVotes)) {
+        // TODO: Ensure these are properly set and pulled before next queue render, get an error with failed to submit on 7th vote
+        const nextRemaining = Math.max(0, remainingVotes - 1);
+        setRemainingVotes(nextRemaining);
+        setRemainingGlobalVotes(nextRemaining);
+      }
       if (advanceImmediately) {
         advanceQueue();
       }
@@ -128,6 +187,14 @@ export default function GlobalVoteScreen() {
         if ((result?.success || invalid) && !advanceImmediately) {
           advanceQueue();
         }
+        if (result?.error === 'rate_limited' || result?.status === 429) {
+          setRemainingVotes(0);
+          setRemainingGlobalVotes(0);
+          clearGlobalDuelQueue();
+          setDuel(null);
+          setLoading(false);
+          return;
+        }
         if (!result?.success && !invalid && isDevEnv) {
           console.warn('Global vote failed without advancing queue', result?.error);
         }
@@ -139,7 +206,17 @@ export default function GlobalVoteScreen() {
         }
       }
     },
-    [advanceQueue, duel, duelReady, ensureFreshTokensForQueue, getCurrentGlobalDuelPair, isDevEnv, isTokenFresh, submitting]
+    [
+      advanceQueue,
+      duel,
+      duelReady,
+      ensureFreshTokensForQueue,
+      getCurrentGlobalDuelPair,
+      isDevEnv,
+      isTokenFresh,
+      remainingVotes,
+      submitting,
+    ]
   );
 
   const chooseByIndex = useCallback(
@@ -162,7 +239,13 @@ export default function GlobalVoteScreen() {
         </View>
 
         <View style={styles.body}>
-          {loading ? (
+          {remainingVotes === 0 ? (
+            <View style={styles.centered}>
+              <Text style={styles.emptyText}>
+                No votes remaining, come back in {VOTE_LIMIT_WINDOW_MINUTES} minutes.
+              </Text>
+            </View>
+          ) : loading ? (
             <View style={styles.centered}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.helperText}>Loading a new duel…</Text>
