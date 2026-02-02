@@ -15,6 +15,7 @@ import { usePalette } from '@/hooks/usePalette';
 
 const FOCUS_SWIPE_THRESHOLD = 24;
 const VOTE_SWIPE_THRESHOLD = 140;
+const SWIPE_VISUAL_MULTIPLIER = 1.5;
 
 export default function DuelDeck({
   pair,
@@ -90,16 +91,17 @@ export default function DuelDeck({
   const panGesture = Gesture.Pan()
     .enabled(photos.length >= 2 && !disabled && !animating)
     .onUpdate((event) => {
-      translateX.value = event.translationX;
+      const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
+      translateX.value = scaledX;
     })
     .onEnd((event) => {
-      const { translationX } = event;
-      const absX = Math.abs(translationX);
+      const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
+      const absX = Math.abs(scaledX);
       if (absX >= VOTE_SWIPE_THRESHOLD) {
-        const targetIndex = translationX > 0 ? 0 : 1;
+        const targetIndex = scaledX > 0 ? 0 : 1;
         runOnJS(handleVote)(targetIndex);
       } else if (absX >= FOCUS_SWIPE_THRESHOLD) {
-        const targetIndex = translationX > 0 ? 0 : 1;
+        const targetIndex = scaledX > 0 ? 0 : 1;
         selectedIndex.value = targetIndex;
         skipSpringReset.value = true;
         translateX.value = withTiming(0, { duration: 180 });
