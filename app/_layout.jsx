@@ -31,6 +31,8 @@ function RootLayoutContent({ loaded }) {
         <>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
+            <Stack.Screen name="friends" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
         </>

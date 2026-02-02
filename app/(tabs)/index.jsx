@@ -2,7 +2,7 @@ import { Image, StyleSheet, Platform, View, Pressable, Text, SafeAreaView, useWi
 import MapView from 'react-native-maps';
 import {Marker, Callout} from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo, useContext } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -20,6 +20,7 @@ import { getDistance } from 'geolib';
 
 import { Toast, useToast } from '../../components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
+import { AuthContext } from '@/hooks/AuthContext';
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
@@ -29,6 +30,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
+  const { invalidateStats } = useContext(AuthContext);
 
   const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
   const [nearestDistance, setNearestDistance] = useState(null);
@@ -198,7 +200,15 @@ export default function HomeScreen() {
           console.warn('Upload did not return a file url; skipping challenge creation');
           return;
         }
-        await newChallenge(location, fileUrl, message);
+        const created = await newChallenge(location, fileUrl, message);
+        if (created?.pin) {
+          setPins((prev) => {
+            if (!Array.isArray(prev)) return [created.pin];
+            if (prev.find((pin) => pin?._id === created.pin._id)) return prev;
+            return [created.pin, ...prev];
+          });
+        }
+        invalidateStats();
         router.replace('/');
       })
       .catch((error) => {

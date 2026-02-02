@@ -6,6 +6,7 @@ export const spacing = {
   lg: 16,
   xl: 20,
   '2xl': 28,
+  '4xl': 56,
 };
 
 export const radii = {

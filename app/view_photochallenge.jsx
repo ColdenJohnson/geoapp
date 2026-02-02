@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useContext } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, Text, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import {
@@ -17,6 +17,7 @@ import { CTAButton } from '@/components/ui/Buttons';
 import TopBar from '@/components/ui/TopBar';
 import { usePalette } from '@/hooks/usePalette';
 import DuelDeck from '@/components/vote/DuelDeck';
+import { AuthContext } from '@/hooks/AuthContext';
 
 export default function ViewPhotoChallengeScreen() {
   const { pinId } = useLocalSearchParams();   // pinId comes from router params
@@ -31,6 +32,7 @@ export default function ViewPhotoChallengeScreen() {
   const [duelVoteToken, setDuelVoteToken] = useState(null);
   const [duelExpiresAt, setDuelExpiresAt] = useState(null);
   const router = useRouter();
+  const { invalidateStats } = useContext(AuthContext);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -155,6 +157,7 @@ export default function ViewPhotoChallengeScreen() {
     });
   
     await addPhoto(pinId, uploadResult);
+    invalidateStats();
   }
 
   return (
