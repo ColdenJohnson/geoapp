@@ -49,7 +49,7 @@ curl -X POST https://exp.host/--/api/v2/push/send \
   }'
 ```
 
-Use `content-available: 1` for silent/background content fetches if needed.
+Use `content-available: 1` for silent/background content fetches if needed
 
 ## When installing new packages:
 `npx expo install __`
