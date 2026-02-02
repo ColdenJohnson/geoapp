@@ -2,7 +2,7 @@ import { StyleSheet, TextInput, TouchableOpacity, View, Text, Alert, ActivityInd
 import { Image } from 'expo-image';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,7 +36,7 @@ export default function UserProfileScreen() {
     invalidateFriends
   } = useContext(AuthContext);
   const [friendSearchInput, setFriendSearchInput] = useState('');
-  const [searchResult, setSearchResult] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
   const [searchMessage, setSearchMessage] = useState(null);
   const [searching, setSearching] = useState(false);
   const [friendActionBusy, setFriendActionBusy] = useState(false);
@@ -103,24 +103,38 @@ export default function UserProfileScreen() {
     ));
   };
 
-  const runFriendSearch = async () => {
-    let trimmed = friendSearchInput.trim();
+  const runFriendSearch = async (query, { showLoading = false, allowShort = false } = {}) => {
+    let trimmed = typeof query === 'string' ? query.trim() : friendSearchInput.trim();
     if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
-    if (!trimmed) {
-      setSearchMessage('Enter a handle to search.');
-      setSearchResult(null);
+    if (!allowShort && trimmed.length < 3) {
       return;
     }
-    setSearching(true);
+    if (showLoading) setSearching(true);
     setSearchMessage(null);
-    setSearchResult(null);
-    const result = await searchUserByHandle(trimmed);
-    if (result?.uid) {
-      setSearchResult(result);
+    const results = await searchUserByHandle(trimmed);
+    if (results.length) {
+      setSearchResults(results.slice(0, 3));
     } else {
-      setSearchMessage('No user found with that handle.');
+      setSearchMessage('No users found.');
     }
-    setSearching(false);
+    if (showLoading) setSearching(false);
+  };
+
+  useEffect(() => {
+    const trimmed = friendSearchInput.trim();
+    if (trimmed.length < 3) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      runFriendSearch(trimmed, { showLoading: false, allowShort: false });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [friendSearchInput]);
+
+  const runFriendSearchImmediate = () => {
+    let trimmed = friendSearchInput.trim();
+    if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
+    runFriendSearch(trimmed, { showLoading: true, allowShort: true });
   };
 
   const sendFriendRequest = async (handle) => {
@@ -135,7 +149,7 @@ export default function UserProfileScreen() {
           ? 'Friend request sent.'
           : 'Request updated.';
       setSearchMessage(message);
-      setSearchResult(null);
+      setSearchResults([]);
       setFriendSearchInput('');
       invalidateFriends();
     } else {
@@ -207,37 +221,32 @@ export default function UserProfileScreen() {
             onChangeText={setFriendSearchInput}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="search"
+            onSubmitEditing={runFriendSearchImmediate}
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.primary}
             cursorColor={colors.text}
           />
-          <View style={styles.friendActionRow}>
-            <CTAButton
-              title={searching ? 'Searching...' : 'Search'}
-              onPress={runFriendSearch}
-              style={styles.smallButton}
-              textStyle={styles.smallButtonText}
-              disabled={searching || !friendSearchInput.trim()}
-            />
-          </View>
           {searching ? (
             <View style={styles.centerRow}>
               <ActivityIndicator size="small" color={colors.text} />
             </View>
-          ) : searchResult ? (
-            <View style={styles.friendRow}>
-              <View style={styles.friendInfo}>
-                <Text style={styles.friendName}>{searchResult.display_name || searchResult.handle || 'Unnamed user'}</Text>
-                {searchResult.handle ? <Text style={styles.friendMeta}>@{searchResult.handle}</Text> : null}
+          ) : searchResults.length ? (
+            searchResults.map((result) => (
+              <View key={`search-${result.uid}`} style={styles.friendRow}>
+                <View style={styles.friendInfo}>
+                  <Text style={styles.friendName}>{result.display_name || result.handle || 'Unnamed user'}</Text>
+                  {result.handle ? <Text style={styles.friendMeta}>@{result.handle}</Text> : null}
+                </View>
+                <CTAButton
+                  title="Add"
+                  onPress={() => sendFriendRequest(result.handle)}
+                  style={styles.smallButton}
+                  textStyle={styles.smallButtonText}
+                  disabled={friendActionBusy}
+                />
               </View>
-              <CTAButton
-                title="Add"
-                onPress={() => sendFriendRequest(searchResult.handle)}
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
-                disabled={friendActionBusy}
-              />
-            </View>
+            ))
           ) : searchMessage ? (
             <Text style={styles.emptyText}>{searchMessage}</Text>
           ) : null}
@@ -414,10 +423,6 @@ function createStyles(colors) {
     searchInput: {
       marginTop: spacing.sm,
     },
-    friendActionRow: {
-      marginTop: spacing.sm,
-      alignItems: 'flex-start',
-    },
     friendRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -469,13 +474,6 @@ function createStyles(colors) {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: spacing.sm,
-    },
-    smallButton: {
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-    },
-    smallButtonText: {
-      fontSize: fontSizes.sm,
     },
     pendingText: {
       color: colors.textMuted,
