@@ -341,7 +341,7 @@ function createStyles(colors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.bg,
+      backgroundColor: colors.surface,
     },
     heroGlow: {
       position: 'absolute',
