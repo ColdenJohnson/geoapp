@@ -311,7 +311,7 @@ export default function UserProfileScreen() {
             />
             <CTAButton
               title="Delete Account"
-              variant="secondary"
+              variant="primary"
               style={[styles.actionButtonLast, styles.dangerButton]}
               textStyle={styles.dangerText}
               onPress={() => {
@@ -349,7 +349,7 @@ function createStyles(colors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.bg,
+      backgroundColor: colors.surface,
     },
     heroGlow: {
       position: 'absolute',
@@ -392,7 +392,7 @@ function createStyles(colors) {
     displayName: {
       fontSize: fontSizes.xl,
       fontWeight: '700',
-      color: colors.text,
+      color: colors.primary,
       fontFamily: 'SpaceMono',
       textAlign: 'center',
     },
@@ -483,7 +483,7 @@ function createStyles(colors) {
     sectionTitle: {
       fontSize: fontSizes.lg,
       fontWeight: '700',
-      color: colors.text,
+      color: colors.primary,
       marginBottom: spacing.sm,
     },
     statsText: {

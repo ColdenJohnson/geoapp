@@ -12,7 +12,7 @@ export const light = {
 
   // surfaces
   bg: '#FFFFFF',
-  surface: '#F7F7F7',
+  surface: '#F1FBFF',
 
   // lines / dividers
   border: '#E6E6E6',
