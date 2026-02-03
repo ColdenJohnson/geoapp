@@ -16,7 +16,7 @@ import {
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
 
 export default function GlobalVoteScreen() {
-  const [photos, setPhotos] = useState([]);
+  const [photos, setPhotos] = useState([]);ch
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const isActiveRef = useRef(false);
