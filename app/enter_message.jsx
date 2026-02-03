@@ -297,7 +297,7 @@ function createStyles(colors) {
       width: 62,
       height: 62,
       borderRadius: 44,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.text,
     },
     card: {
       width: '100%',
