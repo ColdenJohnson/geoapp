@@ -66,26 +66,13 @@ export default function DuelDeck({
         1,
         { duration: 250 },
         (finished) => {
-<<<<<<< HEAD
-          runOnJS(log)('duelDeck:vote:anim-finish', { finished });
-=======
-          if (finished && typeof onVote === 'function') {
-            runOnJS(onVote)(target, pairSnapshot);
-          }
->>>>>>> parent of 43232a3 (REVERT: additional debugging logs)
           animatingVote.value = false;
         }
       );
       if (typeof onVote === 'function') {
         const delayMs = 260;
-        log('duelDeck:vote:schedule', { delayMs });
         setTimeout(() => {
-          log('duelDeck:vote:fire', { target, length: pairSnapshot.length });
-          try {
-            onVote(target, pairSnapshot);
-          } catch (error) {
-            log('duelDeck:vote:fire-error', { message: error?.message });
-          }
+          onVote(target, pairSnapshot);
         }, delayMs);
       }
     },
