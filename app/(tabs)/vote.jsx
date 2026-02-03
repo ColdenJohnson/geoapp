@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { voteGlobalDuel } from '@/lib/api';
@@ -19,31 +19,57 @@ export default function GlobalVoteScreen() {
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [logs, setLogs] = useState([]);
   const isActiveRef = useRef(false);
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const addLog = useCallback((message, data) => {
+    const stamp = new Date().toISOString();
+    const detail = data ? ` ${JSON.stringify(data)}` : '';
+    setLogs((prev) => {
+      const next = [...prev, `${stamp} ${message}${detail}`];
+      return next.length > 80 ? next.slice(-80) : next;
+    });
+  }, []);
+
   const syncFromQueue = useCallback(async () => {
+    addLog('syncFromQueue:start');
     const head = getCurrentGlobalDuelPair();
     if (Array.isArray(head) && head.length >= 2) {
+      addLog('syncFromQueue:cache-hit', { length: head.length });
       setPhotos(head);
       setLoading(false);
       ensurePreloadedGlobalDuels(PRELOADED_PAIR_COUNT).catch((error) =>
-        console.error('Failed to keep preloading queue', error)
+        addLog('preload:error', { message: error?.message })
       );
       return;
     }
 
     setLoading(true);
-    const next = await getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT);
+    let next = [];
+    try {
+      next = await getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT);
+    } catch (error) {
+      addLog('syncFromQueue:error', { message: error?.message });
+    }
     if (!isActiveRef.current) return;
     setPhotos(Array.isArray(next) ? next : []);
+    addLog('syncFromQueue:loaded', { length: Array.isArray(next) ? next.length : 0 });
     setLoading(Array.isArray(next) && next.length >= 2 ? false : true);
-  }, [setLoading, setPhotos, ensurePreloadedGlobalDuels, getCurrentGlobalDuelPair, getOrLoadGlobalDuelPair]);
+  }, [
+    addLog,
+    setLoading,
+    setPhotos,
+    ensurePreloadedGlobalDuels,
+    getCurrentGlobalDuelPair,
+    getOrLoadGlobalDuelPair,
+  ]);
 
   const advanceQueue = useCallback(() => {
     const nextPair = advanceGlobalDuelQueue(PRELOADED_PAIR_COUNT);
+    addLog('advanceQueue:next', { length: Array.isArray(nextPair) ? nextPair.length : 0 });
     setPhotos(Array.isArray(nextPair) ? nextPair : []);
     if (!Array.isArray(nextPair) || nextPair.length < 2) {
       setLoading(true);
@@ -53,25 +79,29 @@ export default function GlobalVoteScreen() {
           setPhotos(pair);
           setLoading(false);
         }
+        addLog('advanceQueue:loaded', { length: Array.isArray(pair) ? pair.length : 0 });
       });
     } else {
       setLoading(false);
     }
-  }, [advanceGlobalDuelQueue, getOrLoadGlobalDuelPair, setLoading, setPhotos]);
+  }, [addLog, advanceGlobalDuelQueue, getOrLoadGlobalDuelPair, setLoading, setPhotos]);
 
   useFocusEffect(
     useCallback(() => {
       isActiveRef.current = true;
+      addLog('focus:enter');
       syncFromQueue();
       return () => {
         isActiveRef.current = false;
+        addLog('focus:exit');
       };
-    }, [syncFromQueue])
+    }, [addLog, syncFromQueue])
   );
 
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
       if (!winnerId || !loserId || submitting) return;
+      addLog('choose:start', { advanceImmediately, winnerId, loserId });
       if (isActiveRef.current) {
         setSubmitting(true);
       }
@@ -80,30 +110,38 @@ export default function GlobalVoteScreen() {
       }
       try {
         const result = await voteGlobalDuel({ winnerPhotoId: winnerId, loserPhotoId: loserId });
+        addLog('choose:result', { success: result?.success });
         if (result?.success && !advanceImmediately) {
           advanceQueue();
         }
       } catch (error) {
-        console.error('Failed to submit global vote', error);
+        addLog('choose:error', { message: error?.message });
       } finally {
         if (isActiveRef.current) {
           setSubmitting(false);
         }
       }
     },
-    [advanceQueue, submitting]
+    [addLog, advanceQueue, submitting]
   );
 
   const chooseByIndex = useCallback(
     (winnerIndex, pairOverride) => {
       const pair = Array.isArray(pairOverride) ? pairOverride : photos;
-      if (!Array.isArray(pair) || pair.length < 2) return;
+      if (!Array.isArray(pair) || pair.length < 2) {
+        addLog('chooseByIndex:invalid-pair', { length: Array.isArray(pair) ? pair.length : 0 });
+        return;
+      }
       const winner = pair[winnerIndex];
       const loser = pair[winnerIndex === 0 ? 1 : 0];
-      if (!winner?._id || !loser?._id) return;
+      if (!winner?._id || !loser?._id) {
+        addLog('chooseByIndex:missing-ids', { winnerId: winner?._id, loserId: loser?._id });
+        return;
+      }
+      addLog('chooseByIndex:vote', { winnerIndex });
       choose(winner._id, loser._id, { advanceImmediately: true });
     },
-    [choose, photos]
+    [addLog, choose, photos]
   );
 
   return (
@@ -141,6 +179,17 @@ export default function GlobalVoteScreen() {
               )}
             />
           )}
+        </View>
+
+        <View style={styles.logPanel} pointerEvents="none">
+          <Text style={styles.logTitle}>VOTE DEBUG LOGS</Text>
+          <ScrollView style={styles.logScroll}>
+            {logs.map((line, index) => (
+              <Text key={`${line}-${index}`} style={styles.logLine}>
+                {line}
+              </Text>
+            ))}
+          </ScrollView>
         </View>
       </View>
     </SafeAreaView>
@@ -190,5 +239,18 @@ function createStyles(colors) {
     metaDetail: { fontSize: 14, color: '#F3F4F6' },
     helperText: { color: colors.textMuted, textAlign: 'center', fontSize: 14 },
     cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
+    logPanel: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      bottom: 84,
+      maxHeight: 220,
+      padding: 10,
+      backgroundColor: 'rgba(0,0,0,0.78)',
+      borderRadius: 10,
+    },
+    logTitle: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', marginBottom: 6 },
+    logScroll: { maxHeight: 170 },
+    logLine: { color: '#D1FAE5', fontSize: 11, marginBottom: 4 },
   });
 }
