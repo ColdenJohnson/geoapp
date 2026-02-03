@@ -1,25 +1,6 @@
-# Welcome to your Expo app 👋
+# Welcome to SideQuest
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
-
-## Get started
-
-2. Start the app
-
-   ```bash
-    npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-Note that both the host and device must both be connected to a VPN. The app will not load if the device cannot connect, and it will not populate pins if the host is not connected.
+Note that both the host and device must both be connected to a VPN (in China). The app will not load if the device cannot connect, and it will not populate pins if the host is not connected.
 
 ## Backend base URL configuration
 
@@ -61,10 +42,11 @@ Use `content-available: 1` for silent/background content fetches if needed
 
 After this process, the app can be started normally using `npx expo start`
 
-## Publishing to app store process:
+## Publishing to app store:
 Set device to iOS device (arm 64)
 Do Product -> Archive
 
+Currently, CI/CD Pipeline largely deals with this
 
 ## Gource File
 https://github.com/acaudwell/Gource
