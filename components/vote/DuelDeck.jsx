@@ -82,12 +82,21 @@ export default function DuelDeck({
         { duration: 250 },
         (finished) => {
           runOnJS(log)('duelDeck:vote:anim-finish', { finished });
-          if (finished && typeof onVote === 'function') {
-            runOnJS(onVote)(target, pairSnapshot);
-          }
           animatingVote.value = false;
         }
       );
+      if (typeof onVote === 'function') {
+        const delayMs = 260;
+        log('duelDeck:vote:schedule', { delayMs });
+        setTimeout(() => {
+          log('duelDeck:vote:fire', { target, length: pairSnapshot.length });
+          try {
+            onVote(target, pairSnapshot);
+          } catch (error) {
+            log('duelDeck:vote:fire-error', { message: error?.message });
+          }
+        }, delayMs);
+      }
     },
     [disabled, animating, photos, selectedIndex, animatingVote, winnerIndex, dismissProgress, onVote, log]
   );
