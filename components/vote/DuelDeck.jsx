@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -20,7 +20,6 @@ const SWIPE_VISUAL_MULTIPLIER = 1.5;
 export default function DuelDeck({
   pair,
   onVote,
-  onDismissComplete,
   disabled = false,
   deckStyle,
   cardStyle,
@@ -30,10 +29,7 @@ export default function DuelDeck({
   cardAspectRatio = 3 / 4,
 }) {
   const photos = useMemo(() => (Array.isArray(pair) ? pair.slice(0, 2) : []), [pair]);
-  const [displayedPair, setDisplayedPair] = useState(photos);
-  const voteInFlightRef = useRef(false);
-  const pendingPairRef = useRef(null);
-  const isDismissingRef = useRef(false);
+  const [animating, setAnimating] = useState(false);
 
   const selectedIndex = useSharedValue(0);
   const translateX = useSharedValue(0);
@@ -46,7 +42,7 @@ export default function DuelDeck({
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
-    const hasPair = displayedPair.length >= 2;
+    const hasPair = photos.length >= 2;
     const nextIdx = hasPair ? (Math.random() < 0.5 ? 0 : 1) : 0;
     selectedIndex.value = nextIdx;
     translateX.value = 0;
@@ -54,57 +50,35 @@ export default function DuelDeck({
     winnerIndex.value = -1;
     animatingVote.value = false;
     skipSpringReset.value = false;
-    voteInFlightRef.current = false;
-    isDismissingRef.current = false;
-    pendingPairRef.current = null;
-  }, [displayedPair, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote, skipSpringReset]);
-
-  useEffect(() => {
-    if (isDismissingRef.current) {
-      pendingPairRef.current = photos;
-      return;
-    }
-    setDisplayedPair(photos);
-  }, [photos]);
-
-  const handleDismissComplete = useCallback(() => {
-    voteInFlightRef.current = false;
-    isDismissingRef.current = false;
-    if (pendingPairRef.current) {
-      setDisplayedPair(pendingPairRef.current);
-      pendingPairRef.current = null;
-    }
-    if (typeof onDismissComplete === 'function') {
-      onDismissComplete();
-    }
-  }, [onDismissComplete]);
+    setAnimating(false);
+  }, [photos, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote, skipSpringReset]);
 
   const handleVote = useCallback(
     (idx) => {
-      if (disabled || voteInFlightRef.current) return;
+      if (disabled || animating) return;
       const target = typeof idx === 'number' ? idx : selectedIndex.value;
-      const pairSnapshot = displayedPair.slice(0, 2);
-      if (typeof onVote === 'function') {
-        onVote(target, pairSnapshot);
-      }
-      voteInFlightRef.current = true;
-      isDismissingRef.current = true;
+      const pairSnapshot = photos.slice(0, 2);
       animatingVote.value = true;
+      setAnimating(true);
       winnerIndex.value = target;
       dismissProgress.value = 0;
       dismissProgress.value = withTiming(
         1,
         { duration: 250 },
         (finished) => {
-          if (finished) {
-            runOnJS(handleDismissComplete)();
-          }
           animatingVote.value = false;
         }
       );
+      if (typeof onVote === 'function') {
+        const delayMs = 260;
+        setTimeout(() => {
+          onVote(target, pairSnapshot);
+        }, delayMs);
+      }
     },
-    [disabled, displayedPair, selectedIndex, animatingVote, winnerIndex, dismissProgress, onVote, handleDismissComplete]
+    [disabled, animating, photos, selectedIndex, animatingVote, winnerIndex, dismissProgress, onVote]
   );
+
   const focusIndex = useDerivedValue(() => {
     if (Math.abs(translateX.value) > FOCUS_SWIPE_THRESHOLD) {
       return translateX.value > 0 ? 0 : 1;
@@ -118,7 +92,7 @@ export default function DuelDeck({
   });
 
   const panGesture = Gesture.Pan()
-    .enabled(displayedPair.length >= 2 && !disabled)
+    .enabled(photos.length >= 2 && !disabled && !animating)
     .onUpdate((event) => {
       const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
       translateX.value = scaledX;
@@ -145,14 +119,14 @@ export default function DuelDeck({
       translateX.value = withSpring(0);
     });
 
-  if (displayedPair.length < 2) {
+  if (photos.length < 2) {
     return null;
   }
 
   return (
     <GestureDetector gesture={panGesture}>
       <View style={[styles.deckArea, deckStyle]}>
-        {displayedPair.map((photo, idx) => (
+        {photos.map((photo, idx) => (
           <AnimatedPhotoCard
             key={photo?._id ?? idx}
             index={idx}
