@@ -177,6 +177,7 @@ export default function GlobalVoteScreen() {
                   </Text>
                 </View>
               )}
+              onLog={addLog}
             />
           )}
         </View>
@@ -243,7 +244,7 @@ function createStyles(colors) {
       position: 'absolute',
       left: 12,
       right: 12,
-      bottom: 84,
+      bottom: 140,
       maxHeight: 220,
       padding: 10,
       backgroundColor: 'rgba(0,0,0,0.78)',

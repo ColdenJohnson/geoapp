@@ -20,6 +20,7 @@ const SWIPE_VISUAL_MULTIPLIER = 1.5;
 export default function DuelDeck({
   pair,
   onVote,
+  onLog,
   disabled = false,
   deckStyle,
   cardStyle,
@@ -41,6 +42,15 @@ export default function DuelDeck({
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const log = useCallback(
+    (message, data) => {
+      if (typeof onLog === 'function') {
+        onLog(message, data);
+      }
+    },
+    [onLog]
+  );
+
   useEffect(() => {
     const hasPair = photos.length >= 2;
     const nextIdx = hasPair ? (Math.random() < 0.5 ? 0 : 1) : 0;
@@ -51,13 +61,18 @@ export default function DuelDeck({
     animatingVote.value = false;
     skipSpringReset.value = false;
     setAnimating(false);
-  }, [photos, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote, skipSpringReset]);
+    log('duelDeck:reset', { length: photos.length, nextIdx });
+  }, [photos, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote, skipSpringReset, log]);
 
   const handleVote = useCallback(
     (idx) => {
-      if (disabled || animating) return;
+      if (disabled || animating) {
+        log('duelDeck:vote:blocked', { disabled, animating });
+        return;
+      }
       const target = typeof idx === 'number' ? idx : selectedIndex.value;
       const pairSnapshot = photos.slice(0, 2);
+      log('duelDeck:vote:start', { target, length: pairSnapshot.length });
       animatingVote.value = true;
       setAnimating(true);
       winnerIndex.value = target;
@@ -66,6 +81,7 @@ export default function DuelDeck({
         1,
         { duration: 250 },
         (finished) => {
+          runOnJS(log)('duelDeck:vote:anim-finish', { finished });
           if (finished && typeof onVote === 'function') {
             runOnJS(onVote)(target, pairSnapshot);
           }
@@ -73,7 +89,7 @@ export default function DuelDeck({
         }
       );
     },
-    [disabled, animating, photos, selectedIndex, animatingVote, winnerIndex, dismissProgress, onVote]
+    [disabled, animating, photos, selectedIndex, animatingVote, winnerIndex, dismissProgress, onVote, log]
   );
 
   const focusIndex = useDerivedValue(() => {
@@ -97,11 +113,19 @@ export default function DuelDeck({
     .onEnd((event) => {
       const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
       const absX = Math.abs(scaledX);
+      runOnJS(log)('duelDeck:pan:end', {
+        scaledX: Number(scaledX.toFixed(1)),
+        absX: Number(absX.toFixed(1)),
+        disabled,
+        animating,
+      });
       if (absX >= VOTE_SWIPE_THRESHOLD) {
         const targetIndex = scaledX > 0 ? 0 : 1;
+        runOnJS(log)('duelDeck:vote:threshold', { targetIndex, absX });
         runOnJS(handleVote)(targetIndex);
       } else if (absX >= FOCUS_SWIPE_THRESHOLD) {
         const targetIndex = scaledX > 0 ? 0 : 1;
+        runOnJS(log)('duelDeck:focus:threshold', { targetIndex, absX });
         selectedIndex.value = targetIndex;
         skipSpringReset.value = true;
         translateX.value = withTiming(0, { duration: 180 });
