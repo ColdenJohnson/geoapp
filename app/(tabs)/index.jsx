@@ -304,34 +304,40 @@ export default function HomeScreen() {
 )}
 
 
-  {pinsForDisplay.map((pin) => (
-    pin?.location ? (
-    <Marker
-      key={pin._id}
-      coordinate={{
-        latitude: pin.displayCoords?.latitude ?? pin.location.latitude,
-        longitude: pin.displayCoords?.longitude ?? pin.location.longitude,
-      }}
-      title={"Photo Challenge"}
-      description={pin.message || 'Geo Pin'}
-    >
-      <Callout
-        tooltip
-        onPress={() => viewPhotoChallenge(pin)}
+  {pinsForDisplay.map((pin) => {
+    if (!pin?.location) return null;
+    const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
+    return (
+      <Marker
+        key={pin._id}
+        coordinate={{
+          latitude: pin.displayCoords?.latitude ?? pin.location.latitude,
+          longitude: pin.displayCoords?.longitude ?? pin.location.longitude,
+        }}
+        title={"Photo Challenge"}
+        description={pin.message || 'Geo Pin'}
       >
-        <View style={styles.calloutCard}>
-          <Text style={styles.calloutLabel}>Challenge</Text>
-          <Text style={styles.calloutPrompt} numberOfLines={3}>
-            {pin.message || '???'}
-          </Text>
-          <View style={styles.calloutDivider} />
-          <Text style={styles.calloutMeta}>
-            Photos: {Number.isFinite(pin?.photo_count) ? pin.photo_count : 0}
-          </Text>
-        </View>
-      </Callout>
-    </Marker> ) : null
-  ))}
+        <Callout
+          tooltip
+          onPress={() => viewPhotoChallenge(pin)}
+        >
+          <View style={styles.calloutCard}>
+            <Text style={styles.calloutLabel}>Challenge</Text>
+            <Text style={styles.calloutPrompt} numberOfLines={3}>
+              {pin.message || '???'}
+            </Text>
+            <View style={styles.calloutDivider} />
+            <Text style={styles.calloutMeta}>
+              By {handleLabel}
+            </Text>
+            <Text style={styles.calloutMeta}>
+              Photos: {Number.isFinite(pin?.photo_count) ? pin.photo_count : 0}
+            </Text>
+          </View>
+        </Callout>
+      </Marker>
+    );
+  })}
 
       </MapView>
       <Toast message={toastMessage} bottomOffset={160} />
