@@ -270,7 +270,7 @@ export default function HomeScreen() {
         ]} 
         onPress={handleCreateChallengePress}
       >
-        <Text style={styles.buttonText}>+</Text>
+        <MaterialIcons name="add-a-photo" size={25} color={colors.text} /> // https://fonts.google.com/icons
         </Pressable>
     <Pressable
         style={({ pressed }) => [
