@@ -19,6 +19,7 @@ jest.mock('expo-router', () => {
 
   return {
     useRouter: () => routerMock,
+    useRootNavigationState: jest.fn(() => ({ key: 'mock-root' })),
     router: routerMock,
     useLocalSearchParams: jest.fn(() => ({})),
     Stack: ({ children }) => <>{children}</>,
@@ -91,6 +92,7 @@ jest.mock('expo-notifications', () => {
     requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
     getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExpoPushToken-mock' })),
     setNotificationChannelAsync: jest.fn(async () => {}),
+    getLastNotificationResponseAsync: jest.fn(async () => null),
     addNotificationReceivedListener: jest.fn((cb) => {
       receivedListeners.push(cb);
       return { remove: jest.fn() };

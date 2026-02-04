@@ -32,6 +32,45 @@ curl -X POST https://exp.host/--/api/v2/push/send \
 
 Use `content-available: 1` for silent/background content fetches if needed
 
+### Notification payload contract (navigation)
+
+When sending push notifications, include a routable target so the client can navigate after the user taps the notification (even from a cold start):
+
+```json
+{
+  "to": "<ExpoPushToken>",
+  "title": "New vote available",
+  "body": "Jump back into the challenge",
+  "data": {
+    "route": "/view_photochallenge",
+    "pinId": "abc123",
+    "notificationId": "server-side-id"
+  }
+}
+```
+
+- `route` (string, required): one of `/(tabs)/index`, `/(tabs)/vote`, `/(tabs)/profile`, `/view_photochallenge`, `/friends`, `/edit_profile`, `/upload`, `/enter_message`.
+- `pinId` (string, optional): passed as `params.pinId` to the routed screen (used by `/view_photochallenge`).
+- Additional metadata like `notificationId` is allowed and ignored by routing.
+
+### Backend endpoint for notification telemetry
+
+Expose `POST /notification_event` to record client lifecycle events:
+
+- Request body shape:
+  ```json
+  {
+    "notificationId": "n-123",     // optional, string
+    "event": "received",           // required: received | opened
+    "uid": "firebase-uid",         // optional if unauthenticated
+    "timestamp": "2026-02-04T12:00:00.000Z", // ISO string; client sends current time
+    "route": "/view_photochallenge",        // optional route target
+    "payload": { "route": "/view_photochallenge", "pinId": "abc123" } // optional raw push data
+  }
+  ```
+- Semantics: `received` is emitted when a push arrives in foreground; `opened` is emitted when the user taps a notification (including cold-start launches). Backend can treat “delivered but no opened within SLA” as ignored.
+- Response: `200 OK` with `{ success: true }` (or similar) is sufficient; failures are logged client-side but do not block navigation.
+
 ## When installing new packages:
 `npx expo install __`
 

@@ -57,7 +57,7 @@ export default function GlobalVoteScreen() {
       );
       return;
     }
-
+    // TODO: Currently, if the app is still loaded in background, and user's votes repopulate, the app may not check again for more votes. Observed when nav to vote tab off of notification, but votes appeared on app restart
     if (getRemainingGlobalVotes() === 0) {
       setDuel(null);
       setLoading(false);
