@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AuthContext } from '../hooks/AuthContext';
-import { acceptFriendRequest } from '@/lib/api';
+import { acceptFriendRequest, rejectFriendRequest, cancelFriendRequest } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { spacing, fontSizes } from '@/theme/tokens';
@@ -42,6 +42,26 @@ export default function FriendsScreen() {
     setActionBusy(false);
   };
 
+  const onReject = async (uid) => {
+    if (!uid) return;
+    setActionBusy(true);
+    const resp = await rejectFriendRequest(uid);
+    if (resp?.success) {
+      invalidateFriends();
+    }
+    setActionBusy(false);
+  };
+
+  const onCancel = async (uid) => {
+    if (!uid) return;
+    setActionBusy(true);
+    const resp = await cancelFriendRequest(uid);
+    if (resp?.success) {
+      invalidateFriends();
+    }
+    setActionBusy(false);
+  };
+
   const renderItem = ({ item, section }) => {
     if (!item?.uid) return null;
     return (
@@ -51,15 +71,33 @@ export default function FriendsScreen() {
           {item.handle ? <Text style={styles.rowMeta}>@{item.handle}</Text> : null}
         </View>
         {section.type === 'incoming' ? (
-          <CTAButton
-            title="Accept"
-            onPress={() => onAccept(item.uid)}
-            style={styles.smallButton}
-            textStyle={styles.smallButtonText}
-            disabled={actionBusy}
-          />
+          <View style={styles.miniActionRow}>
+            <CTAButton
+              title="Accept"
+              onPress={() => onAccept(item.uid)}
+              style={styles.smallButton}
+              textStyle={styles.smallButtonText}
+              disabled={actionBusy}
+            />
+            <CTAButton
+              title="Delete"
+              onPress={() => onReject(item.uid)}
+              style={styles.smallButton}
+              textStyle={styles.smallButtonText}
+              disabled={actionBusy}
+            />
+          </View>
         ) : section.type === 'outgoing' ? (
-          <Text style={styles.pendingText}>Pending</Text>
+          <View style={styles.miniActionRow}>
+            <Text style={styles.pendingText}>Pending</Text>
+            <CTAButton
+              title="Cancel"
+              onPress={() => onCancel(item.uid)}
+              style={styles.smallButton}
+              textStyle={styles.smallButtonText}
+              disabled={actionBusy}
+            />
+          </View>
         ) : null}
       </View>
     );
@@ -184,6 +222,11 @@ function createStyles(colors) {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
       marginTop: 2,
+    },
+    miniActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
     },
     pendingText: {
       color: colors.textMuted,

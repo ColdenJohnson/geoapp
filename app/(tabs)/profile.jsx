@@ -11,7 +11,9 @@ import {
   deleteMyAccount,
   searchUserByHandle,
   requestFriend,
-  acceptFriendRequest
+  acceptFriendRequest,
+  rejectFriendRequest,
+  cancelFriendRequest
 } from '@/lib/api';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
@@ -170,6 +172,30 @@ export default function UserProfileScreen() {
     setFriendActionBusy(false);
   };
 
+  const rejectRequest = async (uid) => {
+    if (!uid) return;
+    setFriendActionBusy(true);
+    const resp = await rejectFriendRequest(uid);
+    if (resp?.success) {
+      invalidateFriends();
+    } else {
+      Alert.alert('Friend Request', resp?.error || 'Failed to delete friend request.');
+    }
+    setFriendActionBusy(false);
+  };
+
+  const cancelRequest = async (uid) => {
+    if (!uid) return;
+    setFriendActionBusy(true);
+    const resp = await cancelFriendRequest(uid);
+    if (resp?.success) {
+      invalidateFriends();
+    } else {
+      Alert.alert('Friend Request', resp?.error || 'Failed to cancel friend request.');
+    }
+    setFriendActionBusy(false);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.heroGlow} />
@@ -267,18 +293,36 @@ export default function UserProfileScreen() {
             </View>
           <Text style={styles.subSectionTitle}>Incoming</Text>
           {renderMiniList(recentIncoming, 'No incoming requests.', (request) => (
-            <CTAButton
-              title="Accept"
-              onPress={() => acceptRequest(request.uid)}
-              style={styles.smallButton}
-              textStyle={styles.smallButtonText}
-              disabled={friendActionBusy}
-            />
+            <View style={styles.miniActionRow}>
+              <CTAButton
+                title="Accept"
+                onPress={() => acceptRequest(request.uid)}
+                style={styles.smallButton}
+                textStyle={styles.smallButtonText}
+                disabled={friendActionBusy}
+              />
+              <SecondaryButton
+                title="Delete"
+                onPress={() => rejectRequest(request.uid)}
+                style={styles.smallButton}
+                textStyle={styles.smallButtonText}
+                disabled={friendActionBusy}
+              />
+            </View>
           ))}
 
           <Text style={styles.subSectionTitle}>Outgoing</Text>
-          {renderMiniList(recentOutgoing, 'No outgoing requests.', () => (
-            <Text style={styles.pendingText}>Pending</Text>
+          {renderMiniList(recentOutgoing, 'No outgoing requests.', (request) => (
+            <View style={styles.miniActionRow}>
+              <Text style={styles.pendingText}>Pending</Text>
+              <SecondaryButton
+                title="Cancel"
+                onPress={() => cancelRequest(request.uid)}
+                style={styles.smallButton}
+                textStyle={styles.smallButtonText}
+                disabled={friendActionBusy}
+              />
+            </View>
           ))}
           </View>
         </TouchableOpacity>
@@ -444,6 +488,11 @@ function createStyles(colors) {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
       marginTop: 2,
+    },
+    miniActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
     },
     summaryRow: {
       flexDirection: 'row',
