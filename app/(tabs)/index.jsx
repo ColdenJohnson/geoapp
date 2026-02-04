@@ -36,6 +36,7 @@ export default function HomeScreen() {
   const [nearestDistance, setNearestDistance] = useState(null);
   const [isNear, setIsNear] = useState(false);
   const [nearestPin, setNearestPin ] = useState(null);
+  const [showFriendsOnly, setShowFriendsOnly] = useState(false);
   const { message: toastMessage, show: showToast} = useToast(3500);
   const { height: screenHeight } = useWindowDimensions();
   const isSmallScreen = screenHeight < 700;
@@ -128,6 +129,10 @@ export default function HomeScreen() {
       };
     });
   }, [pins, userCoords, userIsInMainland]);
+  const visiblePins = useMemo(() => {
+    if (!showFriendsOnly) return pinsForDisplay;
+    return pinsForDisplay.filter((pin) => !!pin?.is_friend_pin);
+  }, [pinsForDisplay, showFriendsOnly]);
 
   // TODO: To make location watcher run app-wide, put this into a LocationProvider at app root/some type of API (not sure, figure this out)
   // TODO: UseFocusEffect vs UseEffect -- usefocuseffect stops when user navigates away from the screen
@@ -277,6 +282,21 @@ export default function HomeScreen() {
       >
         <MaterialIcons name="my-location" size={26} color={colors.text} />
       </Pressable>
+    <Pressable
+        style={({ pressed }) => [
+          styles.button,
+          styles.filterButton,
+          showFriendsOnly ? styles.filterButtonActive : null,
+          { opacity: pressed ? 0.5 : 1 }
+        ]}
+        onPress={() => setShowFriendsOnly((prev) => !prev)}
+      >
+        <MaterialIcons
+          name="people"
+          size={24}
+          color={showFriendsOnly ? colors.bg : colors.text}
+        />
+      </Pressable>
     <MapView
         key={`map-${pins.length} > 0`} // This line fixes map loading in without pins. It forces a remount of the map when pins.length changes to greater than 0.
         style={styles.map}
@@ -304,7 +324,7 @@ export default function HomeScreen() {
 )}
 
 
-  {pinsForDisplay.map((pin) => {
+  {visiblePins.map((pin) => {
     if (!pin?.location) return null;
     const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
     const isFriendPin = !!pin?.is_friend_pin;
@@ -396,6 +416,13 @@ function createStyles(colors, isSmallScreen) {
     },
     locateButton: {
       top: 80,
+    },
+    filterButton: {
+      top: 140,
+    },
+    filterButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
     },
     buttonText: {
       fontSize: 34,
