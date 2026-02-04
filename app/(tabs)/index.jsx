@@ -307,6 +307,7 @@ export default function HomeScreen() {
   {pinsForDisplay.map((pin) => {
     if (!pin?.location) return null;
     const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
+    const isFriendPin = !!pin?.is_friend_pin;
     return (
       <Marker
         key={pin._id}
@@ -316,6 +317,7 @@ export default function HomeScreen() {
         }}
         title={"Photo Challenge"}
         description={pin.message || 'Geo Pin'}
+        pinColor={isFriendPin ? undefined: colors.primary}
       >
         <Callout
           tooltip
