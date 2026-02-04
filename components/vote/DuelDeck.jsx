@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
@@ -16,6 +16,7 @@ import { usePalette } from '@/hooks/usePalette';
 const FOCUS_SWIPE_THRESHOLD = 24;
 const VOTE_SWIPE_THRESHOLD = 140;
 const SWIPE_VISUAL_MULTIPLIER = 1.5;
+const DISMISS_DURATION_MS = 250;
 
 export default function DuelDeck({
   pair,
@@ -28,18 +29,28 @@ export default function DuelDeck({
   renderMeta,
   cardAspectRatio = 3 / 4,
 }) {
-  const photos = useMemo(() => (Array.isArray(pair) ? pair.slice(0, 2) : []), [pair]);
-  const [animating, setAnimating] = useState(false);
+  const incomingPhotos = useMemo(() => (Array.isArray(pair) ? pair.slice(0, 2) : []), [pair]);
+  const [photos, setPhotos] = useState(() => incomingPhotos);
+  const pendingPhotosRef = useRef(null);
+  const voteLockedRef = useRef(false);
 
   const selectedIndex = useSharedValue(0);
   const translateX = useSharedValue(0);
   const dismissProgress = useSharedValue(0);
   const winnerIndex = useSharedValue(-1);
-  const animatingVote = useSharedValue(false);
+  const isDismissing = useSharedValue(false);
   const skipSpringReset = useSharedValue(false);
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  useEffect(() => {
+    if (isDismissing.value) {
+      pendingPhotosRef.current = incomingPhotos;
+      return;
+    }
+    setPhotos(incomingPhotos);
+  }, [incomingPhotos, isDismissing]);
 
   useEffect(() => {
     const hasPair = photos.length >= 2;
@@ -48,35 +59,57 @@ export default function DuelDeck({
     translateX.value = 0;
     dismissProgress.value = 0;
     winnerIndex.value = -1;
-    animatingVote.value = false;
+    isDismissing.value = false;
     skipSpringReset.value = false;
-    setAnimating(false);
-  }, [photos, selectedIndex, translateX, dismissProgress, winnerIndex, animatingVote, skipSpringReset]);
+    voteLockedRef.current = false;
+  }, [photos, selectedIndex, translateX, dismissProgress, winnerIndex, isDismissing, skipSpringReset]);
+
+  const finalizeDismiss = useCallback(() => {
+    isDismissing.value = false;
+
+    const pending = pendingPhotosRef.current;
+    if (pending) {
+      pendingPhotosRef.current = null;
+      setPhotos(pending);
+      return;
+    }
+
+    const hasPair = photos.length >= 2;
+    const nextIdx = hasPair ? (Math.random() < 0.5 ? 0 : 1) : 0;
+    selectedIndex.value = nextIdx;
+    translateX.value = 0;
+    dismissProgress.value = 0;
+    winnerIndex.value = -1;
+    skipSpringReset.value = false;
+  }, [photos, dismissProgress, isDismissing, selectedIndex, translateX, winnerIndex, skipSpringReset]);
 
   const handleVote = useCallback(
     (idx) => {
-      if (disabled || animating) return;
+      if (disabled || voteLockedRef.current) return;
+      if (photos.length < 2) return;
+
       const target = typeof idx === 'number' ? idx : selectedIndex.value;
       const pairSnapshot = photos.slice(0, 2);
-      animatingVote.value = true;
-      setAnimating(true);
+
+      voteLockedRef.current = true;
+      isDismissing.value = true;
       winnerIndex.value = target;
       dismissProgress.value = 0;
       dismissProgress.value = withTiming(
         1,
-        { duration: 250 },
+        { duration: DISMISS_DURATION_MS },
         (finished) => {
-          animatingVote.value = false;
+          if (finished) {
+            runOnJS(finalizeDismiss)();
+          }
         }
       );
+
       if (typeof onVote === 'function') {
-        const delayMs = 260;
-        setTimeout(() => {
-          onVote(target, pairSnapshot);
-        }, delayMs);
+        onVote(target, pairSnapshot);
       }
     },
-    [disabled, animating, photos, selectedIndex, animatingVote, winnerIndex, dismissProgress, onVote]
+    [disabled, photos, selectedIndex, dismissProgress, isDismissing, winnerIndex, onVote, finalizeDismiss]
   );
 
   const focusIndex = useDerivedValue(() => {
@@ -92,12 +125,14 @@ export default function DuelDeck({
   });
 
   const panGesture = Gesture.Pan()
-    .enabled(photos.length >= 2 && !disabled && !animating)
+    .enabled(photos.length >= 2 && !disabled)
     .onUpdate((event) => {
+      if (isDismissing.value) return;
       const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
       translateX.value = scaledX;
     })
     .onEnd((event) => {
+      if (isDismissing.value) return;
       const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
       const absX = Math.abs(scaledX);
       if (absX >= VOTE_SWIPE_THRESHOLD) {
@@ -111,7 +146,7 @@ export default function DuelDeck({
       }
     })
     .onFinalize(() => {
-      if (animatingVote.value) return;
+      if (isDismissing.value) return;
       if (skipSpringReset.value) {
         skipSpringReset.value = false;
         return;
