@@ -1,7 +1,15 @@
 import { useEffect, useState, useCallback, useMemo, useContext } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, Text, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId, fetchDuelByPinId, voteDuel } from '@/lib/api';
+import {
+  fetchPhotosByPinId,
+  addPhoto,
+  fetchChallengeByPinId,
+  fetchDuelByPinId,
+  voteDuel,
+  refreshPinDuelToken,
+  isTokenFresh,
+} from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
@@ -21,6 +29,8 @@ export default function ViewPhotoChallengeScreen() {
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [duelPhotos, setDuelPhotos] = useState([]);
   const [duelLoading, setDuelLoading] = useState(false);
+  const [duelVoteToken, setDuelVoteToken] = useState(null);
+  const [duelExpiresAt, setDuelExpiresAt] = useState(null);
   const router = useRouter();
   const { invalidateStats } = useContext(AuthContext);
   const colors = usePalette();
@@ -64,18 +74,65 @@ export default function ViewPhotoChallengeScreen() {
     if (!pinId) return;
     setDuelLoading(true);
     try {
-      const pair = await fetchDuelByPinId(pinId);
-      setDuelPhotos(Array.isArray(pair) ? pair : []);
+      const payload = await fetchDuelByPinId(pinId);
+      const pair = Array.isArray(payload?.photos) ? payload.photos : [];
+      setDuelPhotos(pair);
+      setDuelVoteToken(typeof payload?.voteToken === 'string' ? payload.voteToken : null);
+      setDuelExpiresAt(typeof payload?.expiresAt === 'string' ? payload.expiresAt : null);
     } finally {
       setDuelLoading(false);
     }
   }
 
-  async function choose(winnerId, loserId) {
+  async function ensurePinTokenFresh() {
+    if (isTokenFresh(duelExpiresAt) && typeof duelVoteToken === 'string') {
+      return { voteToken: duelVoteToken, expiresAt: duelExpiresAt };
+    }
+    const ids = Array.isArray(duelPhotos) ? duelPhotos.map((p) => p?._id).filter(Boolean) : [];
+    if (ids.length < 2) {
+      console.warn('Cannot refresh pin duel token; missing photo ids');
+      return null;
+    }
     try {
-      await voteDuel({ pinId, winnerPhotoId: winnerId, loserPhotoId: loserId });
+      const refreshed = await refreshPinDuelToken(pinId, ids[0], ids[1], duelVoteToken);
+      if (refreshed?.voteToken && refreshed?.expiresAt) {
+        setDuelVoteToken(refreshed.voteToken);
+        setDuelExpiresAt(refreshed.expiresAt);
+        return refreshed;
+      }
     } catch (error) {
-      console.error('Failed to submit duel vote', error);
+      console.warn('Failed to refresh pin duel token', error);
+    }
+    return null;
+  }
+
+  async function choose(winnerId, loserId) {
+    if (!winnerId || !loserId) return;
+    const voteTokenData = await ensurePinTokenFresh();
+    const voteToken = voteTokenData?.voteToken;
+    const expiresAt = voteTokenData?.expiresAt;
+    if (!voteToken) {
+      console.warn('Missing vote token for pin duel; refreshing pair');
+      await loadDuel();
+      return;
+    }
+    try {
+      const result = await voteDuel({
+        pinId,
+        winnerPhotoId: winnerId,
+        loserPhotoId: loserId,
+        voteToken,
+        expiresAt,
+      });
+      if (result?.invalidVoteToken) {
+        console.warn('Pin duel token rejected; fetching a new pair');
+      }
+    } catch (error) {
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        console.warn('Pin duel vote unauthorized; refreshing pair');
+      } else {
+        console.error('Failed to submit duel vote', error);
+      }
     } finally {
       await loadDuel(); // get next pair
     }
@@ -129,7 +186,7 @@ export default function ViewPhotoChallengeScreen() {
                   {duelPhotos?.length >= 2 ? (
                     <DuelDeck
                       pair={duelPhotos}
-                      disabled={duelLoading}
+                      disabled={duelLoading || !duelVoteToken || !isTokenFresh(duelExpiresAt)}
                       onVote={handleDuelVote}
                       deckStyle={styles.quickVoteDeck}
                       cardAspectRatio={16 / 12}

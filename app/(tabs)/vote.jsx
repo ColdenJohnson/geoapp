@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { voteGlobalDuel } from '@/lib/api';
+import { voteGlobalDuel, isTokenFresh } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import DuelDeck from '@/components/vote/DuelDeck';
 import {
@@ -11,23 +11,36 @@ import {
   ensurePreloadedGlobalDuels,
   getCurrentGlobalDuelPair,
   getOrLoadGlobalDuelPair,
+  ensureFreshTokensForQueue,
 } from '@/lib/globalDuelQueue';
 
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
 
 export default function GlobalVoteScreen() {
-  const [photos, setPhotos] = useState([]);
+  const [duel, setDuel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const isActiveRef = useRef(false);
+  const isDevEnv = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const photos = useMemo(() => (Array.isArray(duel?.photos) ? duel.photos : []), [duel]);
+  const duelReady = useCallback(
+    (pkg) =>
+      Array.isArray(pkg?.photos) &&
+      pkg.photos.length >= 2 &&
+      typeof pkg?.voteToken === 'string' &&
+      pkg.voteToken.length > 0 &&
+      isTokenFresh(pkg?.expiresAt),
+    [isTokenFresh]
+  );
 
   const syncFromQueue = useCallback(async () => {
+    await ensureFreshTokensForQueue('global');
     const head = getCurrentGlobalDuelPair();
-    if (Array.isArray(head) && head.length >= 2) {
-      setPhotos(head);
+    if (duelReady(head)) {
+      setDuel(head);
       setLoading(false);
       ensurePreloadedGlobalDuels(PRELOADED_PAIR_COUNT).catch((error) =>
         console.error('Failed to keep preloading queue', error)
@@ -37,27 +50,40 @@ export default function GlobalVoteScreen() {
 
     setLoading(true);
     const next = await getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT);
+    await ensureFreshTokensForQueue('global');
+    const refreshed = getCurrentGlobalDuelPair();
+    const candidate = duelReady(refreshed) ? refreshed : next;
     if (!isActiveRef.current) return;
-    setPhotos(Array.isArray(next) ? next : []);
-    setLoading(Array.isArray(next) && next.length >= 2 ? false : true);
-  }, [setLoading, setPhotos, ensurePreloadedGlobalDuels, getCurrentGlobalDuelPair, getOrLoadGlobalDuelPair]);
+    if (duelReady(candidate)) {
+      setDuel(candidate);
+      setLoading(false);
+    } else {
+      setDuel(null);
+      setLoading(true);
+    }
+  }, [duelReady, ensureFreshTokensForQueue, ensurePreloadedGlobalDuels, getCurrentGlobalDuelPair, getOrLoadGlobalDuelPair]);
 
   const advanceQueue = useCallback(() => {
-    const nextPair = advanceGlobalDuelQueue(PRELOADED_PAIR_COUNT);
-    setPhotos(Array.isArray(nextPair) ? nextPair : []);
-    if (!Array.isArray(nextPair) || nextPair.length < 2) {
-      setLoading(true);
-      getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT).then((pair) => {
-        if (!isActiveRef.current) return;
-        if (Array.isArray(pair) && pair.length >= 2) {
-          setPhotos(pair);
-          setLoading(false);
-        }
-      });
-    } else {
+    const next = advanceGlobalDuelQueue(PRELOADED_PAIR_COUNT);
+    if (duelReady(next)) {
+      setDuel(next);
       setLoading(false);
+    } else {
+      setDuel(null);
+      setLoading(true);
+      getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT).then((pkg) => {
+        if (!isActiveRef.current) return;
+        ensureFreshTokensForQueue('global').then(() => {
+          const current = getCurrentGlobalDuelPair();
+          const candidate = duelReady(current) ? current : pkg;
+          if (duelReady(candidate)) {
+            setDuel(candidate);
+            setLoading(false);
+          }
+        });
+      });
     }
-  }, [advanceGlobalDuelQueue, getOrLoadGlobalDuelPair, setLoading, setPhotos]);
+  }, [advanceGlobalDuelQueue, duelReady, ensureFreshTokensForQueue, getCurrentGlobalDuelPair, getOrLoadGlobalDuelPair]);
 
   useFocusEffect(
     useCallback(() => {
@@ -72,6 +98,19 @@ export default function GlobalVoteScreen() {
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
       if (!winnerId || !loserId || submitting) return;
+      let activeDuel = duel;
+      if (!duelReady(activeDuel) || !isTokenFresh(activeDuel?.expiresAt)) {
+        await ensureFreshTokensForQueue('global');
+        const refreshed = getCurrentGlobalDuelPair();
+        if (duelReady(refreshed)) {
+          activeDuel = refreshed;
+          setDuel(refreshed);
+        } else {
+          console.warn('No duel token available; fetching a new global duel');
+          advanceQueue();
+          return;
+        }
+      }
       if (isActiveRef.current) {
         setSubmitting(true);
       }
@@ -79,9 +118,18 @@ export default function GlobalVoteScreen() {
         advanceQueue();
       }
       try {
-        const result = await voteGlobalDuel({ winnerPhotoId: winnerId, loserPhotoId: loserId });
-        if (result?.success && !advanceImmediately) {
+        const result = await voteGlobalDuel({
+          winnerPhotoId: winnerId,
+          loserPhotoId: loserId,
+          voteToken: activeDuel.voteToken,
+          expiresAt: activeDuel.expiresAt,
+        });
+        const invalid = result?.invalidVoteToken;
+        if ((result?.success || invalid) && !advanceImmediately) {
           advanceQueue();
+        }
+        if (!result?.success && !invalid && isDevEnv) {
+          console.warn('Global vote failed without advancing queue', result?.error);
         }
       } catch (error) {
         console.error('Failed to submit global vote', error);
@@ -91,7 +139,7 @@ export default function GlobalVoteScreen() {
         }
       }
     },
-    [advanceQueue, submitting]
+    [advanceQueue, duel, duelReady, ensureFreshTokensForQueue, getCurrentGlobalDuelPair, isDevEnv, isTokenFresh, submitting]
   );
 
   const chooseByIndex = useCallback(
