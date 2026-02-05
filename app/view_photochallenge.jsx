@@ -15,6 +15,7 @@ import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
 import TopBar from '@/components/ui/TopBar';
+import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import DuelDeck from '@/components/vote/DuelDeck';
 import { AuthContext } from '@/hooks/AuthContext';
@@ -31,8 +32,10 @@ export default function ViewPhotoChallengeScreen() {
   const [duelLoading, setDuelLoading] = useState(false);
   const [duelVoteToken, setDuelVoteToken] = useState(null);
   const [duelExpiresAt, setDuelExpiresAt] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const router = useRouter();
   const { invalidateStats } = useContext(AuthContext);
+  const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -150,14 +153,42 @@ export default function ViewPhotoChallengeScreen() {
     [choose, duelPhotos]
   );
 
-    async function uploadPhotoChallenge() {
-    const uploadResult = await new Promise((resolve) => {
+  function uploadPhotoChallenge() {
+    if (uploading) return;
+    setUploading(true);
+    showToast('Uploading photo…', 60000);
+    let didFail = false;
+    let didSucceed = false;
+    const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve);
       router.push('/upload');
     });
-  
-    await addPhoto(pinId, uploadResult);
-    invalidateStats();
+
+    uploadPromise
+      .then(async (uploadResult) => {
+        if (!uploadResult) {
+          didFail = true;
+          showToast('Upload failed', 2500);
+          return;
+        }
+        await addPhoto(pinId, uploadResult);
+        invalidateStats();
+        await load();
+        await loadDuel();
+        didSucceed = true;
+        showToast('Upload success', 2200);
+      })
+      .catch((error) => {
+        console.error('Failed to add photo after upload', error);
+        didFail = true;
+        showToast('Upload failed', 2500);
+      })
+      .finally(() => {
+        if (!didFail && !didSucceed) {
+          hideToast();
+        }
+        setUploading(false);
+      });
   }
 
   return (
@@ -212,8 +243,9 @@ export default function ViewPhotoChallengeScreen() {
 
       {/* Bottom, always-on-screen action bar (not absolute) */}
       <BottomBar>
-        <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} />
+        <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} disabled={uploading} />
       </BottomBar>
+
 
       {/* Fullscreen image viewer */}
       <Modal visible={viewerVisible} transparent={true} animationType="fade" onRequestClose={() => setViewerVisible(false)}>
@@ -221,6 +253,8 @@ export default function ViewPhotoChallengeScreen() {
           <Image source={selectedUrl ? { uri: selectedUrl } : undefined} style={styles.viewerImage} resizeMode="contain" />
         </Pressable>
       </Modal>
+
+      <Toast message={toastMessage} bottomOffset={140} />
     </SafeAreaView>
   );
 }

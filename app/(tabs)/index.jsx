@@ -37,7 +37,7 @@ export default function HomeScreen() {
   const [isNear, setIsNear] = useState(false);
   const [nearestPin, setNearestPin ] = useState(null);
   const [showFriendsOnly, setShowFriendsOnly] = useState(false);
-  const { message: toastMessage, show: showToast} = useToast(3500);
+  const { message: toastMessage, show: showToast } = useToast(3500);
   const { height: screenHeight } = useWindowDimensions();
   const isSmallScreen = screenHeight < 700;
 

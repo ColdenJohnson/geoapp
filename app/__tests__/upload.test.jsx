@@ -35,16 +35,17 @@ describe('Upload screen', () => {
     expect(getByText(/We need your permission/i)).toBeTruthy();
   });
 
-  it('uploads existing photo when Save is pressed', async () => {
+  it('uploads existing photo when Upload is pressed', async () => {
     cameraModule.useCameraPermissions.mockReturnValue([{ granted: true }, jest.fn()]);
     uploadImage.mockResolvedValue('https://download');
 
     const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
 
-    fireEvent.press(getByText('Upload picture'));
+    fireEvent.press(getByText('Upload'));
+
+    expect(router.back).toHaveBeenCalled();
 
     await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
     expect(resolveUpload).toHaveBeenCalledWith('https://download');
-    expect(router.back).toHaveBeenCalled();
   });
 });

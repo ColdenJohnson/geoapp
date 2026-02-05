@@ -2,7 +2,7 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect } from 'react'
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -20,11 +20,17 @@ export default function Upload({ initialUri = null }) {
   const [permission, requestPermission] = useCameraPermissions()
   const [uri, setUri] = useState(initialUri);
   const [mode, setMode] = useState("picture");
+  const [uploading, setUploading] = useState(false);
   const ref = useRef(null);
   const router = useRouter();
   const { next } = useLocalSearchParams();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const isMounted = useRef(true);
+
+  useEffect(() => () => {
+    isMounted.current = false;
+  }, []);
 
 
   // For Dev
@@ -97,22 +103,32 @@ export default function Upload({ initialUri = null }) {
             style={styles.actionButton}
             variant="filled"
             onPress={async () => {
-              try {
-                const downloadURL = await uploadImage(uri);
-                resolveUpload(downloadURL); // fulfill the original Promise
-                if (next) {
-                  console.log('Navigating to next:', next);
-                  router.push(String(next));
-                } else {
-                  console.log('No next specified, going back');
-                  router.back();
+              if (!uri || uploading) return;
+              setUploading(true);
+              (async () => {
+                try {
+                  const downloadURL = await uploadImage(uri);
+                  resolveUpload(downloadURL); // fulfill the original Promise
+                } catch (err) {
+                  console.error('Error uploading image:', err);
+                  resolveUpload(null);
+                } finally {
+                  if (isMounted.current) {
+                    setUploading(false);
+                  }
                 }
-              } catch (err) {
-                console.error('Error uploading image:', err);
+              })();
+
+              if (next) {
+                console.log('Navigating to next:', next);
+                router.push(String(next));
+              } else {
+                console.log('No next specified, going back');
+                router.back();
               }
-              // TODO: make this loading screen not slow
             }}
             title="Upload"
+            disabled={uploading}
           />
         </View>
       </View>
