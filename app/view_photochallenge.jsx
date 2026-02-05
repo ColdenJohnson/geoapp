@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useContext } from 'react';
-import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, SafeAreaView } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, SafeAreaView, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId } from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
@@ -31,7 +31,16 @@ export default function ViewPhotoChallengeScreen() {
     setLoading(true);
     try {
       const data = await fetchPhotosByPinId(pinId);
-      setPhotos(Array.isArray(data) ? data : []);
+      if (Array.isArray(data)) {
+        const ordered = [...data].sort((a, b) => {
+          const aElo = Number.isFinite(a?.global_elo) ? a.global_elo : 1000;
+          const bElo = Number.isFinite(b?.global_elo) ? b.global_elo : 1000;
+          return bElo - aElo;
+        });
+        setPhotos(ordered);
+      } else {
+        setPhotos([]);
+      }
       const challengeData = await fetchChallengeByPinId(pinId);
       setChallengeDetails(challengeData);
     } catch (e) {
@@ -112,6 +121,19 @@ export default function ViewPhotoChallengeScreen() {
                 <Pressable onPress={() => { setSelectedUrl(item.file_url); setViewerVisible(true); }}>
                   <Image source={{ uri: item.file_url }} style={styles.image} resizeMode="cover" />
                 </Pressable>
+                <View style={styles.photoMeta}>
+                  <View style={styles.metaBlock}>
+                    <Text style={styles.metaTitle}>
+                      Global Elo {Number.isFinite(item?.global_elo) ? item.global_elo : 1000}
+                    </Text>
+                    <Text style={styles.metaDetail}>
+                      W {item?.global_wins ?? 0} · L {item?.global_losses ?? 0}
+                    </Text>
+                  </View>
+                  <Text style={styles.metaHandle}>
+                    {item?.created_by_handle ? `@${item.created_by_handle}` : 'anon'}
+                  </Text>
+                </View>
               </View>
             )}
           />
@@ -149,6 +171,21 @@ function createStyles(colors) {
       backgroundColor: colors.bg,
     },
     image: { width: '100%', height: 220 },
+    photoMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      backgroundColor: colors.bg,
+      gap: 12,
+    },
+    metaBlock: { flex: 1, gap: 2 },
+    metaTitle: { fontSize: 14, fontWeight: '700', color: colors.text },
+    metaDetail: { fontSize: 12, color: colors.textMuted },
+    metaHandle: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
     viewerBackdrop: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.9)',
