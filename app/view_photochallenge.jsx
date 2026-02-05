@@ -1,20 +1,18 @@
 import { useEffect, useState, useCallback, useMemo, useContext } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, SafeAreaView, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId } from '@/lib/api';
+import { fetchPhotosByPinId, addPhoto } from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
-import TopBar from '@/components/ui/TopBar';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
 
 export default function ViewPhotoChallengeScreen() {
-  const { pinId } = useLocalSearchParams();   // pinId comes from router params
+  const { pinId, message: promptParam, created_by_handle: handleParam } = useLocalSearchParams();   // pinId comes from router params
   const [photos, setPhotos] = useState([]);
-  const [ challengeDetails, setChallengeDetails ] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -25,6 +23,12 @@ export default function ViewPhotoChallengeScreen() {
   const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const promptText = typeof promptParam === 'string' && promptParam.trim()
+    ? promptParam
+    : 'Prompt';
+  const handleText = typeof handleParam === 'string' && handleParam.trim()
+    ? handleParam
+    : null;
 
   async function load() {
     if (!pinId) return;
@@ -41,8 +45,6 @@ export default function ViewPhotoChallengeScreen() {
       } else {
         setPhotos([]);
       }
-      const challengeData = await fetchChallengeByPinId(pinId);
-      setChallengeDetails(challengeData);
     } catch (e) {
       console.error('Failed to fetch photos for pin', pinId, e);
       setPhotos([]);
@@ -106,7 +108,12 @@ export default function ViewPhotoChallengeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <TopBar title={`Photo Challenge ${pinId}`} subtitle={`Prompt: ${challengeDetails?.message}`} />
+      <View style={styles.header}>
+        <Text style={styles.headerText}>{promptText}</Text>
+        <Text style={styles.headerHandle}>
+          {handleText ? `@${handleText}` : 'anon'}
+        </Text>
+      </View>
       <View style={styles.container}>
         {loading ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 24 }} />
@@ -161,6 +168,25 @@ export default function ViewPhotoChallengeScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.bg },
+    header: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 12,
+      backgroundColor: colors.bg,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.barBorder,
+    },
+    headerText: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    headerHandle: {
+      marginTop: 4,
+      fontSize: 12,
+      color: colors.textMuted,
+      fontWeight: '600',
+    },
     container: { flex: 1, backgroundColor: colors.surface },
     listContent: { padding: 12, gap: 12, paddingBottom: 96 },
     card: {
@@ -170,7 +196,7 @@ function createStyles(colors) {
       borderColor: colors.border,
       backgroundColor: colors.bg,
     },
-    image: { width: '100%', height: 220 },
+    image: { width: '100%', height: 350 },
     photoMeta: {
       flexDirection: 'row',
       alignItems: 'center',

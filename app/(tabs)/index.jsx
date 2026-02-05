@@ -234,7 +234,14 @@ export default function HomeScreen() {
       showToast(`Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`);
       return;
     }
-    router.push({pathname: '/view_photochallenge', params: { pinId: pin._id } });
+    router.push({
+      pathname: '/view_photochallenge',
+      params: {
+        pinId: pin._id,
+        message: pin?.message || '',
+        created_by_handle: pin?.created_by_handle || '',
+      },
+    });
   }
 
   const colors = usePalette();
