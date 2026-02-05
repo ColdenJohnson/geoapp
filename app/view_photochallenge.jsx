@@ -1,15 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useContext } from 'react';
-import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, Text, SafeAreaView } from 'react-native';
-import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
-import {
-  fetchPhotosByPinId,
-  addPhoto,
-  fetchChallengeByPinId,
-  fetchDuelByPinId,
-  voteDuel,
-  refreshPinDuelToken,
-  isTokenFresh,
-} from '@/lib/api';
+import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, SafeAreaView } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId } from '@/lib/api';
 import { useFocusEffect } from '@react-navigation/native';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
@@ -17,7 +9,6 @@ import { CTAButton } from '@/components/ui/Buttons';
 import TopBar from '@/components/ui/TopBar';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
-import DuelDeck from '@/components/vote/DuelDeck';
 import { AuthContext } from '@/hooks/AuthContext';
 
 export default function ViewPhotoChallengeScreen() {
@@ -28,10 +19,6 @@ export default function ViewPhotoChallengeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState(null);
-  const [duelPhotos, setDuelPhotos] = useState([]);
-  const [duelLoading, setDuelLoading] = useState(false);
-  const [duelVoteToken, setDuelVoteToken] = useState(null);
-  const [duelExpiresAt, setDuelExpiresAt] = useState(null);
   const [uploading, setUploading] = useState(false);
   const router = useRouter();
   const { invalidateStats } = useContext(AuthContext);
@@ -56,8 +43,6 @@ export default function ViewPhotoChallengeScreen() {
   }
 
   useEffect(() => { load(); }, [pinId]);
-  // Auto-load a duel pair for the header section when pin changes
-  useEffect(() => { loadDuel(); }, [pinId]);
 
     useFocusEffect(
     useCallback(() => {
@@ -72,86 +57,6 @@ export default function ViewPhotoChallengeScreen() {
     await load();
     setRefreshing(false);
   };
-
-  async function loadDuel() {
-    if (!pinId) return;
-    setDuelLoading(true);
-    try {
-      const payload = await fetchDuelByPinId(pinId);
-      const pair = Array.isArray(payload?.photos) ? payload.photos : [];
-      setDuelPhotos(pair);
-      setDuelVoteToken(typeof payload?.voteToken === 'string' ? payload.voteToken : null);
-      setDuelExpiresAt(typeof payload?.expiresAt === 'string' ? payload.expiresAt : null);
-    } finally {
-      setDuelLoading(false);
-    }
-  }
-
-  async function ensurePinTokenFresh() {
-    if (isTokenFresh(duelExpiresAt) && typeof duelVoteToken === 'string') {
-      return { voteToken: duelVoteToken, expiresAt: duelExpiresAt };
-    }
-    const ids = Array.isArray(duelPhotos) ? duelPhotos.map((p) => p?._id).filter(Boolean) : [];
-    if (ids.length < 2) {
-      console.warn('Cannot refresh pin duel token; missing photo ids');
-      return null;
-    }
-    try {
-      const refreshed = await refreshPinDuelToken(pinId, ids[0], ids[1], duelVoteToken);
-      if (refreshed?.voteToken && refreshed?.expiresAt) {
-        setDuelVoteToken(refreshed.voteToken);
-        setDuelExpiresAt(refreshed.expiresAt);
-        return refreshed;
-      }
-    } catch (error) {
-      console.warn('Failed to refresh pin duel token', error);
-    }
-    return null;
-  }
-
-  async function choose(winnerId, loserId) {
-    if (!winnerId || !loserId) return;
-    const voteTokenData = await ensurePinTokenFresh();
-    const voteToken = voteTokenData?.voteToken;
-    const expiresAt = voteTokenData?.expiresAt;
-    if (!voteToken) {
-      console.warn('Missing vote token for pin duel; refreshing pair');
-      await loadDuel();
-      return;
-    }
-    try {
-      const result = await voteDuel({
-        pinId,
-        winnerPhotoId: winnerId,
-        loserPhotoId: loserId,
-        voteToken,
-        expiresAt,
-      });
-      if (result?.invalidVoteToken) {
-        console.warn('Pin duel token rejected; fetching a new pair');
-      }
-    } catch (error) {
-      if (error?.response?.status === 401 || error?.response?.status === 403) {
-        console.warn('Pin duel vote unauthorized; refreshing pair');
-      } else {
-        console.error('Failed to submit duel vote', error);
-      }
-    } finally {
-      await loadDuel(); // get next pair
-    }
-  }
-
-  const handleDuelVote = useCallback(
-    (winnerIndex, pairOverride) => {
-      const pair = Array.isArray(pairOverride) ? pairOverride : duelPhotos;
-      if (!Array.isArray(pair) || pair.length < 2) return;
-      const winner = pair[winnerIndex];
-      const loser = pair[winnerIndex === 0 ? 1 : 0];
-      if (!winner?._id || !loser?._id) return;
-      choose(winner._id, loser._id);
-    },
-    [choose, duelPhotos]
-  );
 
   function uploadPhotoChallenge() {
     if (uploading) return;
@@ -174,7 +79,6 @@ export default function ViewPhotoChallengeScreen() {
         await addPhoto(pinId, uploadResult);
         invalidateStats();
         await load();
-        await loadDuel();
         didSucceed = true;
         showToast('Upload success', 2200);
       })
@@ -210,33 +114,6 @@ export default function ViewPhotoChallengeScreen() {
                 </Pressable>
               </View>
             )}
-            ListHeaderComponent={
-              <View style={{ marginBottom: 20 }}>
-                <Text style={[styles.quickVoteTitle, { marginLeft: 4 }]}>Quick Vote</Text>
-                <View style={styles.quickVoteCard}>
-                  {duelPhotos?.length >= 2 ? (
-                    <DuelDeck
-                      pair={duelPhotos}
-                      disabled={duelLoading || !duelVoteToken || !isTokenFresh(duelExpiresAt)}
-                      onVote={handleDuelVote}
-                      deckStyle={styles.quickVoteDeck}
-                      cardAspectRatio={16 / 12}
-                      renderMeta={(photo) => (
-                        <View style={styles.quickVoteMetaOverlay}>
-                          <Text style={styles.quickVoteMetaText}>
-                            Elo {Number.isFinite(photo?.elo) ? photo.elo : 1000}
-                          </Text>
-                        </View>
-                      )}
-                    />
-                  ) : (
-                    <View style={{ alignItems: 'center', padding: 16 }}>
-                      <Text style={{ color: colors.textMuted, marginBottom: 8 }}>{duelLoading ? 'Loading pair...' : 'Not enough photos to start a duel'}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            }
           />
         )}
       </View>
@@ -272,28 +149,6 @@ function createStyles(colors) {
       backgroundColor: colors.bg,
     },
     image: { width: '100%', height: 220 },
-    quickVoteTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8, color: colors.text },
-    quickVoteCard: {
-      padding: 8,
-      backgroundColor: colors.bg,
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
-    quickVoteDeck: {
-      height: 200,
-      maxWidth: 520,
-    },
-    quickVoteMetaOverlay: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      backgroundColor: 'rgba(0,0,0,0.35)',
-    },
-    quickVoteMetaText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
     viewerBackdrop: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.9)',
