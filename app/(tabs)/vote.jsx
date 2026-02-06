@@ -175,6 +175,9 @@ export default function GlobalVoteScreen() {
         setRemainingGlobalVotes(nextRemaining);
       }
       if (advanceImmediately) {
+        // TODO: Optimistic dismissal can re-show the same pair (p1, p2, p3, p1) because
+        // the server only marks a slot consumed after vote submission; prefetch can
+        // pull the same unconsumed pair. Needs reservation or client de-dup later.
         advanceQueue();
       }
       try {
@@ -335,6 +338,6 @@ function createStyles(colors) {
     metaDetail: { fontSize: 14, color: '#F3F4F6' },
     helperText: { color: colors.textMuted, textAlign: 'center', fontSize: 14 },
     cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
-    pinPrompt: { color: colors.text, fontSize: 16, fontWeight: '600', textAlign: 'center' },
+    pinPrompt: { color: colors.primary, fontSize: 20, fontWeight: '600', textAlign: 'center' },
   });
 }
