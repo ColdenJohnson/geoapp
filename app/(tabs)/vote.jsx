@@ -31,6 +31,7 @@ export default function GlobalVoteScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const photos = useMemo(() => (Array.isArray(duel?.photos) ? duel.photos : []), [duel]);
+  const isPinRandom = duel?.bucketType === 'pin_random';
   const duelReady = useCallback(
     (pkg) =>
       Array.isArray(pkg?.photos) &&
@@ -182,6 +183,8 @@ export default function GlobalVoteScreen() {
           loserPhotoId: loserId,
           voteToken: activeDuel.voteToken,
           expiresAt: activeDuel.expiresAt,
+          bucketType: activeDuel.bucketType,
+          pinId: activeDuel.pinId,
         });
         const invalid = result?.invalidVoteToken;
         if ((result?.success || invalid) && !advanceImmediately) {
@@ -267,10 +270,16 @@ export default function GlobalVoteScreen() {
               renderMeta={(photo) => (
                 <View style={styles.meta}>
                   <Text style={styles.metaTitle}>
-                    Global Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
+                    {isPinRandom ? 'Local' : 'Global'} Elo{' '}
+                    {Number.isFinite(isPinRandom ? photo?.local_elo : photo?.global_elo)
+                      ? isPinRandom
+                        ? photo.local_elo
+                        : photo.global_elo
+                      : 1000}
                   </Text>
                   <Text style={styles.metaDetail}>
-                    W {photo?.global_wins ?? 0} · L {photo?.global_losses ?? 0}
+                    W {isPinRandom ? photo?.wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
+                    {isPinRandom ? photo?.losses ?? 0 : photo?.global_losses ?? 0}
                   </Text>
                 </View>
               )}
