@@ -235,7 +235,8 @@ export default function GlobalVoteScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Vote for the best photo</Text>
+          <Text style={styles.title}>Vote!</Text>
+          <Text style={styles.subtitle}>swipe to select</Text>
         </View>
 
         <View style={styles.body}>
@@ -283,7 +284,8 @@ function createStyles(colors) {
     safe: { flex: 1, backgroundColor: colors.bg },
     container: { flex: 1, paddingHorizontal: 16, paddingTop: 12, gap: 16, backgroundColor: colors.surface },
     header: { gap: 4 },
-    title: { fontSize: 24, fontWeight: '700', color: colors.text },
+    title: { fontSize: 24, fontWeight: '700', color: colors.primary },
+    subtitle: { fontSize: 14, fontWeight: '500', color: colors.textMuted },
     body: { flex: 1, gap: 16 },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     emptyText: { color: colors.textMuted, fontSize: 16, textAlign: 'center', paddingHorizontal: 12 },
