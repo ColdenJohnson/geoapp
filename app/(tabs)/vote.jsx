@@ -278,8 +278,8 @@ export default function GlobalVoteScreen() {
                       : 1000}
                   </Text>
                   <Text style={styles.metaDetail}>
-                    W {isPinRandom ? photo?.wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
-                    {isPinRandom ? photo?.losses ?? 0 : photo?.global_losses ?? 0}
+                    W {isPinRandom ? photo?.local_wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
+                    {isPinRandom ? photo?.local_losses ?? 0 : photo?.global_losses ?? 0}
                   </Text>
                 </View>
               )}
