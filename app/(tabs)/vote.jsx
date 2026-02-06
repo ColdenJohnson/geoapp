@@ -240,6 +240,9 @@ export default function GlobalVoteScreen() {
         </View>
 
         <View style={styles.body}>
+          {!loading && photos.length >= 2 && duel?.bucketType === 'pin_random' && duel?.pinPrompt ? (
+            <Text style={styles.pinPrompt}>{duel.pinPrompt}</Text>
+          ) : null}
           {remainingVotes === 0 ? (
             <View style={styles.centered}>
               <Text style={styles.emptyText}>
@@ -323,5 +326,6 @@ function createStyles(colors) {
     metaDetail: { fontSize: 14, color: '#F3F4F6' },
     helperText: { color: colors.textMuted, textAlign: 'center', fontSize: 14 },
     cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
+    pinPrompt: { color: colors.text, fontSize: 16, fontWeight: '600', textAlign: 'center' },
   });
 }
