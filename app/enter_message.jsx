@@ -16,7 +16,7 @@ import { Image } from 'expo-image';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
+import { CTAButton } from '@/components/ui/Buttons';
 
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii } from '@/theme/tokens';
@@ -138,27 +138,29 @@ export default function EnterMessageScreen({ initialUri = null }) {
           responsiveOrientationWhenOrientationLocked
           ratio="4:3"
         />
-        <View style={styles.shutterContainer}>
-          <View style={{ width: 32 }} />
+      </View>
+      <View style={{ height: 12 }} />
+      <Text style={styles.helper}>Snap a photo to start your challenge.</Text>
+      <View style={styles.shutterContainer}>
+        <View style={{ width: 32 }} />
 
-          <Pressable onPress={takePicture}>
-            {({ pressed }) => (
+        <Pressable onPress={takePicture}>
+          {({ pressed }) => (
+            <View
+              style={[
+                styles.shutterBtn,
+                pressed && { opacity: 0.6 },
+              ]}
+            >
               <View
-                style={[
-                  styles.shutterBtn,
-                  pressed && { opacity: 0.6 },
-                ]}
-              >
-                <View
-                  style={styles.shutterBtnInner}
-                />
-              </View>
-            )}
-          </Pressable>
-          <Pressable onPress={toggleFacing}>
-            <FontAwesome6 name="rotate-left" size={28} color={colors.text} />
-          </Pressable>
-        </View>
+                style={styles.shutterBtnInner}
+              />
+            </View>
+          )}
+        </Pressable>
+        <Pressable onPress={toggleFacing}>
+          <FontAwesome6 name="rotate-left" size={28} color={colors.text} />
+        </Pressable>
       </View>
     </View>
   );
@@ -169,9 +171,9 @@ export default function EnterMessageScreen({ initialUri = null }) {
         <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
           <Image source={{ uri }} style={styles.photo} resizeMode="cover" cachePolicy="memory-disk" />
           <View style={[StyleSheet.absoluteFill, styles.cardOverlay]} pointerEvents="none" />
-          <View style={styles.photoBadge}>
-            <Text style={styles.photoBadgeText}>Captured photo</Text>
-          </View>
+          <Pressable style={styles.closeButton} onPress={() => setUri(null)} hitSlop={12}>
+            <FontAwesome6 name="xmark" size={18} color="#FFFFFF" />
+          </Pressable>
         </Animated.View>
       </Pressable>
     </View>
@@ -195,7 +197,6 @@ export default function EnterMessageScreen({ initialUri = null }) {
         <Animated.View
           style={[styles.content, keyboardVisible && styles.contentKeyboard, { transform: [{ translateY: keyboardOffset }] }]}
         >
-          <Text style={styles.title}>Create a new challenge</Text>
 
           {uri ? renderPreview() : renderCamera()}
 
@@ -224,13 +225,20 @@ export default function EnterMessageScreen({ initialUri = null }) {
               </Text>
 
               <View style={styles.actions}>
-                <SecondaryButton title="Retake Photo" onPress={() => setUri(null)} style={{ flex: 1 }} />
-                <CTAButton title="Upload" onPress={handleUpload} style={{ flex: 1 }} disabled={uploading} />
+                <Pressable
+                  onPress={handleUpload}
+                  disabled={uploading}
+                  style={({ pressed }) => [
+                    styles.createAction,
+                    pressed && { opacity: 0.7 },
+                    uploading && { opacity: 0.5 },
+                  ]}
+                >
+                  <Text style={styles.createText}>CREATE&gt;</Text>
+                </Pressable>
               </View>
             </>
-          ) : (
-            <Text style={styles.helper}>Snap a photo to start your challenge.</Text>
-          )}
+          ) : null}
         </Animated.View>
       </View>
     </TouchableWithoutFeedback>
@@ -243,14 +251,14 @@ function createStyles(colors) {
     permissionGate: { alignItems: 'center', justifyContent: 'center', padding: spacing.lg, gap: spacing.md },
     content: {
       flex: 1,
-      padding: spacing.lg,
+      padding: spacing.xs,
       justifyContent: 'center',
       gap: spacing.md,
     },
     contentKeyboard: {
       justifyContent: 'flex-start',
       paddingBottom: spacing.lg,
-      paddingTop: spacing.sm,
+      paddingTop: spacing.lg,
     },
     stage: {
       width: '100%',
@@ -274,14 +282,12 @@ function createStyles(colors) {
       flex: 1,
     },
     shutterContainer: {
-      position: 'absolute',
-      bottom: 18,
-      left: 0,
-      right: 0,
+      marginTop: spacing.md + 12,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: spacing.lg + 4,
+      width: '100%',
     },
     shutterBtn: {
       backgroundColor: 'transparent',
@@ -303,7 +309,7 @@ function createStyles(colors) {
       width: '100%',
       maxWidth: 520,
       aspectRatio: 3 / 4,
-      borderRadius: 16,
+      borderRadius: radii.lg,
       overflow: 'hidden',
       backgroundColor: colors.bg,
       shadowColor: '#000000',
@@ -314,16 +320,17 @@ function createStyles(colors) {
     },
     photo: { ...StyleSheet.absoluteFillObject },
     cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
-    photoBadge: {
+    closeButton: {
       position: 'absolute',
       top: spacing.md,
-      left: spacing.md,
-      paddingVertical: 6,
-      paddingHorizontal: spacing.md,
-      backgroundColor: 'rgba(0,0,0,0.4)',
-      borderRadius: radii.pill,
+      right: spacing.md,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    photoBadgeText: { color: '#FFFFFF', fontWeight: '700', letterSpacing: 0.3 },
     title: {
       fontSize: 22,
       fontWeight: '700',
@@ -335,6 +342,7 @@ function createStyles(colors) {
       fontWeight: '600',
       color: colors.text,
       marginTop: spacing.sm,
+      paddingHorizontal: spacing.md,
     },
     input: {
       width: '100%',
@@ -360,6 +368,18 @@ function createStyles(colors) {
     },
     counterOver: { color: colors.danger },
     actions: { width: '100%', flexDirection: 'row', gap: spacing.md },
+    createAction: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 0,
+    },
+    createText: {
+      fontSize: 26,
+      fontWeight: '800',
+      letterSpacing: 1,
+      color: colors.text,
+    },
     helper: { color: colors.textMuted, textAlign: 'center' },
   });
 }

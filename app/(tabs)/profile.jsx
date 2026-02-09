@@ -1,11 +1,10 @@
-import { StyleSheet, TextInput, TouchableOpacity, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { SafeAreaView, StyleSheet, TextInput, TouchableOpacity, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
 import { Image } from 'expo-image';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   deleteMyAccount,
@@ -44,7 +43,6 @@ export default function UserProfileScreen() {
   const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
@@ -197,10 +195,10 @@ export default function UserProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.heroGlow} />
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] + insets.bottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing || friendsLoading || statsLoading} onRefresh={onRefresh} />}
@@ -385,7 +383,7 @@ export default function UserProfileScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

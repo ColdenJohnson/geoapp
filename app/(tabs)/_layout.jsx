@@ -30,6 +30,7 @@ export default function TabLayout() {
         options={{
           title: 'Map',
           tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "house" : "house.fill"} color={color} />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -37,6 +38,7 @@ export default function TabLayout() {
         options={{
           title: 'Vote',
           tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "trophy" : "trophy.fill"} color={color} />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -44,6 +46,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "person.circle": "person.circle.fill"} color={color} />,
+          headerShown: false,
         }}
       />
     </Tabs>

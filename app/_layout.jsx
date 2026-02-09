@@ -30,9 +30,10 @@ function RootLayoutContent({ loaded }) {
       {user ? (
         <>
           <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false, title:"Map"}} />
             <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
             <Stack.Screen name="friends" options={{ headerShown: false }} />
+            <Stack.Screen name="enter_message" options={{ title: 'Create a new challenge' }} />
           </Stack>
           <StatusBar style="auto" />
         </>

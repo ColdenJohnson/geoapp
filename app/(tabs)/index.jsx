@@ -408,7 +408,7 @@ function createStyles(colors, isSmallScreen) {
     },
     button: {
       position: 'absolute',
-      top: 20,
+      top: 60,
       right: 20,
       width: 50,
       height: 50,
@@ -423,10 +423,10 @@ function createStyles(colors, isSmallScreen) {
       borderColor: colors.border,
     },
     locateButton: {
-      top: 80,
+      top: 120,
     },
     filterButton: {
-      top: 140,
+      top: 180,
     },
     filterButtonActive: {
       backgroundColor: colors.primary,
