@@ -20,12 +20,27 @@ import {
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
 const VOTE_LIMIT_WINDOW_MINUTES = 60;
 
+const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
+function tokenPrefix(token) {
+  return typeof token === 'string' ? token.slice(0, 8) : 'none';
+}
+
+function extractPhotoIds(item) {
+  if (!item) return [];
+  if (Array.isArray(item.photoIds)) return item.photoIds.slice(0, 2);
+  if (Array.isArray(item.photos)) return item.photos.map(p => p?._id).filter(Boolean).slice(0, 2);
+  return [];
+}
+
 export default function GlobalVoteScreen() {
   const [duel, setDuel] = useState(null);
+  const [renderId, setRenderId] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [remainingVotes, setRemainingVotes] = useState(null);
   const isActiveRef = useRef(false);
+  const renderCounterRef = useRef(0);
   const isDevEnv = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 
   const colors = usePalette();
@@ -46,12 +61,30 @@ export default function GlobalVoteScreen() {
     setRemainingVotes(Number.isFinite(current) ? current : null);
   }, [setRemainingVotes]);
 
+  const stageRender = useCallback(
+    (pkg) => {
+      if (!pkg) return;
+      renderCounterRef.current += 1;
+      const nextRenderId = renderCounterRef.current;
+      setRenderId(nextRenderId);
+      setDuel(pkg);
+      if (IS_DEV_LOG) {
+        console.log('[global-duel] render', {
+          renderId: nextRenderId,
+          photoIds: extractPhotoIds(pkg),
+          token: tokenPrefix(pkg?.voteToken),
+        });
+      }
+    },
+    [setDuel, setRenderId]
+  );
+
   const syncFromQueue = useCallback(async () => {
     await ensureFreshTokensForQueue('global');
     syncRemainingVotes();
     const head = getCurrentGlobalDuelPair();
     if (duelReady(head)) {
-      setDuel(head);
+      stageRender(head);
       setLoading(false);
       ensurePreloadedGlobalDuels(PRELOADED_PAIR_COUNT).catch((error) =>
         console.error('Failed to keep preloading queue', error)
@@ -78,7 +111,7 @@ export default function GlobalVoteScreen() {
     const candidate = duelReady(refreshed) ? refreshed : next;
     if (!isActiveRef.current) return;
     if (duelReady(candidate)) {
-      setDuel(candidate);
+      stageRender(candidate);
       setLoading(false);
     } else {
       setDuel(null);
@@ -102,7 +135,7 @@ export default function GlobalVoteScreen() {
       return;
     }
     if (duelReady(next)) {
-      setDuel(next);
+      stageRender(next);
       setLoading(false);
     } else {
       setDuel(null);
@@ -119,7 +152,7 @@ export default function GlobalVoteScreen() {
             return;
           }
           if (duelReady(candidate)) {
-            setDuel(candidate);
+            stageRender(candidate);
             setLoading(false);
           }
         });
@@ -158,7 +191,7 @@ export default function GlobalVoteScreen() {
         const refreshed = getCurrentGlobalDuelPair();
         if (duelReady(refreshed)) {
           activeDuel = refreshed;
-          setDuel(refreshed);
+          stageRender(refreshed);
         } else {
           console.warn('No duel token available; fetching a new global duel');
           advanceQueue();
@@ -179,6 +212,17 @@ export default function GlobalVoteScreen() {
         // the server only marks a slot consumed after vote submission; prefetch can
         // pull the same unconsumed pair. Needs reservation or client de-dup later.
         advanceQueue();
+        advancedQueueAlready = true;
+      }
+
+      if (IS_DEV_LOG) {
+        console.log('[global-duel] submit-call', {
+          renderId,
+          winnerPhotoId: winnerId,
+          loserPhotoId: loserId,
+          token: tokenPrefix(activeDuel?.voteToken),
+          advancedQueueAlready,
+        });
       }
       try {
         const result = await voteGlobalDuel({
@@ -206,6 +250,12 @@ export default function GlobalVoteScreen() {
         }
       } catch (error) {
         console.error('Failed to submit global vote', error);
+        if (IS_DEV_LOG) {
+          console.log('[global-duel] submit-error', {
+            status: error?.response?.status,
+            error: error?.message,
+          });
+        }
       } finally {
         if (isActiveRef.current) {
           setSubmitting(false);
@@ -267,6 +317,8 @@ export default function GlobalVoteScreen() {
           ) : (
             <DuelDeck
               pair={photos}
+              renderId={renderId}
+              voteToken={duel?.voteToken}
               disabled={loading || submitting}
               onVote={chooseByIndex}
               deckStyle={styles.deckArea}

@@ -22,6 +22,8 @@ export default function DuelDeck({
   pair,
   onVote,
   disabled = false,
+  renderId,
+  voteToken,
   deckStyle,
   cardStyle,
   imageStyle,
@@ -109,7 +111,7 @@ export default function DuelDeck({
         onVote(target, pairSnapshot);
       }
     },
-    [disabled, photos, selectedIndex, dismissProgress, isDismissing, winnerIndex, onVote, finalizeDismiss]
+    [disabled, photos, selectedIndex, dismissProgress, isDismissing, winnerIndex, onVote, finalizeDismiss ]
   );
 
   const focusIndex = useDerivedValue(() => {
