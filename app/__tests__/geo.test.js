@@ -16,6 +16,10 @@ describe('isInMainlandChina', () => {
   it('excludes Taiwan', () => {
     expect(isInMainlandChina(25.033, 121.5654)).toBe(false);
   });
+
+  it('returns true for Xiamen', () => {
+    expect(isInMainlandChina(24.495932, 118.163750)).toBe(true);
+  });
 });
 
 describe('wgs84ToGcj02', () => {
