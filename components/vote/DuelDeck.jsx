@@ -17,6 +17,7 @@ const FOCUS_SWIPE_THRESHOLD = 24;
 const VOTE_SWIPE_THRESHOLD = 140;
 const SWIPE_VISUAL_MULTIPLIER = 1.5;
 const DISMISS_DURATION_MS = 250;
+const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
 export default function DuelDeck({
   pair,
@@ -45,6 +46,17 @@ export default function DuelDeck({
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  useEffect(() => {
+    if (IS_DEV_LOG) {
+      console.log('[dueldeck] mount', { renderId, voteTokenPrefix: typeof voteToken === 'string' ? voteToken.slice(0, 8) : 'none' });
+    }
+    return () => {
+      if (IS_DEV_LOG) {
+        console.log('[dueldeck] unmount', { renderId, voteTokenPrefix: typeof voteToken === 'string' ? voteToken.slice(0, 8) : 'none' });
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isDismissing.value) {

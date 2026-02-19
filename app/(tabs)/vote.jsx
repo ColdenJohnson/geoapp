@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 
 import { voteGlobalDuel, isTokenFresh } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
@@ -42,6 +42,7 @@ export default function GlobalVoteScreen() {
   const isActiveRef = useRef(false);
   const renderCounterRef = useRef(0);
   const isDevEnv = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
+  const isScreenFocused = useIsFocused();
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -171,9 +172,15 @@ export default function GlobalVoteScreen() {
   useFocusEffect(
     useCallback(() => {
       isActiveRef.current = true;
+      if (IS_DEV_LOG) {
+        console.log('[vote] focus', { ts: Date.now() });
+      }
       syncFromQueue();
       return () => {
         isActiveRef.current = false;
+        if (IS_DEV_LOG) {
+          console.log('[vote] blur', { ts: Date.now() });
+        }
       };
     }, [syncFromQueue])
   );
@@ -314,7 +321,7 @@ export default function GlobalVoteScreen() {
             <View style={styles.centered}>
               <Text style={styles.emptyText}>Need at least two photos to start global voting.</Text>
             </View>
-          ) : (
+          ) : !isScreenFocused ? null : (
             <DuelDeck
               pair={photos}
               renderId={renderId}
