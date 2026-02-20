@@ -170,10 +170,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const d = computeNearestPin(location, pins);
-    setNearestDistance(d);
-    setIsNear(typeof d === 'number' && d <= NEAR_THRESHOLD_METERS);
-
-    const nearest = computeNearestPin(location, pins);
+    const nearest = d;
     setNearestDistance(nearest ? nearest.distance : null);
     setNearestPin(nearest ? nearest.pin : null);
     setIsNear(!!nearest && nearest.distance <= NEAR_THRESHOLD_METERS);

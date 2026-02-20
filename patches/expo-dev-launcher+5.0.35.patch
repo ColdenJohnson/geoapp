@@ -1,0 +1,22 @@
+diff --git a/node_modules/expo-dev-launcher/ios/Unsafe/RCTPackagerConnection+EXDevLauncherPackagerConnectionInterceptor.m b/node_modules/expo-dev-launcher/ios/Unsafe/RCTPackagerConnection+EXDevLauncherPackagerConnectionInterceptor.m
+index 49b6750..b0cf6c3 100644
+--- a/node_modules/expo-dev-launcher/ios/Unsafe/RCTPackagerConnection+EXDevLauncherPackagerConnectionInterceptor.m
++++ b/node_modules/expo-dev-launcher/ios/Unsafe/RCTPackagerConnection+EXDevLauncherPackagerConnectionInterceptor.m
+@@ -61,10 +61,13 @@ - (void)setSocketConnectionURL:(NSURL *)url
+   newSocket.delegate = (id<RCTReconnectingWebSocketDelegate>)self;
+   [newSocket start];
+ 
+-  @try {
+-    // _serverHostForSocket was removed in RN 0.64
+-    [self setValue:url.absoluteString forKey:@"_serverHostForSocket"];
+-  } @catch(id exception) {}
++  Ivar serverHostPortVar = class_getInstanceVariable([self class], "_serverHostPortForSocket");
++  if (serverHostPortVar != NULL) {
++    NSString *host = [url host] ?: @"localhost";
++    NSNumber *port = [url port];
++    NSString *hostPort = port != nil ? [NSString stringWithFormat:@"%@:%@", host, port] : host;
++    [self setValue:hostPort forKey:@"_serverHostPortForSocket"];
++  }
+   [self setValue:newSocket forKey:@"_socket"];
+ }
+ 
