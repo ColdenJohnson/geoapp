@@ -14,12 +14,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { uploadImage } from '@/lib/uploadHelpers';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
+import { spacing, radii } from '@/theme/tokens';
 
 export default function Upload({ initialUri = null }) {
   const [facing, setFacing] = useState ("back");
   const [permission, requestPermission] = useCameraPermissions()
   const [uri, setUri] = useState(initialUri);
-  const [mode, setMode] = useState("picture");
   const [uploading, setUploading] = useState(false);
   const ref = useRef(null);
   const router = useRouter();
@@ -72,7 +72,7 @@ export default function Upload({ initialUri = null }) {
 
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.permissionGate]}>
         <Text style={styles.message}>We need your permission to show the camera for SideQuest photo upload to work properly.</Text>
         <CTAButton title="Continue" onPress={requestPermission} />
       </View>
@@ -90,59 +90,39 @@ export default function Upload({ initialUri = null }) {
     });
     setUri(photo?.uri);
     console.log('Photo captured:', photo?.uri);
-
   };
 
-  const renderPicture = () => {
-    return (
-      <View>
-        <Image
-          source={{ uri }}
-          contentFit="contain"
-          style={{ width: '100%', aspectRatio: 3/4 }}
-        />
-        <View style={styles.actionRow}>
-          <CTAButton style={[styles.actionButton, { marginRight: 12 }]} onPress={() => setUri(null)} title="Retake Picture" />
-          <CTAButton
-            style={styles.actionButton}
-            variant="filled"
-            onPress={async () => {
-              if (!uri || uploading) return;
-              didSubmitUpload.current = true;
-              setUploading(true);
-              (async () => {
-                try {
-                  const downloadURL = await uploadImage(uri);
-                  resolveUpload(downloadURL); // fulfill the original Promise
-                } catch (err) {
-                  console.error('Error uploading image:', err);
-                  resolveUpload(null);
-                } finally {
-                  if (isMounted.current) {
-                    setUploading(false);
-                  }
-                }
-              })();
+  const handleUpload = () => {
+    if (!uri || uploading) return;
+    didSubmitUpload.current = true;
+    setUploading(true);
 
-              if (next) {
-                console.log('Navigating to next:', next);
-                router.push(String(next));
-              } else {
-                console.log('No next specified, going back');
-                router.back();
-              }
-            }}
-            title="Upload"
-            disabled={uploading}
-          />
-        </View>
-      </View>
-    );
+    (async () => {
+      try {
+        const downloadURL = await uploadImage(uri);
+        resolveUpload(downloadURL); // fulfill the original Promise
+      } catch (err) {
+        console.error('Error uploading image:', err);
+        resolveUpload(null);
+      } finally {
+        if (isMounted.current) {
+          setUploading(false);
+        }
+      }
+    })();
+
+    if (next) {
+      console.log('Navigating to next:', next);
+      router.push(String(next));
+    } else {
+      console.log('No next specified, going back');
+      router.back();
+    }
   };
 
   const renderCamera = () => {
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.stage}>
       <View style={styles.cameraContainer}>
         <CameraView
           style={styles.camera}
@@ -153,8 +133,9 @@ export default function Upload({ initialUri = null }) {
           ratio="4:3"
         />
       </View>
+      <View style={{ height: 12 }} />
+      <Text style={styles.helper}>Snap a photo to upload your challenge entry.</Text>
       <View style={styles.shutterContainer}>
-        {/* Empty view to maintain space, could add a button here instead. */}
         <View style={{ width: 32 }} />
 
         <Pressable onPress={takePicture}>
@@ -162,9 +143,7 @@ export default function Upload({ initialUri = null }) {
             <View
               style={[
                 styles.shutterBtn,
-                {
-                  opacity: pressed ? 0.5 : 1,
-                },
+                pressed && { opacity: 0.6 },
               ]}
             >
               <View
@@ -174,16 +153,43 @@ export default function Upload({ initialUri = null }) {
           )}
         </Pressable>
         <Pressable onPress={toggleFacing}>
-          <FontAwesome6 name="rotate-left" size={32} color={colors.text} />
+          <FontAwesome6 name="rotate-left" size={28} color={colors.text} />
         </Pressable>
       </View>
     </View>
   );
 };
 
+  const renderPreview = () => (
+    <View style={styles.stage}>
+      <View style={styles.card}>
+        <Image source={{ uri }} style={styles.photo} contentFit="cover" cachePolicy="memory-disk" />
+        <View style={[StyleSheet.absoluteFillObject, styles.cardOverlay]} pointerEvents="none" />
+        <Pressable style={styles.closeButton} onPress={() => setUri(null)} hitSlop={12}>
+          <FontAwesome6 name="xmark" size={18} color="#FFFFFF" />
+        </Pressable>
+      </View>
+      <View style={styles.actions}>
+        <Pressable
+          onPress={handleUpload}
+          disabled={uploading}
+          style={({ pressed }) => [
+            styles.createAction,
+            pressed && { opacity: 0.7 },
+            uploading && { opacity: 0.5 },
+          ]}
+        >
+          <Text style={styles.createText}>{uploading ? 'UPLOADING...' : 'UPLOAD>'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
 return (
   <View style={styles.container}>
-    {uri ? renderPicture() : renderCamera()}
+    <View style={styles.content}>
+      {uri ? renderPreview() : renderCamera()}
+    </View>
   </View>
 );
 }
@@ -192,52 +198,112 @@ function createStyles(colors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.bg,
+      backgroundColor: colors.surface,
+    },
+    permissionGate: {
       alignItems: "center",
       justifyContent: "center",
-      padding: 16,
+      padding: spacing.lg,
+      gap: spacing.md,
     },
-    message: { color: colors.text, textAlign: 'center', marginBottom: 12 },
+    content: {
+      flex: 1,
+      padding: spacing.xs,
+      justifyContent: "center",
+      gap: spacing.md,
+    },
+    stage: {
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    message: { color: colors.text, textAlign: "center" },
     cameraContainer: {
       width: "100%",
       aspectRatio: 3 / 4,
-      overflow: "hidden", // clip anything outside 4:3
-      backgroundColor: "black", // optional, prevents weird edges
+      overflow: "hidden",
+      borderRadius: radii.lg,
+      backgroundColor: "black",
+      position: "relative",
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 12 },
+      shadowRadius: 22,
+      shadowOpacity: 0.18,
+      elevation: 10,
     },
     camera: {
       flex: 1,
     },
-    actionRow: {
-      flexDirection: 'row',
-      width: '100%',
-      marginTop: 12,
+    helper: {
+      color: colors.textMuted,
+      textAlign: "center",
     },
-    actionButton: { flex: 1 },
     shutterContainer: {
-      position: "absolute",
-      bottom: 90,
-      left: 0,
-      width: "100%",
-      alignItems: "center",
+      marginTop: spacing.md + 12,
       flexDirection: "row",
+      alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 30,
+      paddingHorizontal: spacing.lg + 4,
+      width: '100%',
     },
     shutterBtn: {
       backgroundColor: "transparent",
-      borderWidth: 5,
+      borderWidth: 4,
       borderColor: colors.text,
-      width: 85,
-      height: 85,
-      borderRadius: 45,
+      width: 78,
+      height: 78,
+      borderRadius: 48,
       alignItems: "center",
       justifyContent: "center",
     },
     shutterBtnInner: {
-      width: 70,
-      height: 70,
-      borderRadius: 50,
+      width: 62,
+      height: 62,
+      borderRadius: 44,
+      backgroundColor: colors.text,
+    },
+    card: {
+      width: "100%",
+      maxWidth: 520,
+      aspectRatio: 3 / 4,
+      borderRadius: radii.lg,
+      overflow: "hidden",
       backgroundColor: colors.bg,
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 12 },
+      shadowRadius: 24,
+      shadowOpacity: 0.2,
+      elevation: 12,
+    },
+    photo: { ...StyleSheet.absoluteFillObject },
+    cardOverlay: { backgroundColor: "rgba(0,0,0,0.05)" },
+    closeButton: {
+      position: "absolute",
+      top: spacing.md,
+      right: spacing.md,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    actions: {
+      width: "100%",
+      flexDirection: "row",
+      marginTop: spacing.sm,
+    },
+    createAction: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 0,
+    },
+    createText: {
+      fontSize: 26,
+      fontWeight: "800",
+      letterSpacing: 1,
+      color: colors.text,
     },
   });
 }
