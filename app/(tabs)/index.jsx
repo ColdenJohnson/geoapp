@@ -213,9 +213,9 @@ export default function HomeScreen() {
     Promise.all([uploadPromise, messagePromise])
       .then(async ([fileUrl, message]) => {
         if (!fileUrl) {
-          console.warn('Upload did not return a file url; skipping challenge creation');
           return;
         }
+        showToast('Uploading...', 60000);
         const created = await newChallenge(location, fileUrl, message);
         if (created?.pin) {
           setPins((prev) => {
@@ -225,10 +225,12 @@ export default function HomeScreen() {
           });
         }
         invalidateStats();
+        showToast('Upload Sucess', 2200);
         router.replace('/');
       })
       .catch((error) => {
         console.error('Failed to create challenge after upload', error);
+        showToast('Upload Failed', 2500);
       });
   }
 

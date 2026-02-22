@@ -45,4 +45,13 @@ describe('EnterMessageScreen', () => {
 
     expect(getByText(/Camera access needed/i)).toBeTruthy();
   });
+
+  it('resolves both promises when leaving before submit', () => {
+    const { unmount } = render(<EnterMessageScreen initialUri="file://mock.jpg" />);
+
+    unmount();
+
+    expect(resolveUpload).toHaveBeenCalledWith(null);
+    expect(resolveMessage).toHaveBeenCalledWith('');
+  });
 });

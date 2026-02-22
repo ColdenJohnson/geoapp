@@ -40,6 +40,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const cameraRef = useRef(null);
   const inputRef = useRef(null);
   const isMounted = useRef(true);
+  const didSubmitUpload = useRef(false);
   const keyboardOffset = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
   const handlePhotoPress = useCallback(() => {
@@ -86,6 +87,10 @@ export default function EnterMessageScreen({ initialUri = null }) {
       showSub.remove();
       hideSub.remove();
       isMounted.current = false;
+      if (!didSubmitUpload.current) {
+        resolveMessage('');
+        resolveUpload(null);
+      }
     };
   }, [cardScale, keyboardOffset]);
 
@@ -105,6 +110,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   // TODO: Surface upload failures and validation errors to the user instead of only logging.
   const handleUpload = () => {
     if (!uri || uploading) return;
+    didSubmitUpload.current = true;
     const trimmed = message.trim();
 
     resolveMessage(trimmed);
