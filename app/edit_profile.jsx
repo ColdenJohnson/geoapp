@@ -1,11 +1,12 @@
-import { StyleSheet, TextInput, TouchableOpacity, View, Text, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, Pressable, View, Text, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { AuthContext } from '../hooks/AuthContext';
-import { updateUserProfile, setUserHandle } from '@/lib/api';
+import { updateUserProfile, setUserHandle, deleteMyAccount } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { CTAButton } from '@/components/ui/Buttons';
@@ -15,12 +16,13 @@ import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
 
 export default function EditProfileScreen() {
-  const { user, profile, setProfile } = useContext(AuthContext);
+  const { user, profile, setProfile, setUser } = useContext(AuthContext);
   const [formDisplayName, setFormDisplayName] = useState('');
   const [formBio, setFormBio] = useState('');
   const [handleInput, setHandleInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [handleStatus, setHandleStatus] = useState(null);
   const router = useRouter();
   const colors = usePalette();
@@ -124,13 +126,43 @@ export default function EditProfileScreen() {
     }
   };
 
+  const confirmDeleteAccount = () => {
+    if (deleting) return;
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive',
+          onPress: async () => {
+            try {
+              setDeleting(true);
+              const resp = await deleteMyAccount();
+              if (resp?.success) {
+                await AsyncStorage.removeItem('user_token');
+                setUser(null);
+                console.log('Account deleted');
+              } else {
+                console.error('Delete failed:', resp?.error || 'Unknown');
+              }
+            } catch (e) {
+              console.error('Delete account error:', e);
+            } finally {
+              setDeleting(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.heroGlow} />
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: spacing['2xl'] + insets.top, paddingBottom: spacing['2xl'] + insets.bottom }
+          { paddingTop: spacing['2xl'] + insets.top, paddingBottom: spacing['2xl'] }
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -173,7 +205,7 @@ export default function EditProfileScreen() {
               cursorColor={colors.text}
             />
 
-            <Text style={styles.sectionTitle}>Handle Name (Unique)</Text>
+            <Text style={styles.sectionTitle}>Unique Handle</Text>
             <TextInput
               style={formStyles.input}
               placeholder="your_handle"
@@ -200,22 +232,34 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.actionRow, styles.actionRowBottom]}>
-          <CTAButton
-            title="Cancel"
-            onPress={() => router.back()}
-            style={styles.actionButton}
-            variant="primary"
-          />
-          <CTAButton
-            title={saving ? 'Saving...' : 'Save'}
-            onPress={saveChanges}
-            variant="filled"
-            style={styles.actionButtonLast}
-            disabled={saving}
-          />
-        </View>
+        <Pressable
+          onPress={confirmDeleteAccount}
+          style={styles.deletePressable}
+          disabled={deleting}
+        >
+          <Text style={styles.deleteText}>{deleting ? 'Deleting Account...' : 'Delete Account'}</Text>
+        </Pressable>
       </ScrollView>
+      
+      <View style={[styles.footerActions, { paddingBottom: spacing.lg + insets.bottom }]}>
+        <View style={styles.footerActionsInner}>
+          <View style={styles.actionRow}>
+            <CTAButton
+              title="Cancel"
+              onPress={() => router.back()}
+              style={styles.actionButton}
+              variant="primary"
+            />
+            <CTAButton
+              title={saving ? 'Saving...' : 'Save'}
+              onPress={saveChanges}
+              variant="filled"
+              style={styles.actionButtonLast}
+              disabled={saving}
+            />
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -256,9 +300,14 @@ function createStyles(colors) {
     actionRow: {
       flexDirection: 'row',
     },
-    actionRowBottom: {
-      marginTop: 'auto',
-      marginBottom: spacing.lg,
+    footerActions: {
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.md,
+    },
+    footerActionsInner: {
+      width: '100%',
+      maxWidth: 520,
+      alignSelf: 'center',
     },
     actionButton: {
       flex: 1,
@@ -309,6 +358,14 @@ function createStyles(colors) {
     },
     formCard: {
       paddingTop: spacing.lg,
+    },
+    deletePressable: {
+      marginTop: spacing.md,
+      alignSelf: 'center',
+    },
+    deleteText: {
+      color: colors.textMuted,
+      fontSize: 16,
     },
     sectionTitle: {
       fontSize: fontSizes.md,

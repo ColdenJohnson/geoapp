@@ -7,7 +7,6 @@ import { AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
 
 import {
-  deleteMyAccount,
   searchUserByHandle,
   requestFriend,
   acceptFriendRequest,
@@ -348,37 +347,8 @@ export default function UserProfileScreen() {
                   console.error('Sign out failed:', error);
                 }
               }}
-              style={styles.actionButton}
+              style={styles.actionButtonLast}
               variant="primary"
-            />
-            <CTAButton
-              title="Delete Account"
-              variant="primary"
-              style={[styles.actionButtonLast, styles.dangerButton]}
-              textStyle={styles.dangerText}
-              onPress={() => {
-                Alert.alert(
-                  'Delete Account',
-                  'This will permanently delete your account. This cannot be undone.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: async () => {
-                        try {
-                          const resp = await deleteMyAccount();
-                          if (resp?.success) {
-                            await AsyncStorage.removeItem('user_token');
-                            setUser(null);
-                            console.log('Account deleted');
-                          } else {
-                            console.error('Delete failed:', resp?.error || 'Unknown');
-                          }
-                        } catch (e) {
-                          console.error('Delete account error:', e);
-                        }
-                      } }
-                  ]
-                );
-              }}
             />
           </View>
         </View>
@@ -544,19 +514,9 @@ function createStyles(colors) {
       flexDirection: 'row',
       marginTop: spacing.md,
     },
-    actionButton: {
-      flex: 1,
-      marginRight: spacing.sm,
-    },
     actionButtonLast: {
       flex: 1,
       marginRight: 0,
-    },
-    dangerButton: {
-      borderColor: colors.danger,
-    },
-    dangerText: {
-      color: colors.danger,
     },
   });
 }
