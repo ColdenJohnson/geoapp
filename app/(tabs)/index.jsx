@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Platform, View, Pressable, Text, SafeAreaView, useWindowDimensions } from 'react-native';
+import { Image, StyleSheet, Platform, View, Pressable, Alert, Text, SafeAreaView, useWindowDimensions } from 'react-native';
 import MapView from 'react-native-maps';
 import {Marker, Callout} from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -65,6 +65,20 @@ export default function HomeScreen() {
     if (!isNear || !nearestPin) {
       console.log(`Not within ${NEAR_THRESHOLD_METERS}, nearest pin is ${nearestDistance} meters away!`); // nearestPin
       showToast(nearestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! Currently ${nearestDistance}m away.` : `No challenge nearby!`);
+      Alert.alert(
+                  'Uh-oh!',
+                  nearestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! \n Would you like to create a new challenge?` : `No challenge nearby! \n Would you like to create a new challenge?`,
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Create', style: 'default', onPress: async () => {
+                        try {
+                          handleCreateChallengePress();
+                        } catch (e) {
+                          console.error('Create challenge error:', e);
+                        }
+                      } }
+                  ]
+                );
       return;
     }
     viewPhotoChallenge(nearestPin);
