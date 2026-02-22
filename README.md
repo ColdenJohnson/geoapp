@@ -18,18 +18,18 @@ SideQuest is a **location-based photo challenge app**. Users create challenges a
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Client | Expo + React Native | iOS-first, fast iteration |
+| Client | Expo + React Native | widely used + fast iteration |
 | Navigation | Expo Router | file-based routes in `geoapp/app/` |
-| Maps/Location | `react-native-maps` + `expo-location` | proximity gating + live user location |
-| Media | `expo-camera`, `expo-image` | capture + caching/prefetch |
+| Maps/Location | `react-native-maps` + `expo-location` | photo pins + live user location |
+| Media | `expo-camera`, `expo-image` | img capture |
 | Auth | Firebase Auth | email + phone (SMS) |
 | Storage | Firebase Storage | image uploads + retrieval |
-| Push | `expo-notifications` | deep links + telemetry |
+| Push | `expo-notifications` | push notifications |
 | Backend | Node + Express (REST) | Mongoose models + auth middleware |
-| DB | MongoDB (via Mongoose) | pins/challenges/duels/votes/users/friends |
-| Deploy | Docker + Google Cloud Run | backend container deployed on GCR |
-| API testing | Postman | endpoint validation + regression checks |
-| Testing | Jest | unit tests for helpers/hooks/screens |
+| DB | MongoDB (via Mongoose) | Main DB (prod + test) |
+| Deploy | Docker + Google Cloud Run | dockerized container deployed on GCR |
+| API testing | Postman | endpoint validation + testing |
+| Testing | Jest | unit tests |
 
 ---
 
@@ -51,7 +51,7 @@ SideQuest is a **location-based photo challenge app**. Users create challenges a
 | Path | What’s inside |
 |---|---|
 | `geoapp/app/` | Expo Router routes + layouts (primary navigation) |
-| `geoapp/screens/` | legacy screens (notably `LoginScreen.jsx`) |
+| `geoapp/screens/` | screens (notably `LoginScreen.jsx`) |
 | `geoapp/components/` | shared UI primitives + feature components (e.g., duel deck) |
 | `geoapp/hooks/` | auth, theming, notifications hooks |
 | `geoapp/lib/` | API client, geo utilities, queues, uploads |
