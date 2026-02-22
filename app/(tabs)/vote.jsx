@@ -10,7 +10,7 @@ import {
   DEFAULT_PRELOAD_COUNT,
   ensurePreloadedGlobalDuels,
   getCurrentGlobalDuelPair,
-  getOrLoadGlobalDuelPair,
+  getOrLoadFirstGlobalDuelPair,
   ensureFreshTokensForQueue,
   getRemainingGlobalVotes,
   setRemainingGlobalVotes,
@@ -100,7 +100,7 @@ export default function GlobalVoteScreen() {
     }
 
     setLoading(true);
-    const next = await getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT);
+    const next = await getOrLoadFirstGlobalDuelPair(PRELOADED_PAIR_COUNT);
     await ensureFreshTokensForQueue('global');
     syncRemainingVotes();
     if (getRemainingGlobalVotes() === 0) {
@@ -123,7 +123,7 @@ export default function GlobalVoteScreen() {
     ensureFreshTokensForQueue,
     ensurePreloadedGlobalDuels,
     getCurrentGlobalDuelPair,
-    getOrLoadGlobalDuelPair,
+    getOrLoadFirstGlobalDuelPair,
     syncRemainingVotes,
   ]);
 
@@ -141,7 +141,7 @@ export default function GlobalVoteScreen() {
     } else {
       setDuel(null);
       setLoading(true);
-      getOrLoadGlobalDuelPair(PRELOADED_PAIR_COUNT).then((pkg) => {
+      getOrLoadFirstGlobalDuelPair(PRELOADED_PAIR_COUNT).then((pkg) => {
         if (!isActiveRef.current) return;
         ensureFreshTokensForQueue('global').then(() => {
           const current = getCurrentGlobalDuelPair();
@@ -164,7 +164,7 @@ export default function GlobalVoteScreen() {
     duelReady,
     ensureFreshTokensForQueue,
     getCurrentGlobalDuelPair,
-    getOrLoadGlobalDuelPair,
+    getOrLoadFirstGlobalDuelPair,
     getRemainingGlobalVotes,
     syncRemainingVotes,
   ]);
