@@ -29,7 +29,7 @@ describe('EnterMessageScreen', () => {
     const { getByPlaceholderText, getByText } = render(<EnterMessageScreen initialUri="file://mock.jpg" />);
 
     fireEvent.changeText(getByPlaceholderText(/challenge prompt/i), '  hello world  ');
-    fireEvent.press(getByText('Upload'));
+    fireEvent.press(getByText('CREATE>'));
 
     expect(resolveMessage).toHaveBeenCalledWith('hello world');
     expect(router.back).toHaveBeenCalled();

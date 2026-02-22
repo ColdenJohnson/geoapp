@@ -27,9 +27,13 @@ export default function Upload({ initialUri = null }) {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isMounted = useRef(true);
+  const didSubmitUpload = useRef(false);
 
   useEffect(() => () => {
     isMounted.current = false;
+    if (!didSubmitUpload.current) {
+      resolveUpload(null);
+    }
   }, []);
 
 
@@ -104,6 +108,7 @@ export default function Upload({ initialUri = null }) {
             variant="filled"
             onPress={async () => {
               if (!uri || uploading) return;
+              didSubmitUpload.current = true;
               setUploading(true);
               (async () => {
                 try {

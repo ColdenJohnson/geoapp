@@ -1,8 +1,7 @@
-import { useEffect, useState, useCallback, useMemo, useContext } from 'react';
+import { useEffect, useState, useMemo, useContext } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, SafeAreaView, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { fetchPhotosByPinId, addPhoto } from '@/lib/api';
-import { useFocusEffect } from '@react-navigation/native';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
@@ -55,14 +54,6 @@ export default function ViewPhotoChallengeScreen() {
 
   useEffect(() => { load(); }, [pinId]);
 
-    useFocusEffect(
-    useCallback(() => {
-      // refresh when returning from the Upload screen
-      load();
-    }, [pinId])
-  );
-
-
   const onRefresh = async () => {
     setRefreshing(true);
     await load();
@@ -82,9 +73,9 @@ export default function ViewPhotoChallengeScreen() {
 
     uploadPromise
       .then(async (uploadResult) => {
-        if (!uploadResult) {
+        if (!uploadResult) { // If promise resolves to falsey (i.e. user exits upload screen)
+          hideToast();
           didFail = true;
-          showToast('Upload failed', 2500);
           return;
         }
         await addPhoto(pinId, uploadResult);
