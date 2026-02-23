@@ -70,15 +70,13 @@ export default function UserProfileScreen() {
       >
         {/* Profile Header -- could have a different profile picture */}
         <View style={[formStyles.card, styles.headerCard]}>
-          <TouchableOpacity onPress={() => router.push('/edit_profile')}>
-            <View style={styles.profileImageWrap}>
-              <Image
-                source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
-                style={styles.profileImage}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-              />
-            </View>
+          <TouchableOpacity onPress={() => router.push('/edit_profile')} style={styles.profileImageWrap}>
+            <Image
+              source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
+              style={styles.profileImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
           </TouchableOpacity>
           <Text style={styles.displayName}>{profile?.display_name || 'No Display Name set'}</Text>
           <Text style={profile?.handle ? styles.handleText : styles.handlePlaceholder}>
@@ -190,18 +188,20 @@ function createStyles(colors) {
       paddingBottom: spacing.lg,
     },
     profileImageWrap: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
+      width: 108,
+      height: 108,
+      borderRadius: 54,
       marginBottom: spacing.md,
       overflow: 'hidden',
-      alignItems: 'center',
-      justifyContent: 'center',
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      shadowOpacity: 0.12,
+      elevation: 6,
     },
     profileImage: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
+      width: '100%',
+      height: '100%',
     },
     displayName: {
       fontSize: fontSizes['2xl'],

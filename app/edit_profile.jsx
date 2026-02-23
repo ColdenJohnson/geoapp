@@ -174,24 +174,22 @@ export default function EditProfileScreen() {
 
           {/* Profile Photo */}
           <View style={[formStyles.card, styles.headerCard]}>
-            <TouchableOpacity onPress={pickAndUploadPhoto} disabled={uploading}>
-              <View style={styles.profileImageWrap}>
-                <Image
-                  source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
-                  style={styles.profileImage}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
-                />
-                {uploading ? (
-                  <View style={styles.profileOverlay}>
-                    <View style={styles.profileOverlayBackdrop} />
-                    <View style={styles.profileOverlayContent}>
-                      <ActivityIndicator size="small" color={colors.text} />
-                      <Text style={styles.profileOverlayText}>Uploading...</Text>
-                    </View>
+            <TouchableOpacity onPress={pickAndUploadPhoto} disabled={uploading} style={styles.profileImageWrap}>
+              <Image
+                source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
+                style={styles.profileImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+              {uploading ? (
+                <View style={styles.profileOverlay}>
+                  <View style={styles.profileOverlayBackdrop} />
+                  <View style={styles.profileOverlayContent}>
+                    <ActivityIndicator size="small" color={colors.text} />
+                    <Text style={styles.profileOverlayText}>Uploading...</Text>
                   </View>
-                ) : null}
-              </View>
+                </View>
+              ) : null}
             </TouchableOpacity>
           </View>
 
@@ -320,20 +318,20 @@ function createStyles(colors) {
       paddingBottom: spacing.lg,
     },
     profileImageWrap: {
-      width: 120,
-      height: 120,
-      borderRadius: 36,
+      width: 108,
+      height: 108,
+      borderRadius: 54,
       marginBottom: spacing.md,
       overflow: 'hidden',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: colors.primary,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      shadowOpacity: 0.12,
+      elevation: 6,
     },
     profileImage: {
-      width: 120,
-      height: 120,
-      borderRadius: 34,
+      width: '100%',
+      height: '100%',
     },
     profileOverlay: {
       ...StyleSheet.absoluteFillObject,
