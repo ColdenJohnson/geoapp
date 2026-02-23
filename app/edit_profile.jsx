@@ -15,6 +15,8 @@ import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
 
+const BIO_MAX_LENGTH = 100;
+
 export default function EditProfileScreen() {
   const { user, profile, setProfile, setUser } = useContext(AuthContext);
   const [formDisplayName, setFormDisplayName] = useState('');
@@ -32,7 +34,7 @@ export default function EditProfileScreen() {
 
   useEffect(() => {
     setFormDisplayName(profile?.display_name || '');
-    setFormBio(profile?.bio || '');
+    setFormBio((profile?.bio || '').slice(0, BIO_MAX_LENGTH));
     setHandleInput(profile?.handle || '');
   }, [profile?.display_name, profile?.bio, profile?.handle]);
 
@@ -92,7 +94,8 @@ export default function EditProfileScreen() {
 
     const updates = {};
     if (formDisplayName !== (profile?.display_name || '')) updates.display_name = formDisplayName;
-    if (formBio !== (profile?.bio || '')) updates.bio = formBio;
+    const normalizedBio = typeof formBio === 'string' ? formBio.slice(0, BIO_MAX_LENGTH) : '';
+    if (normalizedBio !== (profile?.bio || '')) updates.bio = normalizedBio;
 
     if (Object.keys(updates).length > 0) {
       const updated = await updateUserProfile(user.uid, updates);
@@ -223,11 +226,13 @@ export default function EditProfileScreen() {
               style={formStyles.input}
               placeholder=""
               value={formBio}
-              onChangeText={setFormBio}
+              onChangeText={(value) => setFormBio(value.slice(0, BIO_MAX_LENGTH))}
+              maxLength={BIO_MAX_LENGTH}
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.primary}
               cursorColor={colors.text}
             />
+            <Text style={styles.bioCounter}>{`${formBio.length}/${BIO_MAX_LENGTH}`}</Text>
           </View>
         </View>
 
@@ -375,6 +380,13 @@ function createStyles(colors) {
       color: colors.primary,
       fontWeight: '700',
       marginBottom: spacing.sm,
+    },
+    bioCounter: {
+      marginTop: spacing.xs,
+      textAlign: 'right',
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '700',
     },
   });
 }

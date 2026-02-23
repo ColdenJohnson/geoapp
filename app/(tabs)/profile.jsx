@@ -85,6 +85,9 @@ export default function UserProfileScreen() {
             {profile?.handle ? `@${profile.handle}` : 'No handle set'}
           </Text>
           <Text style={styles.contactText}>{contactValue}</Text>
+          {typeof profile?.bio === 'string' && profile.bio.trim() ? (
+            <Text style={styles.bioText}>{profile.bio.trim()}</Text>
+          ) : null}
         </View>
 
         {/* Profile Details */}
@@ -225,6 +228,16 @@ function createStyles(colors) {
       marginTop: spacing.xs,
       textAlign: 'center',
       fontWeight: '600',
+    },
+    bioText: {
+      marginTop: spacing.sm,
+      textAlign: 'center',
+      color: colors.textMuted,
+      fontSize: fontSizes.md,
+      lineHeight: 20,
+      fontWeight: '600',
+      maxWidth: 320,
+      alignSelf: 'center',
     },
     statsCard: {
       marginBottom: spacing.lg,

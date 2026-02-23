@@ -1,5 +1,6 @@
-import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
 
 import { AuthContext } from '@/hooks/AuthContext';
 import {
@@ -28,6 +29,7 @@ export default function FriendsTabScreen() {
   const [searching, setSearching] = useState(false);
   const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
@@ -181,7 +183,9 @@ export default function FriendsTabScreen() {
 
         <View style={[formStyles.card, styles.friendsCard]}>
           <View style={styles.summaryRow}>
-            <Text style={styles.sectionTitle}>Friends</Text>
+            <TouchableOpacity onPress={() => router.push('/friends')}>
+              <Text style={styles.sectionTitle}>Friends</Text>
+            </TouchableOpacity>
             <View style={styles.summaryRight}>
               <Text style={styles.summaryCount}>{friends.length}</Text>
             </View>
@@ -268,6 +272,14 @@ export default function FriendsTabScreen() {
             </View>
           ))}
         </View>
+
+        <View style={styles.listFriendsButtonWrap}>
+          <CTAButton
+            title="List Friends"
+            onPress={() => router.push('/friends')}
+            variant="primary"
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -296,6 +308,9 @@ function createStyles(colors) {
       marginBottom: spacing.lg,
     },
     friendsCard: {
+      marginBottom: spacing.lg,
+    },
+    listFriendsButtonWrap: {
       marginBottom: spacing.lg,
     },
     requestsCard: {
