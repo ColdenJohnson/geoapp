@@ -34,6 +34,7 @@ export default function HomeScreen() {
   const { message: toastMessage, show: showToast } = useToast(3500);
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
+  const { user, friends, invalidateStats } = useContext(AuthContext);
 
   // TODO: If there were many more pins, we would need pinsArr to be relatively smaller (returned within a radius)
   function computeNearestPin(currentLocation, pinsArr) {
