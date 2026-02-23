@@ -23,7 +23,12 @@ export default function Upload({ initialUri = null }) {
   const [uploading, setUploading] = useState(false);
   const ref = useRef(null);
   const router = useRouter();
-  const { next } = useLocalSearchParams();
+  const { next, prompt } = useLocalSearchParams();
+  const promptText = useMemo(() => {
+    if (typeof prompt === 'string') return prompt.trim();
+    if (Array.isArray(prompt) && typeof prompt[0] === 'string') return prompt[0].trim();
+    return '';
+  }, [prompt]);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isMounted = useRef(true);
@@ -123,6 +128,11 @@ export default function Upload({ initialUri = null }) {
   const renderCamera = () => {
   return (
     <View style={styles.stage}>
+      {promptText ? (
+        <Text style={styles.promptText} numberOfLines={2}>
+          {promptText}
+        </Text>
+      ) : null}
       <View style={styles.cameraContainer}>
         <CameraView
           style={styles.camera}
@@ -240,6 +250,14 @@ function createStyles(colors) {
       color: colors.textMuted,
       textAlign: "center",
       fontWeight: "700",
+    },
+    promptText: {
+      width: '100%',
+      marginBottom: spacing.sm,
+      textAlign: 'center',
+      color: colors.primary,
+      fontSize: 18,
+      fontWeight: '700',
     },
     shutterContainer: {
       marginTop: spacing.md + 12,

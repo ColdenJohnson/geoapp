@@ -100,7 +100,12 @@ export default function ViewPhotoChallengeScreen() {
     let didSucceed = false;
     const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve);
-      router.push('/upload');
+      router.push({
+        pathname: '/upload',
+        params: {
+          prompt: promptText,
+        },
+      });
     });
 
     uploadPromise

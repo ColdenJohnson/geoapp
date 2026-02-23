@@ -28,7 +28,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
-  const { invalidateStats } = useContext(AuthContext);
+  const { invalidateStats, user, friends } = useContext(AuthContext);
 
   const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
   const [showFriendsOnly, setShowFriendsOnly] = useState(false);
@@ -93,7 +93,12 @@ export default function HomeScreen() {
 
     const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve);
-      router.push('/upload');
+      router.push({
+        pathname: '/upload',
+        params: {
+          prompt: pin?.message || '',
+        },
+      });
     });
 
     uploadPromise
@@ -180,6 +185,23 @@ export default function HomeScreen() {
       ? wgs84ToGcj02(userCoords.latitude, userCoords.longitude)
       : userCoords;
   }, [userCoords, userIsInMainland]);
+  const friendUidSet = useMemo(() => {
+    if (!Array.isArray(friends)) return new Set();
+    return new Set(
+      friends
+        .map((friend) => friend?.uid)
+        .filter((uid) => typeof uid === 'string' && uid.length > 0)
+    );
+  }, [friends]);
+
+  const isFriendOrOwnPin = useCallback((pin) => {
+    const createdBy = typeof pin?.created_by === 'string' ? pin.created_by : '';
+    if (createdBy) {
+      if (createdBy === user?.uid) return true;
+      return friendUidSet.has(createdBy);
+    }
+    return pin?.is_friend_pin === true;
+  }, [friendUidSet, user?.uid]);
 
   const pinsForDisplay = useMemo(() => {
     if (!Array.isArray(pins)) {
@@ -210,8 +232,8 @@ export default function HomeScreen() {
   }, [pins, userCoords, userIsInMainland]);
   const visiblePins = useMemo(() => {
     if (!showFriendsOnly) return pinsForDisplay;
-    return pinsForDisplay.filter((pin) => !!pin?.is_friend_pin);
-  }, [pinsForDisplay, showFriendsOnly]);
+    return pinsForDisplay.filter((pin) => isFriendOrOwnPin(pin));
+  }, [isFriendOrOwnPin, pinsForDisplay, showFriendsOnly]);
 
   // TODO: To make location watcher run app-wide, put this into a LocationProvider at app root/some type of API (not sure, figure this out)
   // TODO: UseFocusEffect vs UseEffect -- usefocuseffect stops when user navigates away from the screen
@@ -278,10 +300,14 @@ export default function HomeScreen() {
         showToast('Uploading...', 60000);
         const created = await newChallenge(location, fileUrl, message);
         if (created?.pin) {
+          const nextPin = {
+            ...created.pin,
+            created_by: created.pin?.created_by || user?.uid || null,
+          };
           setPins((prev) => {
-            if (!Array.isArray(prev)) return [created.pin];
-            if (prev.find((pin) => pin?._id === created.pin._id)) return prev;
-            return [created.pin, ...prev];
+            if (!Array.isArray(prev)) return [nextPin];
+            if (prev.find((pin) => pin?._id === nextPin._id)) return prev;
+            return [nextPin, ...prev];
           });
         }
         invalidateStats();
@@ -373,7 +399,7 @@ export default function HomeScreen() {
   {visiblePins.map((pin) => {
     if (!pin?.location) return null;
     const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
-    const isFriendPin = !!pin?.is_friend_pin;
+    const isFriendPin = isFriendOrOwnPin(pin);
     return (
       <Marker
         key={pin._id}
@@ -383,7 +409,7 @@ export default function HomeScreen() {
         }}
         title={"Photo Challenge"}
         description={pin.message || 'Geo Pin'}
-        pinColor={isFriendPin ? undefined: colors.primary}
+        pinColor={isFriendPin ? colors.danger : colors.primary}
       >
         <Callout
           tooltip
