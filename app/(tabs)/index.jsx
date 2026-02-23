@@ -24,6 +24,7 @@ import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [pins, setPins] = useState([]); // for all pins
+  const [optimisticPhotosByPin, setOptimisticPhotosByPin] = useState({});
   const router = useRouter();
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
@@ -100,10 +101,47 @@ export default function HomeScreen() {
         if (!uploadResult) {
           return;
         }
+        const pinId = pin._id;
         showToast('Uploading photo…', 60000);
-        await addPhoto(pin._id, uploadResult);
-        invalidateStats();
-        showToast('Upload success', 2200);
+        setPins((prev) =>
+          Array.isArray(prev)
+            ? prev.map((p) =>
+                p?._id === pinId
+                  ? { ...p, photo_count: Math.max(0, Number(p?.photo_count || 0) + 1) }
+                  : p
+              )
+            : prev
+        );
+        setOptimisticPhotosByPin((prev) => {
+          const current = Array.isArray(prev?.[pinId]) ? prev[pinId] : [];
+          return { ...prev, [pinId]: [uploadResult, ...current].slice(0, 3) };
+        });
+
+        try {
+          await addPhoto(pinId, uploadResult);
+          invalidateStats();
+          showToast('Upload success', 2200);
+        } catch (error) {
+          setPins((prev) =>
+            Array.isArray(prev)
+              ? prev.map((p) =>
+                  p?._id === pinId
+                    ? { ...p, photo_count: Math.max(0, Number(p?.photo_count || 0) - 1) }
+                    : p
+                )
+              : prev
+          );
+          setOptimisticPhotosByPin((prev) => {
+            const current = Array.isArray(prev?.[pinId]) ? prev[pinId] : [];
+            const next = current.filter((url) => url !== uploadResult);
+            if (next.length === 0) {
+              const { [pinId]: _removed, ...rest } = prev;
+              return rest;
+            }
+            return { ...prev, [pinId]: next };
+          });
+          throw error;
+        }
       })
       .catch((error) => {
         console.error('Failed to upload photo to nearest challenge', error);
@@ -275,6 +313,7 @@ export default function HomeScreen() {
         pinId: pin._id,
         message: pin?.message || '',
         created_by_handle: pin?.created_by_handle || '',
+        optimistic_photo_urls: JSON.stringify(optimisticPhotosByPin?.[pin._id] || []),
       },
     });
   }

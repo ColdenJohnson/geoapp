@@ -10,7 +10,12 @@ import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
 
 export default function ViewPhotoChallengeScreen() {
-  const { pinId, message: promptParam, created_by_handle: handleParam } = useLocalSearchParams();   // pinId comes from router params
+  const {
+    pinId,
+    message: promptParam,
+    created_by_handle: handleParam,
+    optimistic_photo_urls: optimisticPhotoUrlsParam,
+  } = useLocalSearchParams();   // pinId comes from router params
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,6 +33,16 @@ export default function ViewPhotoChallengeScreen() {
   const handleText = typeof handleParam === 'string' && handleParam.trim()
     ? handleParam
     : null;
+  const optimisticPhotoUrls = useMemo(() => {
+    if (typeof optimisticPhotoUrlsParam !== 'string') return [];
+    try {
+      const parsed = JSON.parse(optimisticPhotoUrlsParam);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((url) => typeof url === 'string' && url.length > 0);
+    } catch {
+      return [];
+    }
+  }, [optimisticPhotoUrlsParam]);
 
   async function load() {
     if (!pinId) return;
@@ -40,7 +55,24 @@ export default function ViewPhotoChallengeScreen() {
           const bElo = Number.isFinite(b?.global_elo) ? b.global_elo : 1000;
           return bElo - aElo;
         });
-        setPhotos(ordered);
+        if (optimisticPhotoUrls.length) {
+          const optimistic = optimisticPhotoUrls.map((url, index) => ({
+            _id: `optimistic-${index}-${url}`,
+            file_url: url,
+            global_elo: 1000,
+            global_wins: 0,
+            global_losses: 0,
+            created_by_handle: 'you',
+            optimistic: true,
+          }));
+          const merged = [
+            ...optimistic,
+            ...ordered.filter((photo) => !optimisticPhotoUrls.includes(photo?.file_url)),
+          ];
+          setPhotos(merged);
+        } else {
+          setPhotos(ordered);
+        }
       } else {
         setPhotos([]);
       }
@@ -52,7 +84,7 @@ export default function ViewPhotoChallengeScreen() {
     }
   }
 
-  useEffect(() => { load(); }, [pinId]);
+  useEffect(() => { load(); }, [pinId, optimisticPhotoUrls]);
 
   const onRefresh = async () => {
     setRefreshing(true);
