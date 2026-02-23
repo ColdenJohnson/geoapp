@@ -40,28 +40,13 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
-    const unsubAuth = auth().onAuthStateChanged(async (fbUser) => {
-      if (!fbUser) {
-        setUser(null);
-        setProfile(null);
-        setLoadingAuth(false);
-        await AsyncStorage.removeItem('user_token');
-        return;
-      }
-      const idToken = await fbUser.getIdToken(true);
-      setUser({
-        uid: fbUser.uid,
-        email: fbUser.email ?? null,
-        phoneNumber: fbUser.phoneNumber ?? null,
-        idToken,
-      });
-      await AsyncStorage.setItem('user_token', idToken);
-      setLoadingAuth(false);
-    });
+    let cancelled = false;
 
-    const unsubToken = auth().onIdTokenChanged(async (fbUser) => {
-      if (fbUser) {
+    const applyTokenForUser = async (fbUser) => {
+      if (!fbUser) return;
+      try {
         const idToken = await fbUser.getIdToken();
+        if (cancelled) return;
         setUser((prev) => {
           const base = prev && prev.uid
             ? prev
@@ -69,10 +54,39 @@ export function AuthProvider({ children }) {
           return { ...base, idToken };
         });
         await AsyncStorage.setItem('user_token', idToken);
+      } catch (error) {
+        console.warn('Failed to hydrate auth token', error);
+      }
+    };
+
+    const unsubAuth = auth().onAuthStateChanged((fbUser) => {
+      if (!fbUser) {
+        setUser(null);
+        setProfile(null);
+        setLoadingAuth(false);
+        Promise.resolve(AsyncStorage.removeItem('user_token')).catch((error) => {
+          console.warn('Failed to clear auth token from cache', error);
+        });
+        return;
+      }
+      setUser({
+        uid: fbUser.uid,
+        email: fbUser.email ?? null,
+        phoneNumber: fbUser.phoneNumber ?? null,
+        idToken: null,
+      });
+      setLoadingAuth(false);
+      applyTokenForUser(fbUser);
+    });
+
+    const unsubToken = auth().onIdTokenChanged(async (fbUser) => {
+      if (fbUser) {
+        await applyTokenForUser(fbUser);
       }
     });
 
     return () => {
+      cancelled = true;
       unsubAuth();
       unsubToken();
     };

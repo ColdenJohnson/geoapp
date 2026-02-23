@@ -11,12 +11,17 @@ jest.mock('@react-native-firebase/auth', () => () => ({
 }));
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(() => Promise.resolve(null)),
   setItem: jest.fn(),
   removeItem: jest.fn(),
 }));
 
 jest.mock('@/lib/api', () => ({
   fetchUsersByUID: jest.fn(),
+  fetchFriends: jest.fn(() => Promise.resolve([])),
+  fetchFriendRequests: jest.fn(() => Promise.resolve({ incoming: [], outgoing: [] })),
+  fetchUserStats: jest.fn(() => Promise.resolve(null)),
+  fetchUserTopPhotos: jest.fn(() => Promise.resolve([])),
 }));
 
 const { fetchUsersByUID } = require('@/lib/api');
