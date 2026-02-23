@@ -66,6 +66,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="friends_tab"
+        options={{
+          title: 'Friends',
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "person.2" : "person.2.fill"} color={color} />,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

@@ -1,23 +1,15 @@
-import { SafeAreaView, StyleSheet, TextInput, TouchableOpacity, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
+import { SafeAreaView, StyleSheet, TouchableOpacity, View, Text, ScrollView, RefreshControl } from 'react-native';
 import { Image } from 'expo-image';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
-
-import {
-  searchUserByHandle,
-  requestFriend,
-  acceptFriendRequest,
-  rejectFriendRequest,
-  cancelFriendRequest
-} from '@/lib/api';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import auth from '@react-native-firebase/auth';
 import { usePalette } from '@/hooks/usePalette';
-import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
+import { CTAButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { spacing, fontSizes } from '@/theme/tokens';
 
@@ -26,20 +18,10 @@ export default function UserProfileScreen() {
     user,
     setUser,
     profile,
-    friends,
-    friendRequests,
-    friendsLoading,
     stats,
     statsLoading,
-    refreshFriends,
-    refreshStats,
-    invalidateFriends
+    refreshStats
   } = useContext(AuthContext);
-  const [friendSearchInput, setFriendSearchInput] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchMessage, setSearchMessage] = useState(null);
-  const [searching, setSearching] = useState(false);
-  const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const colors = usePalette();
@@ -55,143 +37,9 @@ export default function UserProfileScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([
-      refreshFriends({ force: true }),
-      refreshStats({ force: true })
-    ]);
+    await refreshStats({ force: true });
     setRefreshing(false);
-  }, [refreshFriends, refreshStats]);
-
-  const recentFriends = useMemo(() => {
-    return [...friends]
-      .sort((a, b) => new Date(b?.accepted_at || 0) - new Date(a?.accepted_at || 0))
-      .slice(0, 2);
-  }, [friends]);
-
-  const recentIncoming = useMemo(() => {
-    return [...(friendRequests.incoming || [])]
-      .sort((a, b) => new Date(b?.requested_at || 0) - new Date(a?.requested_at || 0))
-      .slice(0, 2);
-  }, [friendRequests.incoming]);
-
-  const recentOutgoing = useMemo(() => {
-    return [...(friendRequests.outgoing || [])]
-      .sort((a, b) => new Date(b?.requested_at || 0) - new Date(a?.requested_at || 0))
-      .slice(0, 2);
-  }, [friendRequests.outgoing]);
-
-  const renderMiniList = (items, emptyLabel, rightAction) => {
-    if (friendsLoading) {
-      return (
-        <View style={styles.centerRow}>
-          <ActivityIndicator size="small" color={colors.text} />
-        </View>
-      );
-    }
-    if (!items.length) {
-      return <Text style={styles.emptyText}>{emptyLabel}</Text>;
-    }
-    return items.map((item) => (
-      <View key={`${item.uid}-${item.handle || 'row'}`} style={styles.friendRow}>
-        <View style={styles.friendInfo}>
-          <Text style={styles.friendName}>{item.display_name || item.handle || 'Unnamed user'}</Text>
-          {item.handle ? <Text style={styles.friendMeta}>@{item.handle}</Text> : null}
-        </View>
-        {rightAction ? rightAction(item) : null}
-      </View>
-    ));
-  };
-
-  const runFriendSearch = async (query, { showLoading = false, allowShort = false } = {}) => {
-    let trimmed = typeof query === 'string' ? query.trim() : friendSearchInput.trim();
-    if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
-    if (!allowShort && trimmed.length < 3) {
-      return;
-    }
-    if (showLoading) setSearching(true);
-    setSearchMessage(null);
-    const results = await searchUserByHandle(trimmed);
-    if (results.length) {
-      setSearchResults(results.slice(0, 3));
-    } else {
-      setSearchMessage('No users found.');
-    }
-    if (showLoading) setSearching(false);
-  };
-
-  useEffect(() => {
-    const trimmed = friendSearchInput.trim();
-    if (trimmed.length < 3) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      runFriendSearch(trimmed, { showLoading: false, allowShort: false });
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [friendSearchInput]);
-
-  const runFriendSearchImmediate = () => {
-    let trimmed = friendSearchInput.trim();
-    if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
-    runFriendSearch(trimmed, { showLoading: true, allowShort: true });
-  };
-
-  const sendFriendRequest = async (handle) => {
-    if (!handle) return;
-    setFriendActionBusy(true);
-    const resp = await requestFriend({ handle });
-    if (resp?.success) {
-      const status = resp?.status;
-      const message = status === 'accepted'
-        ? 'You are already friends.'
-        : status === 'pending'
-          ? 'Friend request sent.'
-          : 'Request updated.';
-      setSearchMessage(message);
-      setSearchResults([]);
-      setFriendSearchInput('');
-      invalidateFriends();
-    } else {
-      Alert.alert('Friend Request', resp?.error || 'Failed to send friend request.');
-    }
-    setFriendActionBusy(false);
-  };
-
-  const acceptRequest = async (uid) => {
-    if (!uid) return;
-    setFriendActionBusy(true);
-    const resp = await acceptFriendRequest(uid);
-    if (resp?.success) {
-      invalidateFriends();
-    } else {
-      Alert.alert('Friend Request', resp?.error || 'Failed to accept friend request.');
-    }
-    setFriendActionBusy(false);
-  };
-
-  const rejectRequest = async (uid) => {
-    if (!uid) return;
-    setFriendActionBusy(true);
-    const resp = await rejectFriendRequest(uid);
-    if (resp?.success) {
-      invalidateFriends();
-    } else {
-      Alert.alert('Friend Request', resp?.error || 'Failed to delete friend request.');
-    }
-    setFriendActionBusy(false);
-  };
-
-  const cancelRequest = async (uid) => {
-    if (!uid) return;
-    setFriendActionBusy(true);
-    const resp = await cancelFriendRequest(uid);
-    if (resp?.success) {
-      invalidateFriends();
-    } else {
-      Alert.alert('Friend Request', resp?.error || 'Failed to cancel friend request.');
-    }
-    setFriendActionBusy(false);
-  };
+  }, [refreshStats]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -199,7 +47,7 @@ export default function UserProfileScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing || friendsLoading || statsLoading} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing || statsLoading} onRefresh={onRefresh} />}
       >
         {/* Profile Header -- could have a different profile picture */}
         <View style={[formStyles.card, styles.headerCard]}>
@@ -226,102 +74,6 @@ export default function UserProfileScreen() {
           <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? profile?.pin_count ?? 0}</Text>
           <Text style={styles.statsText}>Photos posted: {stats?.photo_count ?? profile?.photo_count ?? 0}</Text>
         </View>
-
-        {/* Friends */}
-        <TouchableOpacity onPress={() => router.push('/friends')} activeOpacity={0.85}>
-          <View style={[formStyles.card, styles.friendsCard]}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.sectionTitle}>Friends</Text>
-              <View style={styles.summaryRight}>
-                <Text style={styles.summaryCount}>{friends.length}</Text>
-              </View>
-            </View>
-          <TextInput
-            style={[formStyles.input, styles.searchInput]}
-            placeholder="Search by handle"
-            value={friendSearchInput}
-            onChangeText={setFriendSearchInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            onSubmitEditing={runFriendSearchImmediate}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.primary}
-            cursorColor={colors.text}
-          />
-          {searching ? (
-            <View style={styles.centerRow}>
-              <ActivityIndicator size="small" color={colors.text} />
-            </View>
-          ) : searchResults.length ? (
-            searchResults.map((result) => (
-              <View key={`search-${result.uid}`} style={styles.friendRow}>
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{result.display_name || result.handle || 'Unnamed user'}</Text>
-                  {result.handle ? <Text style={styles.friendMeta}>@{result.handle}</Text> : null}
-                </View>
-                <CTAButton
-                  title="Add"
-                  onPress={() => sendFriendRequest(result.handle)}
-                  style={styles.smallButton}
-                  textStyle={styles.smallButtonText}
-                  disabled={friendActionBusy}
-                />
-              </View>
-            ))
-          ) : searchMessage ? (
-            <Text style={styles.emptyText}>{searchMessage}</Text>
-          ) : null}
-
-          <Text style={styles.subSectionTitle}>Recently Added</Text>
-          {renderMiniList(recentFriends, 'No friends yet.')}
-          </View>
-        </TouchableOpacity>
-
-        {/* Friend Requests */}
-        <TouchableOpacity onPress={() => router.push('/friends')} activeOpacity={0.85}>
-          <View style={[formStyles.card, styles.requestsCard]}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.sectionTitle}>Friend Requests</Text>
-              <View style={styles.summaryRight}>
-                <Text style={styles.summaryCount}>{friendRequests.incoming.length + friendRequests.outgoing.length}</Text>
-              </View>
-            </View>
-          <Text style={styles.subSectionTitle}>Incoming</Text>
-          {renderMiniList(recentIncoming, 'No incoming requests.', (request) => (
-            <View style={styles.miniActionRow}>
-              <CTAButton
-                title="Accept"
-                onPress={() => acceptRequest(request.uid)}
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
-                disabled={friendActionBusy}
-              />
-              <SecondaryButton
-                title="Delete"
-                onPress={() => rejectRequest(request.uid)}
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
-                disabled={friendActionBusy}
-              />
-            </View>
-          ))}
-
-          <Text style={styles.subSectionTitle}>Outgoing</Text>
-          {renderMiniList(recentOutgoing, 'No outgoing requests.', (request) => (
-            <View style={styles.miniActionRow}>
-              <Text style={styles.pendingText}>Pending</Text>
-              <SecondaryButton
-                title="Cancel"
-                onPress={() => cancelRequest(request.uid)}
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
-                disabled={friendActionBusy}
-              />
-            </View>
-          ))}
-          </View>
-        </TouchableOpacity>
 
         {/* Actions */}
         <View style={styles.actions}>
