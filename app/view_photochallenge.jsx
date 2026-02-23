@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useContext } from 'react';
-import { StyleSheet, View, ActivityIndicator, FlatList, Image, RefreshControl, Modal, Pressable, SafeAreaView, Text } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, FlatList, RefreshControl, Modal, Pressable, SafeAreaView, Text } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchPhotosByPinId, addPhoto } from '@/lib/api';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
@@ -9,6 +11,51 @@ import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
 
+const PIN_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const pinPhotosCacheKey = (pinId) => `pin_photos_cache_${pinId}`;
+const pinPhotosMemoryCache = new Map();
+
+function sortPhotosByGlobalElo(rows) {
+  if (!Array.isArray(rows)) return [];
+  return [...rows].sort((a, b) => {
+    const aElo = Number.isFinite(a?.global_elo) ? a.global_elo : 1000;
+    const bElo = Number.isFinite(b?.global_elo) ? b.global_elo : 1000;
+    return bElo - aElo;
+  });
+}
+
+function mergeOptimisticPhotos(serverRows, optimisticPhotoUrls) {
+  const ordered = Array.isArray(serverRows) ? serverRows : [];
+  if (!Array.isArray(optimisticPhotoUrls) || optimisticPhotoUrls.length === 0) {
+    return ordered;
+  }
+  const optimistic = optimisticPhotoUrls.map((url, index) => ({
+    _id: `optimistic-${index}-${url}`,
+    file_url: url,
+    global_elo: 1000,
+    global_wins: 0,
+    global_losses: 0,
+    created_by_handle: 'you',
+    optimistic: true,
+  }));
+  const optimisticSet = new Set(optimisticPhotoUrls);
+  return [
+    ...optimistic,
+    ...ordered.filter((photo) => !optimisticSet.has(photo?.file_url)),
+  ];
+}
+
+function prefetchPhotoUrls(rows) {
+  if (!Array.isArray(rows)) return;
+  for (const row of rows) {
+    const url = row?.file_url;
+    if (typeof url !== 'string' || !url) continue;
+    Image.prefetch(url).catch((error) => {
+      console.warn('Failed to prefetch pin photo', error);
+    });
+  }
+}
+
 export default function ViewPhotoChallengeScreen() {
   const {
     pinId,
@@ -16,7 +63,7 @@ export default function ViewPhotoChallengeScreen() {
     created_by_handle: handleParam,
     optimistic_photo_urls: optimisticPhotoUrlsParam,
   } = useLocalSearchParams();   // pinId comes from router params
-  const [photos, setPhotos] = useState([]);
+  const [serverPhotos, setServerPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -26,6 +73,7 @@ export default function ViewPhotoChallengeScreen() {
   const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { invalidateStats } = useContext(AuthContext);
   const promptText = typeof promptParam === 'string' && promptParam.trim()
     ? promptParam
     : 'Prompt';
@@ -42,52 +90,104 @@ export default function ViewPhotoChallengeScreen() {
       return [];
     }
   }, [optimisticPhotoUrlsParam]);
+  const photos = useMemo(
+    () => mergeOptimisticPhotos(serverPhotos, optimisticPhotoUrls),
+    [serverPhotos, optimisticPhotoUrls]
+  );
 
-  async function load() {
-    if (!pinId) return;
-    setLoading(true);
+  async function load({ showSpinner = true } = {}) {
+    if (!pinId) return false;
+    if (showSpinner) setLoading(true);
     try {
       const data = await fetchPhotosByPinId(pinId);
-      if (Array.isArray(data)) {
-        const ordered = [...data].sort((a, b) => {
-          const aElo = Number.isFinite(a?.global_elo) ? a.global_elo : 1000;
-          const bElo = Number.isFinite(b?.global_elo) ? b.global_elo : 1000;
-          return bElo - aElo;
-        });
-        if (optimisticPhotoUrls.length) {
-          const optimistic = optimisticPhotoUrls.map((url, index) => ({
-            _id: `optimistic-${index}-${url}`,
-            file_url: url,
-            global_elo: 1000,
-            global_wins: 0,
-            global_losses: 0,
-            created_by_handle: 'you',
-            optimistic: true,
-          }));
-          const merged = [
-            ...optimistic,
-            ...ordered.filter((photo) => !optimisticPhotoUrls.includes(photo?.file_url)),
-          ];
-          setPhotos(merged);
-        } else {
-          setPhotos(ordered);
-        }
-      } else {
-        setPhotos([]);
-      }
+      const ordered = sortPhotosByGlobalElo(Array.isArray(data) ? data : []);
+      setServerPhotos(ordered);
+      prefetchPhotoUrls(ordered);
+      const fetchedAt = Date.now();
+      pinPhotosMemoryCache.set(String(pinId), { photos: ordered, fetchedAt });
+      await AsyncStorage.setItem(
+        pinPhotosCacheKey(pinId),
+        JSON.stringify({ photos: ordered, fetchedAt })
+      );
+      return true;
     } catch (e) {
       console.error('Failed to fetch photos for pin', pinId, e);
-      setPhotos([]);
+      return false;
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [pinId, optimisticPhotoUrls]);
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateAndLoad() {
+      if (!pinId) {
+        setServerPhotos([]);
+        setLoading(false);
+        return;
+      }
+
+      let hadCache = false;
+      let cacheIsFresh = false;
+      const memoryCached = pinPhotosMemoryCache.get(String(pinId));
+      if (Array.isArray(memoryCached?.photos)) {
+        hadCache = true;
+        cacheIsFresh =
+          Number.isFinite(memoryCached?.fetchedAt) &&
+          Date.now() - memoryCached.fetchedAt <= PIN_PHOTOS_CACHE_TTL_MS;
+        setServerPhotos(memoryCached.photos);
+        setLoading(false);
+        prefetchPhotoUrls(memoryCached.photos);
+      }
+
+      if (!hadCache) {
+        setLoading(true);
+        try {
+          const raw = await AsyncStorage.getItem(pinPhotosCacheKey(pinId));
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed?.photos)) {
+              hadCache = true;
+              cacheIsFresh =
+                Number.isFinite(parsed?.fetchedAt) &&
+                Date.now() - parsed.fetchedAt <= PIN_PHOTOS_CACHE_TTL_MS;
+              const ordered = sortPhotosByGlobalElo(parsed.photos);
+              pinPhotosMemoryCache.set(String(pinId), {
+                photos: ordered,
+                fetchedAt: Number.isFinite(parsed?.fetchedAt) ? parsed.fetchedAt : null,
+              });
+              if (!cancelled) {
+                setServerPhotos(ordered);
+                setLoading(false);
+              }
+              prefetchPhotoUrls(ordered);
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to hydrate pin photos cache', error);
+        }
+      }
+      if (cancelled) return;
+
+      if (!hadCache) {
+        await load({ showSpinner: true });
+        return;
+      }
+
+      if (!cacheIsFresh) {
+        await load({ showSpinner: false });
+      }
+    }
+
+    hydrateAndLoad();
+    return () => {
+      cancelled = true;
+    };
+  }, [pinId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await load({ showSpinner: false });
     setRefreshing(false);
   };
 
@@ -116,7 +216,7 @@ export default function ViewPhotoChallengeScreen() {
         }
         await addPhoto(pinId, uploadResult);
         invalidateStats();
-        await load();
+        await load({ showSpinner: false });
         didSucceed = true;
         showToast('Upload success', 2200);
       })
@@ -153,7 +253,12 @@ export default function ViewPhotoChallengeScreen() {
             renderItem={({ item }) => (
               <View style={styles.card}>
                 <Pressable onPress={() => { setSelectedUrl(item.file_url); setViewerVisible(true); }}>
-                  <Image source={{ uri: item.file_url }} style={styles.image} resizeMode="cover" />
+                  <Image
+                    source={{ uri: item.file_url }}
+                    style={styles.image}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
                 </Pressable>
                 <View style={styles.photoMeta}>
                   <View style={styles.metaBlock}>
@@ -183,7 +288,12 @@ export default function ViewPhotoChallengeScreen() {
       {/* Fullscreen image viewer */}
       <Modal visible={viewerVisible} transparent={true} animationType="fade" onRequestClose={() => setViewerVisible(false)}>
         <Pressable style={styles.viewerBackdrop} onPress={() => setViewerVisible(false)}>
-          <Image source={selectedUrl ? { uri: selectedUrl } : undefined} style={styles.viewerImage} resizeMode="contain" />
+          <Image
+            source={selectedUrl ? { uri: selectedUrl } : undefined}
+            style={styles.viewerImage}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+          />
         </Pressable>
       </Modal>
 
