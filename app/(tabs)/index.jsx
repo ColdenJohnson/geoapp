@@ -409,7 +409,7 @@ export default function HomeScreen() {
         }}
         title={"Photo Challenge"}
         description={pin.message || 'Geo Pin'}
-        pinColor={isFriendPin ? colors.danger : colors.primary}
+        pinColor={isFriendPin ? colors.primary_darkened : colors.primary}
       >
         <Callout
           tooltip

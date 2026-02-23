@@ -4,6 +4,7 @@
 export const light = {
   // brand
   primary: '#FF6B35',
+  primary_darkened: '#e2460e',
   primaryTextOn: '#FFFFFF',
 
   // text
