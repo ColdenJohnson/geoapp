@@ -195,7 +195,6 @@ export default function UserProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.heroGlow} />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
         showsVerticalScrollIndicator={false}
@@ -363,16 +362,6 @@ function createStyles(colors) {
       flex: 1,
       backgroundColor: colors.surface,
     },
-    heroGlow: {
-      position: 'absolute',
-      top: -140,
-      right: -100,
-      width: 260,
-      height: 260,
-      borderRadius: 130,
-      backgroundColor: colors.primary,
-      opacity: 0.07,
-    },
     content: {
       flexGrow: 1,
       paddingHorizontal: spacing.xl,
@@ -402,16 +391,18 @@ function createStyles(colors) {
       borderRadius: 48,
     },
     displayName: {
-      fontSize: fontSizes.xl,
-      fontWeight: '700',
+      fontSize: fontSizes['2xl'],
+      fontWeight: '900',
       color: colors.primary,
       fontFamily: 'SpaceMono',
+      letterSpacing: 0.3,
       textAlign: 'center',
     },
     handleText: {
       color: colors.textMuted,
       marginTop: spacing.xs,
       textAlign: 'center',
+      fontWeight: '700',
     },
     handlePlaceholder: {
       color: colors.textMuted,
@@ -423,6 +414,7 @@ function createStyles(colors) {
       color: colors.textMuted,
       marginTop: spacing.xs,
       textAlign: 'center',
+      fontWeight: '600',
     },
     statsCard: {
       marginBottom: spacing.lg,
@@ -440,8 +432,8 @@ function createStyles(colors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: spacing.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      paddingVertical: spacing.md - 2,
+      borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
     friendInfo: {
@@ -450,12 +442,13 @@ function createStyles(colors) {
     },
     friendName: {
       color: colors.text,
-      fontWeight: '600',
+      fontWeight: '700',
     },
     friendMeta: {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
-      marginTop: 2,
+      marginTop: 3,
+      fontWeight: '700',
     },
     miniActionRow: {
       flexDirection: 'row',
@@ -474,14 +467,17 @@ function createStyles(colors) {
     },
     summaryCount: {
       color: colors.textMuted,
-      fontSize: fontSizes.md,
-      fontWeight: '600',
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 1,
     },
     subSectionTitle: {
       marginTop: spacing.md,
       marginBottom: spacing.xs,
-      fontSize: fontSizes.md,
-      fontWeight: '600',
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 1.1,
+      textTransform: 'uppercase',
       color: colors.text,
     },
     emptyText: {
@@ -496,16 +492,19 @@ function createStyles(colors) {
     pendingText: {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
+      fontWeight: '700',
     },
     sectionTitle: {
       fontSize: fontSizes.lg,
-      fontWeight: '700',
+      fontWeight: '900',
+      letterSpacing: 0.4,
       color: colors.primary,
       marginBottom: spacing.sm,
     },
     statsText: {
       color: colors.textMuted,
-      lineHeight: 22,
+      lineHeight: 24,
+      fontWeight: '700',
     },
     actions: {
       marginTop: spacing.md,

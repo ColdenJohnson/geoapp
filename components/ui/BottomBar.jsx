@@ -19,10 +19,10 @@ export default function BottomBar({ children, style }) {
 function createStyles(colors) {
   return StyleSheet.create({
     bar: {
-      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: 1,
       borderTopColor: colors.barBorder,
       backgroundColor: colors.bg,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: spacing.lg,
       paddingTop: spacing.sm,
       paddingBottom: spacing.md,
       zIndex: 10,

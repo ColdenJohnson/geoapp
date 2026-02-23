@@ -112,7 +112,6 @@ export default function FriendsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.heroGlow} />
       <SectionList
         sections={sections}
         keyExtractor={(item) => `${item.uid}-${item.handle || 'row'}`}
@@ -151,17 +150,7 @@ function createStyles(colors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.bg,
-    },
-    heroGlow: {
-      position: 'absolute',
-      top: -140,
-      right: -100,
-      width: 260,
-      height: 260,
-      borderRadius: 130,
-      backgroundColor: colors.primary,
-      opacity: 0.07,
+      backgroundColor: colors.surface,
     },
     content: {
       paddingHorizontal: spacing.xl,
@@ -176,14 +165,16 @@ function createStyles(colors) {
       marginBottom: spacing.lg,
     },
     pageTitle: {
-      fontSize: fontSizes.lg,
-      fontWeight: '700',
-      color: colors.text,
+      fontSize: fontSizes.xl,
+      fontWeight: '900',
+      color: colors.primary,
+      fontFamily: 'SpaceMono',
+      letterSpacing: 0.4,
     },
     backText: {
       color: colors.primary,
       fontSize: fontSizes.md,
-      fontWeight: '600',
+      fontWeight: '800',
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -193,21 +184,24 @@ function createStyles(colors) {
       marginBottom: spacing.xs,
     },
     sectionTitle: {
-      fontSize: fontSizes.md,
-      fontWeight: '600',
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 1.1,
+      textTransform: 'uppercase',
       color: colors.text,
     },
     sectionCount: {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
-      fontWeight: '600',
+      fontWeight: '800',
+      letterSpacing: 0.8,
     },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: spacing.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      paddingVertical: spacing.md - 2,
+      borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
     rowInfo: {
@@ -216,12 +210,13 @@ function createStyles(colors) {
     },
     rowName: {
       color: colors.text,
-      fontWeight: '600',
+      fontWeight: '700',
     },
     rowMeta: {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
       marginTop: 2,
+      fontWeight: '700',
     },
     miniActionRow: {
       flexDirection: 'row',
@@ -231,6 +226,7 @@ function createStyles(colors) {
     pendingText: {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
+      fontWeight: '700',
     },
     smallButton: {
       paddingVertical: spacing.sm,
@@ -249,6 +245,7 @@ function createStyles(colors) {
     },
     emptyText: {
       color: colors.textMuted,
+      fontWeight: '700',
     },
   });
 }

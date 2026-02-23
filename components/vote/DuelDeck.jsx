@@ -276,15 +276,16 @@ function createStyles(colors) {
     card: {
       position: 'absolute',
       width: '100%',
-      borderRadius: 16,
+      borderRadius: 24,
       overflow: 'hidden',
       backgroundColor: colors.bg,
       shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowRadius: 24,
-      elevation: 12,
+      shadowOffset: { width: 0, height: 18 },
+      shadowRadius: 30,
+      shadowOpacity: 0.16,
+      elevation: 14,
     },
     photo: { ...StyleSheet.absoluteFillObject },
-    cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
+    cardOverlay: { backgroundColor: 'rgba(12,7,3,0.12)' },
   });
 }

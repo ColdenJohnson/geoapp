@@ -162,7 +162,6 @@ export default function LoginScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
-        <View style={styles.heroGlow} />
         <View style={styles.content}>
         <View style={styles.brandBlock}>
           <Image source={require('../assets/images/icon.png')} style={styles.logo} />
@@ -343,16 +342,6 @@ function createStyles(colors) {
       flex: 1,
       backgroundColor: colors.surface,
     },
-    heroGlow: {
-      position: 'absolute',
-      top: -120,
-      right: -80,
-      width: 240,
-      height: 240,
-      borderRadius: 120,
-      backgroundColor: colors.primary,
-      opacity: 0.08,
-    },
     content: {
       flex: 1,
       paddingHorizontal: spacing.xl,
@@ -367,22 +356,22 @@ function createStyles(colors) {
       marginBottom: spacing.xl,
     },
     logo: {
-      width: 72,
-      height: 72,
-      borderRadius: 18,
+      width: 80,
+      height: 80,
+      borderRadius: 24,
       marginBottom: spacing.sm,
     },
     brand: {
       fontSize: fontSizes.xl,
-      fontWeight: '700',
-      letterSpacing: 0.6,
-      color: colors.text,
+      fontWeight: '900',
+      letterSpacing: 0.9,
+      color: colors.primary,
       fontFamily: 'SpaceMono',
     },
     title: {
       fontSize: fontSizes['2xl'],
-      fontWeight: '800',
-      letterSpacing: 0.4,
+      fontWeight: '900',
+      letterSpacing: 0.8,
       color: colors.text,
       textAlign: 'center',
       fontFamily: 'SpaceMono',
@@ -406,12 +395,12 @@ function createStyles(colors) {
       alignItems: 'center',
     },
     countryButton: {
-      height: 50,
+      height: 52,
       paddingHorizontal: spacing.sm,
       borderRadius: radii.md,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bg,
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: spacing.sm,
@@ -425,11 +414,12 @@ function createStyles(colors) {
     },
     resendText: {
       color: colors.primary,
-      fontWeight: '600',
+      fontWeight: '800',
     },
     cooldownText: {
       color: colors.textMuted,
       marginTop: spacing.xs,
+      fontWeight: '600',
     },
     toggleRow: {
       flexDirection: 'row',
@@ -444,13 +434,13 @@ function createStyles(colors) {
     },
     toggleLink: {
       color: colors.primary,
-      fontWeight: '600',
+      fontWeight: '800',
     },
     actionBar: {
       marginTop: spacing.sm,
       borderRadius: radii.lg,
       borderTopWidth: 0,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderWidth: 1,
       borderColor: colors.barBorder,
       backgroundColor: colors.bg,
     },
@@ -465,7 +455,10 @@ function createStyles(colors) {
     },
     altTitle: {
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
+      fontSize: 11,
+      letterSpacing: 1.1,
+      textTransform: 'uppercase',
+      fontWeight: '800',
       marginBottom: spacing.sm,
       textAlign: 'center',
     },
@@ -481,14 +474,17 @@ function createStyles(colors) {
     },
     methodButtonActive: {
       borderColor: colors.primary,
+      backgroundColor: colors.surface,
     },
     methodTextActive: {
       color: colors.primary,
+      fontWeight: '800',
     },
     error: {
       color: colors.danger,
       marginTop: spacing.md,
       textAlign: 'center',
+      fontWeight: '700',
     },
   });
 }

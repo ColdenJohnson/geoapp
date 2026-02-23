@@ -1,44 +1,44 @@
 // theme/tokens.js
 export const spacing = {
   xs: 6,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  '2xl': 28,
-  '4xl': 56,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 24,
+  '2xl': 32,
+  '4xl': 64,
 };
 
 export const radii = {
-  sm: 6,
-  md: 10,
-  lg: 16,
-  pill: 28,
+  sm: 10,
+  md: 14,
+  lg: 24,
+  pill: 20,
   round: 999,
 };
 
 export const fontSizes = {
-  sm: 14,
+  sm: 13,
   md: 16,
-  lg: 18,
-  xl: 22,
-  '2xl': 28,
+  lg: 20,
+  xl: 24,
+  '2xl': 30,
 };
 
 // Shadow presets that render reasonably on iOS/Android
 export const shadows = {
   bar: {
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: -2 },
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: -8 },
+    shadowRadius: 18,
+    elevation: 10,
   },
   chip: {
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.11,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 7,
   },
 };

@@ -5,13 +5,14 @@ import { spacing, radii, fontSizes, shadows } from '@/theme/tokens';
 export function createFormStyles(colors) {
   return StyleSheet.create({
     input: {
-      height: 50,
+      height: 52,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: radii.md,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bg,
       paddingHorizontal: spacing.md,
       fontSize: fontSizes.md,
+      fontWeight: '600',
       color: colors.text,
     },
     inputDense: {
@@ -19,7 +20,7 @@ export function createFormStyles(colors) {
     },
     card: {
       backgroundColor: colors.bg,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderWidth: 1,
       borderColor: colors.border,
       borderRadius: radii.lg,
       padding: spacing.lg,
@@ -28,6 +29,7 @@ export function createFormStyles(colors) {
     helperText: {
       color: colors.textMuted,
       fontSize: fontSizes.sm,
+      lineHeight: 18,
     },
   });
 }

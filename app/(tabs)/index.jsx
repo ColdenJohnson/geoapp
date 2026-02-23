@@ -1,31 +1,28 @@
-import { Image, StyleSheet, Platform, View, Pressable, Alert, Text, SafeAreaView, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, Pressable, Alert, Text } from 'react-native';
 import MapView from 'react-native-maps';
 import {Marker, Callout} from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useEffect, useState, useRef, useCallback, useMemo, useContext } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import axios from 'axios';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useRouter} from 'expo-router';
 
-import { newChallenge, fetchAllLocationPins } from '../../lib/api';
+import { newChallenge, fetchAllLocationPins, addPhoto } from '../../lib/api';
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
 
-import BottomBar from '../../components/ui/BottomBar';
-import { CTAButton } from '../../components/ui/Buttons';
 import { getDistance } from 'geolib';
 
 import { Toast, useToast } from '../../components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
+import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
-  const [errorMsg, setErrorMsg] = useState(null);
-  const PUBLIC_BASE_URL = process.env.EXPO_PUBLIC_BASE_URL // from .env file
   const [pins, setPins] = useState([]); // for all pins
   const router = useRouter();
   const mapRef = useRef(null);
@@ -33,13 +30,10 @@ export default function HomeScreen() {
   const { invalidateStats } = useContext(AuthContext);
 
   const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
-  const [nearestDistance, setNearestDistance] = useState(null);
-  const [isNear, setIsNear] = useState(false);
-  const [nearestPin, setNearestPin ] = useState(null);
   const [showFriendsOnly, setShowFriendsOnly] = useState(false);
   const { message: toastMessage, show: showToast } = useToast(3500);
-  const { height: screenHeight } = useWindowDimensions();
-  const isSmallScreen = screenHeight < 700;
+  const insets = useSafeAreaInsets();
+  const bottomTabOverflow = useBottomTabOverflow();
 
   // TODO: If there were many more pins, we would need pinsArr to be relatively smaller (returned within a radius)
   function computeNearestPin(currentLocation, pinsArr) {
@@ -62,12 +56,17 @@ export default function HomeScreen() {
   }
 
   function handleTakePhoto() {
-    if (!isNear || !nearestPin) {
-      console.log(`Not within ${NEAR_THRESHOLD_METERS}, nearest pin is ${nearestDistance} meters away!`); // nearestPin
-      showToast(nearestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! Currently ${nearestDistance}m away.` : `No challenge nearby!`);
+    const nearestNow = computeNearestPin(location, pins);
+    const closestPin = nearestNow?.pin ?? null;
+    const closestDistance = nearestNow?.distance ?? null;
+    const inRange = Number.isFinite(closestDistance) && closestDistance <= NEAR_THRESHOLD_METERS;
+
+    if (!inRange || !closestPin) {
+      console.log(`Not within ${NEAR_THRESHOLD_METERS}, nearest pin is ${closestDistance} meters away!`); // nearestPin
+      showToast(closestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! Currently ${closestDistance}m away.` : `No challenge nearby!`);
       Alert.alert(
                   'Uh-oh!',
-                  nearestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! \n Would you like to create a new challenge?` : `No challenge nearby! \n Would you like to create a new challenge?`,
+                  closestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! \n Would you like to create a new challenge?` : `No challenge nearby! \n Would you like to create a new challenge?`,
                   [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Create', style: 'default', onPress: async () => {
@@ -81,7 +80,35 @@ export default function HomeScreen() {
                 );
       return;
     }
-    viewPhotoChallenge(nearestPin);
+    uploadPhotoToNearestChallenge(closestPin);
+  }
+
+  // Camera-plus action: go straight into upload for the nearest in-range challenge.
+  function uploadPhotoToNearestChallenge(pin) {
+    if (!pin?._id) {
+      showToast('No valid challenge nearby.');
+      return;
+    }
+
+    const uploadPromise = new Promise((resolve) => {
+      setUploadResolver(resolve);
+      router.push('/upload');
+    });
+
+    uploadPromise
+      .then(async (uploadResult) => {
+        if (!uploadResult) {
+          return;
+        }
+        showToast('Uploading photo…', 60000);
+        await addPhoto(pin._id, uploadResult);
+        invalidateStats();
+        showToast('Upload success', 2200);
+      })
+      .catch((error) => {
+        console.error('Failed to upload photo to nearest challenge', error);
+        showToast('Upload failed', 2500);
+      });
   }
 
   useEffect(() => {
@@ -157,7 +184,7 @@ export default function HomeScreen() {
       (async () => {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          setErrorMsg('Permission to access location was denied');
+          console.warn('Permission to access location was denied');
           return;
         }
         const sub = await Location.watchPositionAsync(
@@ -183,11 +210,6 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    const d = computeNearestPin(location, pins);
-    const nearest = d;
-    setNearestDistance(nearest ? nearest.distance : null);
-    setNearestPin(nearest ? nearest.pin : null);
-    setIsNear(!!nearest && nearest.distance <= NEAR_THRESHOLD_METERS);
     if (!didCenter && userCoords && mapRef.current) {
       handleCenterOnUser();
       setDidCenter(true);
@@ -271,54 +293,18 @@ export default function HomeScreen() {
       300
     );
   }, [derivedUserCenter]);
-  const styles = useMemo(
-    () => createStyles(colors, isSmallScreen),
-    [colors, isSmallScreen]
-  );
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const controlsBottomOffset = 20 + insets.bottom + bottomTabOverflow;
+  const toastBottomOffset = controlsBottomOffset + 96;
+  const topRightControlsTop = 16 + insets.top;
 
   
   return (
-
-    {/* If breaking during deployment, it is because it needs an API https://docs.expo.dev/versions/latest/sdk/map-view/ 
-    Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps
-    */},
     <View style={styles.map_container}>
-    <Pressable // button to create new challenge
-        style={({ pressed }) => [
-          styles.button, 
-          { opacity: pressed ? 0.5 : 1 }
-        ]} 
-        onPress={handleCreateChallengePress}
-      >
-        <MaterialIcons name="add-a-photo" size={25} color={colors.text} />
-        {/* https://fonts.google.com/icons */}
-        </Pressable>
-    <Pressable
-        style={({ pressed }) => [
-          styles.button,
-          styles.locateButton,
-          { opacity: pressed ? 0.5 : 1 }
-        ]}
-        onPress={handleCenterOnUser}
-      >
-        <MaterialIcons name="my-location" size={26} color={colors.text} />
-      </Pressable>
-    <Pressable
-        style={({ pressed }) => [
-          styles.button,
-          styles.filterButton,
-          showFriendsOnly ? styles.filterButtonActive : null,
-          { opacity: pressed ? 0.5 : 1 }
-        ]}
-        onPress={() => setShowFriendsOnly((prev) => !prev)}
-      >
-        <MaterialIcons
-          name="people"
-          size={24}
-          color={showFriendsOnly ? colors.bg : colors.text}
-        />
-      </Pressable>
-    <MapView
+      {/* If breaking during deployment, it is because it needs an API https://docs.expo.dev/versions/latest/sdk/map-view/
+      Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps
+      */}
+      <MapView
         key={`map-${pins.length} > 0`} // This line fixes map loading in without pins. It forces a remount of the map when pins.length changes to greater than 0.
         style={styles.map}
         showsUserLocation={true}
@@ -383,114 +369,167 @@ export default function HomeScreen() {
   })}
 
       </MapView>
-      <Toast message={toastMessage} bottomOffset={160} />
-      <BottomBar>
-        <CTAButton
-          title={isNear && typeof nearestDistance === 'number' ? `Take Photo` : 'Take Photo'}
-          onPress={handleTakePhoto}
-          // Gray when pin not near
-          style={!isNear ? { borderColor: colors.border, backgroundColor: colors.surface } : undefined}
-          textStyle={!isNear ? { color: colors.textMuted } : undefined}
-        />
-      </BottomBar>
+      <View style={[styles.topRightOverlay, { top: topRightControlsTop }]} pointerEvents="box-none">
+        <View style={styles.controlStackVertical}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              { opacity: pressed ? 0.5 : 1 },
+            ]}
+            onPress={handleCenterOnUser}
+          >
+            <MaterialIcons name="my-location" size={26} color={colors.text} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              showFriendsOnly ? styles.filterButtonActive : null,
+              { opacity: pressed ? 0.5 : 1 },
+            ]}
+            onPress={() => setShowFriendsOnly((prev) => !prev)}
+          >
+            <MaterialIcons
+              name="people"
+              size={24}
+              color={showFriendsOnly ? colors.bg : colors.text}
+            />
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={[styles.controlsOverlay, { bottom: controlsBottomOffset }]} pointerEvents="box-none">
+        <View style={styles.controlGroup}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              styles.buttonCreate,
+              { opacity: pressed ? 0.5 : 1 },
+            ]}
+            onPress={handleCreateChallengePress}
+          >
+            <MaterialIcons name="add-location-alt" size={28} color={colors.primary} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              styles.buttonTakePhoto,
+              { opacity: pressed ? 0.5 : 1 },
+            ]}
+            onPress={handleTakePhoto}
+          >
+            <MaterialIcons
+              name="add-a-photo"
+              size={27}
+              color={colors.primaryTextOn}
+            />
+          </Pressable>
+        </View>
+      </View>
+      <Toast message={toastMessage} bottomOffset={toastBottomOffset} />
     </View>
   );
 }
 
-function createStyles(colors, isSmallScreen) {
+function createStyles(colors) {
   return StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: colors.bg,
-    },
-    titleContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      padding: 32
-    },
     map: {
       width: '100%',
-      // on small screens, let the map take up more space
-      flex: isSmallScreen ? 0.91 : 0.885,
+      flex: 1,
     },
     map_container: {
       flex: 1,
       width: '100%',
-      backgroundColor: colors.bg,
+      backgroundColor: colors.surface,
     },
     button: {
-      position: 'absolute',
-      top: 60,
-      right: 20,
-      width: 50,
-      height: 50,
+      width: 60,
+      height: 60,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.bg,
-      borderRadius: 25,
+      borderRadius: 20,
       padding: 10,
-      zIndex: 10,
-      elevation: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
-    locateButton: {
-      top: 120,
-    },
-    filterButton: {
-      top: 180,
+      elevation: 12,
+      borderWidth: 1,
+      borderColor: colors.barBorder,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      shadowOpacity: 0.12,
     },
     filterButtonActive: {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
-    buttonText: {
-      fontSize: 34,
-      lineHeight: 34,
-      fontWeight: 'bold',
-      color: colors.text,
+    buttonCreate: {
+      borderColor: colors.primary,
+      borderWidth: 2,
+      backgroundColor: colors.bg,
+    },
+    buttonTakePhoto: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    topRightOverlay: {
+      position: 'absolute',
+      right: 18,
+      zIndex: 10,
+    },
+    controlsOverlay: {
+      position: 'absolute',
+      left: 18,
+      right: 18,
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      alignItems: 'center',
+      zIndex: 10,
+    },
+    controlGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    controlStackVertical: {
+      alignItems: 'center',
+      gap: 12,
     },
     calloutCard: {
-      width: 200,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      backgroundColor: colors.surface,
-      borderRadius: 14,
-      borderWidth: StyleSheet.hairlineWidth,
+      width: 220,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      backgroundColor: colors.bg,
+      borderRadius: 22,
+      borderWidth: 1,
       borderColor: colors.border,
       shadowColor: '#000',
-      shadowOpacity: 0.12,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 6,
+      shadowOpacity: 0.14,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 12 },
+      elevation: 12,
     },
     calloutLabel: {
-      fontSize: 11,
+      fontSize: 10,
       textTransform: 'uppercase',
-      letterSpacing: 0.8,
-      color: colors.textMuted,
+      letterSpacing: 1.3,
+      color: colors.primary,
+      fontWeight: '800',
       marginBottom: 6,
     },
     calloutPrompt: {
-      fontSize: 14,
-      lineHeight: 18,
-      fontWeight: '600',
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '800',
       color: colors.text,
     },
     calloutDivider: {
-      height: StyleSheet.hairlineWidth,
+      height: 1,
       backgroundColor: colors.border,
       marginVertical: 10,
     },
     calloutMeta: {
       fontSize: 12,
+      fontWeight: '700',
       color: colors.textMuted,
-    },
-    bottomBarSmall: {
-      paddingHorizontal: 10,
-      paddingTop: 6,
-      paddingBottom: 10,
     },
   });
 }

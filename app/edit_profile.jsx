@@ -158,7 +158,6 @@ export default function EditProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.heroGlow} />
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -270,16 +269,6 @@ function createStyles(colors) {
       flex: 1,
       backgroundColor: colors.surface,
     },
-    heroGlow: {
-      position: 'absolute',
-      top: -140,
-      right: -100,
-      width: 260,
-      height: 260,
-      borderRadius: 130,
-      backgroundColor: colors.primary,
-      opacity: 0.07,
-    },
     content: {
       flexGrow: 1,
       paddingHorizontal: spacing.xl,
@@ -291,11 +280,13 @@ function createStyles(colors) {
       flexGrow: 1,
     },
     pageTitle: {
-      fontSize: fontSizes.lg,
-      fontWeight: '700',
-      color: colors.text,
+      fontSize: fontSizes.xl,
+      fontWeight: '900',
+      color: colors.primary,
       marginBottom: spacing.md,
       textAlign: 'center',
+      letterSpacing: 0.4,
+      fontFamily: 'SpaceMono',
     },
     actionRow: {
       flexDirection: 'row',
@@ -326,16 +317,18 @@ function createStyles(colors) {
     profileImageWrap: {
       width: 120,
       height: 120,
-      borderRadius: 60,
+      borderRadius: 36,
       marginBottom: spacing.md,
       overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: colors.primary,
     },
     profileImage: {
       width: 120,
       height: 120,
-      borderRadius: 60,
+      borderRadius: 34,
     },
     profileOverlay: {
       ...StyleSheet.absoluteFillObject,
@@ -354,7 +347,8 @@ function createStyles(colors) {
     profileOverlayText: {
       color: colors.text,
       fontSize: fontSizes.sm,
-      fontWeight: '600',
+      fontWeight: '800',
+      letterSpacing: 0.6,
     },
     formCard: {
       paddingTop: spacing.lg,
@@ -365,17 +359,21 @@ function createStyles(colors) {
     },
     deleteText: {
       color: colors.textMuted,
-      fontSize: 16,
+      fontSize: 15,
+      fontWeight: '700',
     },
     sectionTitle: {
-      fontSize: fontSizes.md,
-      fontWeight: '600',
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 1.1,
+      textTransform: 'uppercase',
       color: colors.text,
       marginBottom: spacing.sm,
       marginTop: spacing.md,
     },
     statusText: {
-      color: colors.textMuted,
+      color: colors.primary,
+      fontWeight: '700',
       marginBottom: spacing.sm,
     },
   });

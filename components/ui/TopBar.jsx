@@ -36,7 +36,7 @@ function createStyles(colors) {
       paddingTop: spacing.md,
       paddingBottom: spacing.md,
       backgroundColor: colors.bg,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: 1,
       borderBottomColor: colors.barBorder,
     },
     texts: {
@@ -45,11 +45,14 @@ function createStyles(colors) {
     },
     title: {
       fontSize: fontSizes.lg,
-      fontWeight: '700',
+      fontWeight: '800',
+      letterSpacing: 0.4,
       color: colors.text,
     },
     subtitle: {
-      fontSize: fontSizes.md,
+      fontSize: fontSizes.sm,
+      fontWeight: '700',
+      letterSpacing: 0.5,
       color: colors.textMuted,
     },
     right: {
