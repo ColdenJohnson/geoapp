@@ -28,7 +28,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const mapRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
-  const { invalidateStats, user, friends } = useContext(AuthContext);
 
   const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
   const [showFriendsOnly, setShowFriendsOnly] = useState(false);

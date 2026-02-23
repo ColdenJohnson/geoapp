@@ -1,10 +1,11 @@
-import { SafeAreaView, StyleSheet, TouchableOpacity, View, Text, ScrollView, RefreshControl } from 'react-native';
+import { SafeAreaView, StyleSheet, TouchableOpacity, View, Text, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import auth from '@react-native-firebase/auth';
@@ -20,7 +21,10 @@ export default function UserProfileScreen() {
     profile,
     stats,
     statsLoading,
-    refreshStats
+    refreshStats,
+    topPhotos,
+    topPhotosLoading,
+    refreshTopPhotos
   } = useContext(AuthContext);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -37,9 +41,24 @@ export default function UserProfileScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshStats({ force: true });
+    await Promise.all([
+      refreshStats({ force: true }),
+      refreshTopPhotos({ force: true }),
+    ]);
     setRefreshing(false);
-  }, [refreshStats]);
+  }, [refreshStats, refreshTopPhotos]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshTopPhotos({ force: false }).catch((error) => {
+        console.warn('Failed to refresh top photos', error);
+      });
+    }, [refreshTopPhotos])
+  );
+  const displayedTopPhotos = useMemo(
+    () => (Array.isArray(topPhotos) ? topPhotos.slice(0, 2) : []),
+    [topPhotos]
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -73,6 +92,45 @@ export default function UserProfileScreen() {
           <Text style={styles.sectionTitle}>Stats</Text>
           <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? profile?.pin_count ?? 0}</Text>
           <Text style={styles.statsText}>Photos posted: {stats?.photo_count ?? profile?.photo_count ?? 0}</Text>
+        </View>
+
+        <View style={[formStyles.card, styles.topPhotosCard]}>
+          <Text style={styles.sectionTitle}>Top Elo Photos</Text>
+          {topPhotosLoading && displayedTopPhotos.length === 0 ? (
+            <View style={styles.centerRow}>
+              <ActivityIndicator size="small" color={colors.text} />
+            </View>
+          ) : null}
+          {!topPhotosLoading && displayedTopPhotos.length === 0 ? (
+            <Text style={styles.emptyText}>No ranked photos yet.</Text>
+          ) : null}
+          {displayedTopPhotos.length ? (
+            <View style={styles.topPhotosGrid}>
+              {displayedTopPhotos.map((photo, index) => (
+                <View key={photo?._id || `${index}`} style={styles.topPhotoTile}>
+                  <Image
+                    source={photo?.file_url ? { uri: photo.file_url } : undefined}
+                    style={styles.topPhotoImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
+                  <View style={styles.topPhotoRankBadge}>
+                    <Text style={styles.topPhotoRankText}>#{index + 1}</Text>
+                  </View>
+                  <View style={styles.topPhotoMeta}>
+                    <Text style={styles.topPhotoElo}>
+                      Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+              {displayedTopPhotos.length < 2 ? (
+                <View style={[styles.topPhotoTile, styles.topPhotoPlaceholder]}>
+                  <Text style={styles.topPhotoPlaceholderText}>Waiting for more ranked photos</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {/* Actions */}
@@ -171,6 +229,9 @@ function createStyles(colors) {
     statsCard: {
       marginBottom: spacing.lg,
     },
+    topPhotosCard: {
+      marginBottom: spacing.lg,
+    },
     friendsCard: {
       marginBottom: spacing.lg,
     },
@@ -257,6 +318,65 @@ function createStyles(colors) {
       color: colors.textMuted,
       lineHeight: 24,
       fontWeight: '700',
+    },
+    topPhotosGrid: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    topPhotoTile: {
+      flex: 1,
+      borderRadius: 16,
+      overflow: 'hidden',
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      aspectRatio: 4 / 5,
+    },
+    topPhotoImage: {
+      width: '100%',
+      height: '100%',
+    },
+    topPhotoRankBadge: {
+      position: 'absolute',
+      top: spacing.sm,
+      left: spacing.sm,
+      backgroundColor: 'rgba(255,255,255,0.9)',
+      borderRadius: 10,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+    },
+    topPhotoRankText: {
+      color: colors.primary,
+      fontSize: fontSizes.sm,
+      fontWeight: '900',
+    },
+    topPhotoMeta: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(12, 7, 3, 0.55)',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    topPhotoElo: {
+      color: '#FFFFFF',
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 0.4,
+      textAlign: 'center',
+    },
+    topPhotoPlaceholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderStyle: 'dashed',
+    },
+    topPhotoPlaceholderText: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '700',
+      textAlign: 'center',
+      paddingHorizontal: spacing.md,
     },
     actions: {
       marginTop: spacing.md,

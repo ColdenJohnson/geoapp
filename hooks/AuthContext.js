@@ -2,9 +2,10 @@ import { createContext, useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';  // TODO: for production prefer expo-secure-store for tokens, or similar -- asyncstorage is plain key-value
 import auth from '@react-native-firebase/auth';
-import { fetchUsersByUID, fetchFriends, fetchFriendRequests, fetchUserStats } from '@/lib/api';
+import { fetchUsersByUID, fetchFriends, fetchFriendRequests, fetchUserStats, fetchUserTopPhotos } from '@/lib/api';
 
 export const AuthContext = createContext();
+const TOP_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);           // Firebase user
@@ -17,10 +18,26 @@ export function AuthProvider({ children }) {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsDirty, setStatsDirty] = useState(false);
-  const preloadRef = useRef({ friends: false, stats: false });
+  const [topPhotos, setTopPhotos] = useState([]);
+  const [topPhotosLoading, setTopPhotosLoading] = useState(false);
+  const [topPhotosDirty, setTopPhotosDirty] = useState(false);
+  const [topPhotosFetchedAt, setTopPhotosFetchedAt] = useState(null);
+  const preloadRef = useRef({ friends: false, stats: false, topPhotos: false });
 
   const friendsCacheKey = (uid) => `friends_cache_${uid}`;
   const statsCacheKey = (uid) => `stats_cache_${uid}`;
+  const topPhotosCacheKey = (uid) => `top_photos_cache_${uid}`;
+
+  const prefetchTopPhotoUrls = (photos) => {
+    if (!Array.isArray(photos)) return;
+    for (const photo of photos) {
+      const url = photo?.file_url;
+      if (typeof url !== 'string' || !url) continue;
+      Image.prefetch(url).catch((error) => {
+        console.warn('Failed to prefetch top photo', error);
+      });
+    }
+  };
 
   useEffect(() => {
     const unsubAuth = auth().onAuthStateChanged(async (fbUser) => {
@@ -79,7 +96,8 @@ export function AuthProvider({ children }) {
   }, [user?.uid]);
 
   useEffect(() => {
-    preloadRef.current = { friends: false, stats: false };
+    preloadRef.current = { friends: false, stats: false, topPhotos: false };
+    setTopPhotosDirty(false);
   }, [user?.uid]);
 
   useEffect(() => {
@@ -118,6 +136,30 @@ export function AuthProvider({ children }) {
       }
     }
     loadStatsCache();
+  }, [user?.uid]);
+
+  useEffect(() => {
+    async function loadTopPhotosCache() {
+      if (!user?.uid) {
+        setTopPhotos([]);
+        setTopPhotosFetchedAt(null);
+        return;
+      }
+      setTopPhotos([]);
+      setTopPhotosFetchedAt(null);
+      const raw = await AsyncStorage.getItem(topPhotosCacheKey(user.uid));
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        const cachedPhotos = Array.isArray(parsed?.photos) ? parsed.photos : [];
+        setTopPhotos(cachedPhotos);
+        setTopPhotosFetchedAt(Number.isFinite(parsed?.fetchedAt) ? parsed.fetchedAt : null);
+        prefetchTopPhotoUrls(cachedPhotos);
+      } catch (error) {
+        console.warn('Failed to parse top photos cache', error);
+      }
+    }
+    loadTopPhotosCache();
   }, [user?.uid]);
 
   async function refreshFriends({ force = false } = {}) {
@@ -166,6 +208,37 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function refreshTopPhotos({ force = false, limit = 2, metric = 'global' } = {}) {
+    if (!user?.uid) return null;
+    if (topPhotosLoading) return null;
+    const isStale =
+      !Number.isFinite(topPhotosFetchedAt) ||
+      Date.now() - topPhotosFetchedAt > TOP_PHOTOS_CACHE_TTL_MS;
+    if (!force && !topPhotosDirty && !isStale) return topPhotos;
+    setTopPhotosLoading(true);
+    try {
+      const rows = await fetchUserTopPhotos(user.uid, { limit, metric });
+      const nextPhotos = Array.isArray(rows) ? rows : [];
+      const fetchedAt = Date.now();
+      setTopPhotos(nextPhotos);
+      setTopPhotosDirty(false);
+      setTopPhotosFetchedAt(fetchedAt);
+      prefetchTopPhotoUrls(nextPhotos);
+      await AsyncStorage.setItem(
+        topPhotosCacheKey(user.uid),
+        JSON.stringify({
+          photos: nextPhotos,
+          fetchedAt,
+          metric: metric === 'local' ? 'local' : 'global',
+          limit: Number.isFinite(limit) ? limit : 2,
+        })
+      );
+      return nextPhotos;
+    } finally {
+      setTopPhotosLoading(false);
+    }
+  }
+
   const invalidateFriends = () => {
     setFriendsDirty(true);
     refreshFriends({ force: true });
@@ -174,6 +247,13 @@ export function AuthProvider({ children }) {
   const invalidateStats = () => {
     setStatsDirty(true);
     refreshStats({ force: true });
+  };
+
+  const invalidateTopPhotos = () => {
+    const currentPhotoCount = Number(stats?.photo_count ?? profile?.photo_count ?? 0);
+    if (Number.isFinite(currentPhotoCount) && currentPhotoCount < 2) {
+      setTopPhotosDirty(true);
+    }
   };
 
   useEffect(() => {
@@ -185,6 +265,10 @@ export function AuthProvider({ children }) {
     if (!preloadRef.current.stats) {
       preloadRef.current.stats = true;
       refreshStats({ force: true });
+    }
+    if (!preloadRef.current.topPhotos) {
+      preloadRef.current.topPhotos = true;
+      refreshTopPhotos({ force: false });
     }
   }, [user?.uid]);
 
@@ -200,10 +284,14 @@ export function AuthProvider({ children }) {
       friendsLoading,
       stats,
       statsLoading,
+      topPhotos,
+      topPhotosLoading,
       refreshFriends,
       refreshStats,
+      refreshTopPhotos,
       invalidateFriends,
-      invalidateStats
+      invalidateStats,
+      invalidateTopPhotos
     }}>
       {children}
     </AuthContext.Provider>

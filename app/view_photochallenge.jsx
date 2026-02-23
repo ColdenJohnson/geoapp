@@ -23,7 +23,6 @@ export default function ViewPhotoChallengeScreen() {
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const router = useRouter();
-  const { invalidateStats } = useContext(AuthContext);
   const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
