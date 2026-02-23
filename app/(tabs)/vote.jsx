@@ -214,6 +214,7 @@ export default function GlobalVoteScreen() {
         setRemainingVotes(nextRemaining);
         setRemainingGlobalVotes(nextRemaining);
       }
+      let advancedQueueAlready = false;
       if (advanceImmediately) {
         // TODO: Optimistic dismissal can re-show the same pair (p1, p2, p3, p1) because
         // the server only marks a slot consumed after vote submission; prefetch can
@@ -294,34 +295,32 @@ export default function GlobalVoteScreen() {
     [choose, photos]
   );
 
+  const voteSessionTitle = !loading && photos.length >= 2 && isPinRandom && duel?.pinPrompt
+    ? duel.pinPrompt
+    : isPinRandom
+      ? 'Local Challenge'
+      : 'Global Matchup';
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Vote!</Text>
-          <Text style={styles.subtitle}>swipe to select</Text>
-        </View>
-
-        <View style={styles.body}>
-          {!loading && photos.length >= 2 && duel?.bucketType === 'pin_random' && duel?.pinPrompt ? (
-            <Text style={styles.pinPrompt}>{duel.pinPrompt}</Text>
-          ) : null}
-          {remainingVotes === 0 ? (
-            <View style={styles.centered}>
-              <Text style={styles.emptyText}>
-                No votes remaining, come back in {VOTE_LIMIT_WINDOW_MINUTES} minutes.
-              </Text>
-            </View>
-          ) : loading ? (
-            <View style={styles.centered}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.helperText}>Loading a new duel…</Text>
-            </View>
-          ) : photos.length < 2 ? (
-            <View style={styles.centered}>
-              <Text style={styles.emptyText}>Need at least two photos to start global voting.</Text>
-            </View>
-          ) : !isScreenFocused ? null : (
+        {remainingVotes === 0 ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>
+              No votes remaining, come back in {VOTE_LIMIT_WINDOW_MINUTES} minutes.
+            </Text>
+          </View>
+        ) : loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading a new duel…</Text>
+          </View>
+        ) : photos.length < 2 ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>Need at least two photos to start global voting.</Text>
+          </View>
+        ) : !isScreenFocused ? null : (
+          <View style={styles.voteStage}>
             <DuelDeck
               pair={photos}
               renderId={renderId}
@@ -331,8 +330,8 @@ export default function GlobalVoteScreen() {
               deckStyle={styles.deckArea}
               renderMeta={(photo) => (
                 <View style={styles.meta}>
-                  <Text style={styles.metaTitle}>
-                    {isPinRandom ? 'Local' : 'Global'} Elo{' '}
+                  <Text style={styles.metaLabel}>{isPinRandom ? 'Local' : 'Global'} Elo</Text>
+                  <Text style={styles.metaHandle}>
                     {Number.isFinite(isPinRandom ? photo?.local_elo : photo?.global_elo)
                       ? isPinRandom
                         ? photo.local_elo
@@ -346,8 +345,20 @@ export default function GlobalVoteScreen() {
                 </View>
               )}
             />
-          )}
-        </View>
+
+            <View style={styles.topOverlay} pointerEvents="none">
+              <Text style={styles.kicker}>Voting Session</Text>
+              <Text style={styles.sessionTitle}>{voteSessionTitle}</Text>
+              {Number.isFinite(remainingVotes) ? (
+                <Text style={styles.remainingVotes}>{remainingVotes} votes left this hour</Text>
+              ) : null}
+            </View>
+
+            <View style={styles.bottomOverlay} pointerEvents="none">
+              <Text style={styles.helperText}>Slide to reveal the winner</Text>
+            </View>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -355,80 +366,99 @@ export default function GlobalVoteScreen() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    safe: { flex: 1, backgroundColor: colors.surface },
+    safe: { flex: 1, backgroundColor: '#000000' },
     container: {
       flex: 1,
-      paddingHorizontal: 18,
-      paddingTop: 14,
-      gap: 18,
-      backgroundColor: 'transparent',
+      backgroundColor: '#000000',
     },
-    header: { gap: 6 },
-    title: {
-      fontSize: 30,
+    voteStage: { flex: 1, backgroundColor: '#000000' },
+    centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+    emptyText: {
+      color: 'rgba(255, 255, 255, 0.84)',
+      fontSize: 16,
+      fontWeight: '700',
+      lineHeight: 24,
+      textAlign: 'center',
+      paddingHorizontal: 24,
+    },
+    loadingText: { color: 'rgba(255, 255, 255, 0.7)', textAlign: 'center', fontSize: 14, fontWeight: '800' },
+    deckArea: {
+      flex: 1,
+      width: '100%',
+      backgroundColor: '#000000',
+    },
+    meta: {
+      gap: 2,
+      paddingVertical: 6,
+      maxWidth: 280,
+    },
+    metaLabel: {
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 1.1,
+      textTransform: 'uppercase',
+      color: 'rgba(255, 255, 255, 0.56)',
+    },
+    metaHandle: {
+      fontSize: 28,
+      lineHeight: 32,
       fontWeight: '900',
-      color: colors.primary,
-      letterSpacing: 0.5,
-      fontFamily: 'SpaceMono',
+      color: '#FFFFFF',
+      letterSpacing: 0.2,
     },
-    subtitle: {
+    metaDetail: {
+      fontSize: 12,
+      color: 'rgba(245, 237, 232, 0.94)',
+      fontWeight: '700',
+      letterSpacing: 0.3,
+    },
+    topOverlay: {
+      position: 'absolute',
+      top: 26,
+      left: 14,
+      right: 14,
+      alignItems: 'center',
+      zIndex: 20,
+    },
+    kicker: {
+      fontSize: 10,
+      fontWeight: '900',
+      letterSpacing: 3.1,
+      textTransform: 'uppercase',
+      color: colors.primary,
+    },
+    sessionTitle: {
+      marginTop: 4,
+      fontSize: 24,
+      fontWeight: '800',
+      color: '#FFFFFF',
+      textAlign: 'center',
+      paddingHorizontal: 20,
+      letterSpacing: 0.3,
+    },
+    remainingVotes: {
+      marginTop: 8,
+      fontSize: 10,
+      color: 'rgba(255, 255, 255, 0.68)',
+      textTransform: 'uppercase',
+      fontWeight: '800',
+      letterSpacing: 1.4,
+    },
+    bottomOverlay: {
+      position: 'absolute',
+      bottom: 30,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 20,
+    },
+    helperText: {
+      color: 'rgba(255, 255, 255, 0.62)',
+      textAlign: 'center',
       fontSize: 11,
       fontWeight: '800',
       letterSpacing: 1.2,
       textTransform: 'uppercase',
-      color: colors.textMuted,
-    },
-    body: { flex: 1, gap: 18 },
-    centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-    emptyText: {
-      color: colors.textMuted,
-      fontSize: 16,
-      fontWeight: '600',
-      lineHeight: 24,
-      textAlign: 'center',
-      paddingHorizontal: 12,
-    },
-    deckArea: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      alignSelf: 'center',
-      width: '100%',
-      maxWidth: 720,
-    },
-    card: {
-      position: 'absolute',
-      width: '100%',
-      aspectRatio: 3 / 4,
-      borderRadius: 16,
-      overflow: 'hidden',
-      backgroundColor: colors.bg,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowRadius: 24,
-      elevation: 12,
-    },
-    photo: { ...StyleSheet.absoluteFillObject },
-    meta: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      padding: 16,
-      backgroundColor: 'rgba(12, 7, 3, 0.52)',
-      gap: 4,
-    },
-    metaTitle: { fontSize: 15, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 },
-    metaDetail: { fontSize: 13, color: '#F5EDE8', fontWeight: '700' },
-    helperText: { color: colors.textMuted, textAlign: 'center', fontSize: 14, fontWeight: '700' },
-    cardOverlay: { backgroundColor: 'rgba(0,0,0,0.05)' },
-    pinPrompt: {
-      color: colors.primary,
-      fontSize: 21,
-      fontWeight: '800',
-      textAlign: 'center',
-      letterSpacing: 0.2,
-      paddingHorizontal: 8,
     },
   });
 }

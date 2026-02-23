@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
-  useDerivedValue,
   useSharedValue,
   withSpring,
   withTiming,
@@ -13,11 +12,19 @@ import Animated, {
 
 import { usePalette } from '@/hooks/usePalette';
 
-const FOCUS_SWIPE_THRESHOLD = 24;
 const VOTE_SWIPE_THRESHOLD = 140;
-const SWIPE_VISUAL_MULTIPLIER = 1.5;
-const DISMISS_DURATION_MS = 250;
+const MIN_THRESHOLD_PX = 56;
+const DIVIDER_CLAMP_PADDING = 2;
+const DRAG_RESPONSE_MULTIPLIER = 1.3;
+const COMMIT_EXPAND_DURATION_MS = 100;
+const COMMIT_HOLD_DURATION_MS = 350;
+const META_REVEAL_DISTANCE = 60;
 const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
+function clamp(value, min, max) {
+  'worklet';
+  return Math.max(min, Math.min(max, value));
+}
 
 export default function DuelDeck({
   pair,
@@ -26,26 +33,31 @@ export default function DuelDeck({
   renderId,
   voteToken,
   deckStyle,
+  renderMeta,
   cardStyle,
   imageStyle,
   overlayStyle,
-  renderMeta,
-  cardAspectRatio = 3 / 4,
 }) {
   const incomingPhotos = useMemo(() => (Array.isArray(pair) ? pair.slice(0, 2) : []), [pair]);
   const [photos, setPhotos] = useState(() => incomingPhotos);
   const pendingPhotosRef = useRef(null);
   const voteLockedRef = useRef(false);
+  const { width: windowWidth } = useWindowDimensions();
 
-  const selectedIndex = useSharedValue(0);
-  const translateX = useSharedValue(0);
+  const dividerX = useSharedValue(0);
   const dismissProgress = useSharedValue(0);
   const winnerIndex = useSharedValue(-1);
   const isDismissing = useSharedValue(false);
-  const skipSpringReset = useSharedValue(false);
+  const deckWidth = useSharedValue(Math.max(1, windowWidth));
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  useEffect(() => {
+    if (windowWidth > 0) {
+      deckWidth.value = windowWidth;
+    }
+  }, [windowWidth, deckWidth]);
 
   useEffect(() => {
     if (IS_DEV_LOG) {
@@ -66,107 +78,141 @@ export default function DuelDeck({
     setPhotos(incomingPhotos);
   }, [incomingPhotos, isDismissing]);
 
-  useEffect(() => {
-    const hasPair = photos.length >= 2;
-    const nextIdx = hasPair ? (Math.random() < 0.5 ? 0 : 1) : 0;
-    selectedIndex.value = nextIdx;
-    translateX.value = 0;
+  const resetDeckState = useCallback(() => {
+    dividerX.value = 0;
     dismissProgress.value = 0;
     winnerIndex.value = -1;
     isDismissing.value = false;
-    skipSpringReset.value = false;
     voteLockedRef.current = false;
-  }, [photos, selectedIndex, translateX, dismissProgress, winnerIndex, isDismissing, skipSpringReset]);
+  }, [dismissProgress, dividerX, isDismissing, winnerIndex]);
+
+  useEffect(() => {
+    resetDeckState();
+  }, [photos, resetDeckState]);
 
   const finalizeDismiss = useCallback(() => {
-    isDismissing.value = false;
-
     const pending = pendingPhotosRef.current;
     if (pending) {
       pendingPhotosRef.current = null;
       setPhotos(pending);
-      return;
+    } else {
+      setPhotos(incomingPhotos);
     }
+    resetDeckState();
+  }, [incomingPhotos, resetDeckState]);
 
-    const hasPair = photos.length >= 2;
-    const nextIdx = hasPair ? (Math.random() < 0.5 ? 0 : 1) : 0;
-    selectedIndex.value = nextIdx;
-    translateX.value = 0;
-    dismissProgress.value = 0;
-    winnerIndex.value = -1;
-    skipSpringReset.value = false;
-  }, [photos, dismissProgress, isDismissing, selectedIndex, translateX, winnerIndex, skipSpringReset]);
-
-  const handleVote = useCallback(
-    (idx) => {
+  const submitVote = useCallback(
+    (targetIndex) => {
       if (disabled || voteLockedRef.current) return;
       if (photos.length < 2) return;
-
-      const target = typeof idx === 'number' ? idx : selectedIndex.value;
-      const pairSnapshot = photos.slice(0, 2);
-
       voteLockedRef.current = true;
-      isDismissing.value = true;
-      winnerIndex.value = target;
-      dismissProgress.value = 0;
-      dismissProgress.value = withTiming(
-        1,
-        { duration: DISMISS_DURATION_MS },
-        (finished) => {
-          if (finished) {
-            runOnJS(finalizeDismiss)();
-          }
-        }
-      );
-
+      const pairSnapshot = photos.slice(0, 2);
       if (typeof onVote === 'function') {
-        onVote(target, pairSnapshot);
+        onVote(targetIndex, pairSnapshot);
       }
     },
-    [disabled, photos, selectedIndex, dismissProgress, isDismissing, winnerIndex, onVote, finalizeDismiss ]
+    [disabled, onVote, photos]
   );
 
-  const focusIndex = useDerivedValue(() => {
-    if (Math.abs(translateX.value) > FOCUS_SWIPE_THRESHOLD) {
-      return translateX.value > 0 ? 0 : 1;
-    }
-    return selectedIndex.value;
-  });
-
-  const swipeProgress = useDerivedValue(() => {
-    const distance = Math.abs(translateX.value);
-    return Math.min(distance / VOTE_SWIPE_THRESHOLD, 1);
-  });
+  const handleDeckLayout = useCallback(
+    (event) => {
+      const width = event?.nativeEvent?.layout?.width;
+      if (Number.isFinite(width) && width > 0) {
+        deckWidth.value = width;
+      }
+    },
+    [deckWidth]
+  );
 
   const panGesture = Gesture.Pan()
     .enabled(photos.length >= 2 && !disabled)
     .onUpdate((event) => {
       if (isDismissing.value) return;
-      const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
-      translateX.value = scaledX;
+      const width = Math.max(deckWidth.value, 1);
+      const maxOffset = Math.max(0, width / 2 - DIVIDER_CLAMP_PADDING);
+      const boostedTranslation = event.translationX * DRAG_RESPONSE_MULTIPLIER;
+      dividerX.value = clamp(boostedTranslation, -maxOffset, maxOffset);
     })
-    .onEnd((event) => {
+    .onEnd(() => {
       if (isDismissing.value) return;
-      const scaledX = event.translationX * SWIPE_VISUAL_MULTIPLIER;
-      const absX = Math.abs(scaledX);
-      if (absX >= VOTE_SWIPE_THRESHOLD) {
-        const targetIndex = scaledX > 0 ? 0 : 1;
-        runOnJS(handleVote)(targetIndex);
-      } else if (absX >= FOCUS_SWIPE_THRESHOLD) {
-        const targetIndex = scaledX > 0 ? 0 : 1;
-        selectedIndex.value = targetIndex;
-        skipSpringReset.value = true;
-        translateX.value = withTiming(0, { duration: 180 });
-      }
-    })
-    .onFinalize(() => {
-      if (isDismissing.value) return;
-      if (skipSpringReset.value) {
-        skipSpringReset.value = false;
+      const width = Math.max(deckWidth.value, 1);
+      const threshold = Math.min(VOTE_SWIPE_THRESHOLD, Math.max(MIN_THRESHOLD_PX, width * 0.33));
+      const absX = Math.abs(dividerX.value);
+      if (absX < threshold) {
+        dividerX.value = withSpring(0, { damping: 19, stiffness: 190 });
         return;
       }
-      translateX.value = withSpring(0);
+
+      const targetIndex = dividerX.value >= 0 ? 0 : 1;
+      const targetX = targetIndex === 0 ? width / 2 : -width / 2;
+      isDismissing.value = true;
+      winnerIndex.value = targetIndex;
+      dismissProgress.value = 0;
+      dividerX.value = withTiming(targetX, { duration: COMMIT_EXPAND_DURATION_MS });
+      dismissProgress.value = withTiming(1, { duration: COMMIT_HOLD_DURATION_MS }, (finished) => {
+        if (finished) {
+          runOnJS(finalizeDismiss)();
+        }
+      });
+      runOnJS(submitVote)(targetIndex);
     });
+
+  const fullFrameStyle = useAnimatedStyle(() => ({
+    width: Math.max(deckWidth.value, 1),
+  }));
+
+  const leftPaneStyle = useAnimatedStyle(() => {
+    const width = Math.max(deckWidth.value, 1);
+    const leftWidth = clamp(width * 0.5 + dividerX.value, 0, width);
+    return { width: leftWidth };
+  });
+
+  const rightPaneStyle = useAnimatedStyle(() => {
+    const width = Math.max(deckWidth.value, 1);
+    const leftWidth = clamp(width * 0.5 + dividerX.value, 0, width);
+    return { width: width - leftWidth };
+  });
+
+  const dividerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dividerX.value }],
+    opacity: isDismissing.value ? 0 : 1,
+  }));
+
+  const handleBubbleStyle = useAnimatedStyle(() => {
+    const width = Math.max(deckWidth.value, 1);
+    const threshold = Math.min(VOTE_SWIPE_THRESHOLD, Math.max(MIN_THRESHOLD_PX, width * 0.33));
+    const absX = Math.abs(dividerX.value);
+    const active = absX >= threshold;
+    return {
+      transform: [{ scale: 1 + Math.min(absX / 420, 0.22) }],
+      backgroundColor: active ? colors.primary : '#FFFFFF',
+    };
+  });
+
+  const hintStyle = useAnimatedStyle(() => {
+    const opacity = !isDismissing.value && Math.abs(dividerX.value) < 20 ? 1 : 0;
+    return { opacity };
+  });
+
+  const leftMetaStyle = useAnimatedStyle(() => {
+    const dragReveal = clamp(dividerX.value / META_REVEAL_DISTANCE, 0, 1);
+    const winnerReveal = winnerIndex.value === 0 ? dismissProgress.value : 0;
+    return { opacity: Math.max(dragReveal, winnerReveal) };
+  });
+
+  const rightMetaStyle = useAnimatedStyle(() => {
+    const dragReveal = clamp((-dividerX.value) / META_REVEAL_DISTANCE, 0, 1);
+    const winnerReveal = winnerIndex.value === 1 ? dismissProgress.value : 0;
+    return { opacity: Math.max(dragReveal, winnerReveal) };
+  });
+
+  const leftWinnerStyle = useAnimatedStyle(() => ({
+    opacity: winnerIndex.value === 0 ? dismissProgress.value : 0,
+  }));
+
+  const rightWinnerStyle = useAnimatedStyle(() => ({
+    opacity: winnerIndex.value === 1 ? dismissProgress.value : 0,
+  }));
 
   if (photos.length < 2) {
     return null;
@@ -174,118 +220,175 @@ export default function DuelDeck({
 
   return (
     <GestureDetector gesture={panGesture}>
-      <View style={[styles.deckArea, deckStyle]}>
-        {photos.map((photo, idx) => (
-          <AnimatedPhotoCard
-            key={photo?._id ?? idx}
-            index={idx}
-            photo={photo}
-            styles={styles}
-            translateX={translateX}
-            focusIndex={focusIndex}
-            swipeProgress={swipeProgress}
-            winnerIndex={winnerIndex}
-            dismissProgress={dismissProgress}
-            cardStyle={cardStyle}
-            imageStyle={imageStyle}
-            overlayStyle={overlayStyle}
-            renderMeta={renderMeta}
-            cardAspectRatio={cardAspectRatio}
-          />
-        ))}
+      <View style={[styles.deckArea, deckStyle]} onLayout={handleDeckLayout}>
+        <Animated.View style={[styles.pane, styles.leftPane, leftPaneStyle]}>
+          <Animated.View style={[styles.fullFrame, styles.leftFrame, fullFrameStyle, cardStyle]}>
+            <Image
+              source={{ uri: photos[0]?.file_url }}
+              style={[styles.photo, imageStyle]}
+              resizeMode="cover"
+              cachePolicy="memory-disk"
+            />
+            <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
+            <Animated.View style={[styles.metaSlot, leftMetaStyle]} pointerEvents="none">
+              {typeof renderMeta === 'function' ? renderMeta(photos[0], 0) : null}
+            </Animated.View>
+            <Animated.View style={[styles.winnerOverlay, leftWinnerStyle]} pointerEvents="none">
+              <View style={styles.winnerBadge}>
+                <Text style={styles.winnerCheck}>✓</Text>
+              </View>
+              <Text style={styles.winnerText}>WINNER!</Text>
+            </Animated.View>
+          </Animated.View>
+        </Animated.View>
+
+        <Animated.View style={[styles.pane, styles.rightPane, rightPaneStyle]}>
+          <Animated.View style={[styles.fullFrame, styles.rightFrame, fullFrameStyle, cardStyle]}>
+            <Image
+              source={{ uri: photos[1]?.file_url }}
+              style={[styles.photo, imageStyle]}
+              resizeMode="cover"
+              cachePolicy="memory-disk"
+            />
+            <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
+            <Animated.View style={[styles.metaSlot, rightMetaStyle]} pointerEvents="none">
+              {typeof renderMeta === 'function' ? renderMeta(photos[1], 1) : null}
+            </Animated.View>
+            <Animated.View style={[styles.winnerOverlay, rightWinnerStyle]} pointerEvents="none">
+              <View style={styles.winnerBadge}>
+                <Text style={styles.winnerCheck}>✓</Text>
+              </View>
+              <Text style={styles.winnerText}>WINNER!</Text>
+            </Animated.View>
+          </Animated.View>
+        </Animated.View>
+
+        <Animated.View style={[styles.dividerRail, dividerStyle]} pointerEvents="none">
+          <Animated.View style={[styles.handleBubble, handleBubbleStyle]}>
+            <Text style={styles.handleGlyph}>VS</Text>
+          </Animated.View>
+          <Animated.View style={[styles.hintRow, hintStyle]}>
+            <Text style={styles.hintArrow}>‹</Text>
+            <Text style={styles.hintArrow}>›</Text>
+          </Animated.View>
+        </Animated.View>
       </View>
     </GestureDetector>
-  );
-}
-
-function AnimatedPhotoCard({
-  photo,
-  index,
-  translateX,
-  focusIndex,
-  swipeProgress,
-  winnerIndex,
-  dismissProgress,
-  styles,
-  cardStyle,
-  imageStyle,
-  overlayStyle,
-  renderMeta,
-  cardAspectRatio,
-}) {
-  const focus = useDerivedValue(
-    () => withTiming(focusIndex.value === index ? 1 : 0, { duration: 180 }),
-    [focusIndex, index]
-  );
-
-  const animatedStyle = useAnimatedStyle(
-    () => {
-      const active = focus.value;
-      const progress = swipeProgress.value;
-      const swipeActive = Math.abs(translateX.value) > 1;
-      const targetIndex = swipeActive ? (translateX.value > 0 ? 0 : 1) : focusIndex.value;
-      const isTarget = swipeActive && targetIndex === index;
-      const baseOffsetX = index === 0 ? -120 : 120;
-      const focusNudge = (index === 0 ? -1 : 1) * active * 14;
-      const pullToCenter = isTarget ? baseOffsetX * (1 - progress) : baseOffsetX + focusNudge;
-      const pushAway = !isTarget && swipeActive ? baseOffsetX + (index === 0 ? -18 : 18) * progress : pullToCenter;
-      const translateCardX = isTarget ? pullToCenter : pushAway;
-      const lift = winnerIndex.value === index ? -40 * dismissProgress.value : 0;
-      const baseScale = 0.82 + active * 0.06;
-      const scale = isTarget ? baseScale + 0.22 * progress : baseScale - 0.04 * progress;
-      const winnerBoost = winnerIndex.value === index ? 0.05 * dismissProgress.value : 0;
-      const fadeOut = winnerIndex.value === -1 ? 1 : winnerIndex.value === index ? 1 : 1 - dismissProgress.value;
-
-      return {
-        zIndex: isTarget ? 3 : focusIndex.value === index ? 2 : 1,
-        shadowOpacity: 0.16 + 0.3 * active + (isTarget ? 0.2 * progress : 0),
-        transform: [
-          { translateX: translateCardX },
-          { translateY: lift },
-          { scale: scale + winnerBoost },
-        ],
-        opacity: fadeOut,
-      };
-    },
-    [index]
-  );
-
-  return (
-    <Animated.View style={[styles.card, { aspectRatio: cardAspectRatio }, cardStyle, animatedStyle]}>
-      <Image
-        source={{ uri: photo?.file_url }}
-        style={[styles.photo, imageStyle]}
-        resizeMode="cover"
-        cachePolicy="memory-disk"
-      />
-      {typeof renderMeta === 'function' ? renderMeta(photo, index) : null}
-      <View style={[StyleSheet.absoluteFill, styles.cardOverlay, overlayStyle]} pointerEvents="none" />
-    </Animated.View>
   );
 }
 
 function createStyles(colors) {
   return StyleSheet.create({
     deckArea: {
+      flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       alignSelf: 'center',
       width: '100%',
-      maxWidth: 720,
-    },
-    card: {
-      position: 'absolute',
-      width: '100%',
-      borderRadius: 24,
       overflow: 'hidden',
-      backgroundColor: colors.bg,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 18 },
-      shadowRadius: 30,
-      shadowOpacity: 0.16,
-      elevation: 14,
+      backgroundColor: '#000000',
     },
-    photo: { ...StyleSheet.absoluteFillObject },
-    cardOverlay: { backgroundColor: 'rgba(12,7,3,0.12)' },
+    pane: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      overflow: 'hidden',
+    },
+    leftPane: { left: 0 },
+    rightPane: { right: 0 },
+    fullFrame: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+    },
+    leftFrame: { left: 0 },
+    rightFrame: { right: 0 },
+    photo: {
+      width: '100%',
+      height: '100%',
+    },
+    photoShade: {
+      backgroundColor: 'rgba(0, 0, 0, 0.24)',
+    },
+    metaSlot: {
+      position: 'absolute',
+      left: 20,
+      right: 20,
+      bottom: 34,
+    },
+    winnerOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(255, 107, 53, 0.36)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    winnerBadge: {
+      width: 92,
+      height: 92,
+      borderRadius: 46,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 4,
+      borderColor: 'rgba(255, 255, 255, 0.9)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    winnerCheck: {
+      fontSize: 44,
+      fontWeight: '900',
+      color: colors.primary_darkened || colors.primary,
+      marginTop: -2,
+    },
+    winnerText: {
+      marginTop: 14,
+      fontSize: 34,
+      fontWeight: '900',
+      color: '#FFFFFF',
+      letterSpacing: 0.4,
+    },
+    dividerRail: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      width: 2,
+      backgroundColor: 'rgba(255, 255, 255, 0.34)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 30,
+    },
+    handleBubble: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      borderWidth: 4,
+      borderColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      shadowOpacity: 0.25,
+      elevation: 12,
+      zIndex: 2,
+    },
+    handleGlyph: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: '#0f172a',
+      letterSpacing: 0.8,
+    },
+    hintRow: {
+      position: 'absolute',
+      width: 126,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      zIndex: 1,
+    },
+    hintArrow: {
+      fontSize: 29,
+      color: 'rgba(255, 255, 255, 0.82)',
+      fontWeight: '800',
+      lineHeight: 29,
+    },
   });
 }
