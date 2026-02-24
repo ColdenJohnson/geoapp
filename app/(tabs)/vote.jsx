@@ -18,7 +18,6 @@ import {
 } from '@/lib/globalDuelQueue';
 
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
-const VOTE_LIMIT_WINDOW_MINUTES = 60;
 
 const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
@@ -307,7 +306,9 @@ export default function GlobalVoteScreen() {
         {remainingVotes === 0 ? (
           <View style={styles.centered}>
             <Text style={styles.emptyText}>
-              No votes remaining, come back in {VOTE_LIMIT_WINDOW_MINUTES} minutes.
+              You've used your votes for now.
+              {'\n'}We don't do doom scrolling here.
+              {'\n'}Post a challenge. Add a photo. Create!
             </Text>
           </View>
         ) : loading ? (
