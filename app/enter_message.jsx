@@ -32,11 +32,13 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const [facing, setFacing] = useState('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [uploading, setUploading] = useState(false);
+  const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const remaining = useMemo(() => MAX_LEN - message.length, [message]);
+  const isAtMaxLength = message.length >= MAX_LEN;
+  const hasMessage = message.trim().length > 0;
   const cameraRef = useRef(null);
   const inputRef = useRef(null);
   const isMounted = useRef(true);
@@ -107,11 +109,24 @@ export default function EnterMessageScreen({ initialUri = null }) {
     setUri(photo?.uri ?? null);
   };
 
+  const handleMessageChange = useCallback((value) => {
+    setMessage(value);
+    if (showEmptyMessageError) {
+      setShowEmptyMessageError(false);
+    }
+  }, [showEmptyMessageError]);
+
   // TODO: Surface upload failures and validation errors to the user instead of only logging.
   const handleUpload = () => {
     if (!uri || uploading) return;
-    didSubmitUpload.current = true;
     const trimmed = message.trim();
+    if (!trimmed) {
+      setShowEmptyMessageError(true);
+      setMessage('');
+      inputRef.current?.focus();
+      return;
+    }
+    didSubmitUpload.current = true;
 
     resolveMessage(trimmed);
     setUploading(true);
@@ -208,27 +223,25 @@ export default function EnterMessageScreen({ initialUri = null }) {
 
           {uri ? (
             <>
-              <Text style={styles.subtitle}>Add a challenge note</Text>
+              <View style={styles.noteBlock}>
+                <Text style={styles.subtitle}>Add a challenge note</Text>
 
-              <TextInput
-                ref={inputRef}
-                value={message}
-                onChangeText={setMessage}
-                placeholder="Write a short challenge prompt…"
-                placeholderTextColor={colors.textMuted}
-                maxLength={MAX_LEN}
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
-                autoFocus
-                style={styles.input}
-                textAlignVertical="top"
-                multiline
-              />
-
-              <Text style={[styles.counter, remaining < 0 && styles.counterOver]}>
-                {remaining}
-              </Text>
+                <TextInput
+                  ref={inputRef}
+                  value={message}
+                  onChangeText={handleMessageChange}
+                  placeholder="Write a short challenge prompt…"
+                  placeholderTextColor={showEmptyMessageError ? colors.danger : colors.textMuted}
+                  maxLength={MAX_LEN}
+                  returnKeyType="done"
+                  blurOnSubmit
+                  onSubmitEditing={Keyboard.dismiss}
+                  autoFocus
+                  style={[styles.input, isAtMaxLength && styles.inputMaxed]}
+                  textAlignVertical="top"
+                  multiline
+                />
+              </View>
 
               <View style={styles.actions}>
                 <Pressable
@@ -238,6 +251,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
                     styles.createAction,
                     pressed && { opacity: 0.7 },
                     uploading && { opacity: 0.5 },
+                    !hasMessage && { opacity: 0.45 },
                   ]}
                 >
                   <Text style={styles.createText}>CREATE&gt;</Text>
@@ -361,6 +375,10 @@ function createStyles(colors) {
       marginTop: spacing.sm,
       paddingHorizontal: spacing.md,
     },
+    noteBlock: {
+      width: '100%',
+      gap: 6,
+    },
     input: {
       width: '100%',
       minHeight: 50,
@@ -379,12 +397,7 @@ function createStyles(colors) {
       elevation: 8,
       fontWeight: '600',
     },
-    counter: {
-      alignSelf: 'flex-end',
-      fontSize: 12,
-      color: colors.textMuted,
-    },
-    counterOver: { color: colors.danger },
+    inputMaxed: { color: colors.danger },
     actions: { width: '100%', flexDirection: 'row', gap: spacing.md },
     createAction: {
       flex: 1,

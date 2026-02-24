@@ -299,6 +299,9 @@ export default function HomeScreen() {
         }
         showToast('Uploading...', 60000);
         const created = await newChallenge(location, fileUrl, message);
+        if (!created) {
+          throw new Error('newChallenge returned falsey');
+        }
         if (created?.pin) {
           const nextPin = {
             ...created.pin,
