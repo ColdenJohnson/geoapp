@@ -22,7 +22,7 @@ import { CTAButton } from '@/components/ui/Buttons';
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii } from '@/theme/tokens';
 
-import { resolveMessage, resolveUpload } from '../lib/promiseStore';
+import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseStore';
 import { uploadImage } from '@/lib/uploadHelpers';
 
 const MAX_LEN = 50;
@@ -36,6 +36,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const [facing, setFacing] = useState('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [uploading, setUploading] = useState(false);
+  const [isGeoLocked, setIsGeoLocked] = useState(true);
   const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
@@ -50,6 +51,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const didSubmitUpload = useRef(false);
   const keyboardOffset = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
+  const contentBottomPadding = (keyboardVisible ? spacing.lg : spacing.sm) + insets.bottom + EXTRA_BOTTOM_BUFFER;
   const handlePhotoPress = useCallback(() => {
     if (keyboardVisible) {
       Keyboard.dismiss();
@@ -97,6 +99,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
       if (!didSubmitUpload.current) {
         resolveMessage('');
         resolveUpload(null);
+        resolveGeoLock(true);
       }
     };
   }, [cardScale, keyboardOffset]);
@@ -134,6 +137,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
     didSubmitUpload.current = true;
 
     resolveMessage(trimmed);
+    resolveGeoLock(isGeoLocked);
     setUploading(true);
 
     (async () => {
@@ -220,56 +224,90 @@ export default function EnterMessageScreen({ initialUri = null }) {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
-        <Animated.View
-          style={[
-            styles.content,
-            keyboardVisible && styles.contentKeyboard,
-            { paddingBottom: (keyboardVisible ? spacing.lg : spacing.sm) + insets.bottom + EXTRA_BOTTOM_BUFFER },
-            { transform: [{ translateY: keyboardOffset }] },
-          ]}
-        >
+        {uri ? (
+          <Animated.ScrollView
+            style={[
+              styles.scrollFrame,
+              { transform: [{ translateY: keyboardOffset }] },
+            ]}
+            contentContainerStyle={[
+              styles.scrollContent,
+              keyboardVisible && styles.scrollContentKeyboard,
+              { paddingBottom: contentBottomPadding },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {renderPreview()}
 
-          {uri ? renderPreview() : renderCamera()}
+            <Pressable
+              style={({ pressed }) => [
+                styles.geoLockToggle,
+                pressed && { opacity: 0.7 },
+                uploading && { opacity: 0.5 },
+              ]}
+              onPress={() => setIsGeoLocked((prev) => !prev)}
+              disabled={uploading}
+            >
+              <FontAwesome6
+                name={isGeoLocked ? 'square-check' : 'square'}
+                size={18}
+                color={isGeoLocked ? colors.primary : colors.textMuted}
+              />
+              <View style={styles.geoLockText}>
+                <Text style={styles.geoLockLabel}>Location locked</Text>
+                <Text style={styles.geoLockHint}>
+                  {isGeoLocked
+                    ? 'Only nearby users can join this challenge.'
+                    : 'Anyone can join this challenge from anywhere.'}
+                </Text>
+                </View>
+              </Pressable>
+            <View style={styles.noteBlock}>
+              <TextInput
+                ref={inputRef}
+                value={message}
+                onChangeText={handleMessageChange}
+                placeholder="Write a short challenge prompt…"
+                placeholderTextColor={showEmptyMessageError ? colors.danger : colors.textMuted}
+                maxLength={MAX_LEN}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={Keyboard.dismiss}
+                autoFocus
+                style={[styles.input, isAtMaxLength && styles.inputMaxed]}
+                textAlignVertical="top"
+                multiline
+              />
+            </View>
 
-          {uri ? (
-            <>
-              <View style={styles.noteBlock}>
-                <Text style={styles.subtitle}>Add a challenge note</Text>
-
-                <TextInput
-                  ref={inputRef}
-                  value={message}
-                  onChangeText={handleMessageChange}
-                  placeholder="Write a short challenge prompt…"
-                  placeholderTextColor={showEmptyMessageError ? colors.danger : colors.textMuted}
-                  maxLength={MAX_LEN}
-                  returnKeyType="done"
-                  blurOnSubmit
-                  onSubmitEditing={Keyboard.dismiss}
-                  autoFocus
-                  style={[styles.input, isAtMaxLength && styles.inputMaxed]}
-                  textAlignVertical="top"
-                  multiline
-                />
-              </View>
-
-              <View style={styles.actions}>
-                <Pressable
-                  onPress={handleUpload}
-                  disabled={uploading}
-                  style={({ pressed }) => [
-                    styles.createAction,
-                    pressed && { opacity: 0.7 },
-                    uploading && { opacity: 0.5 },
-                    !hasMessage && { opacity: 0.45 },
-                  ]}
-                >
-                  <Text style={styles.createText}>CREATE&gt;</Text>
-                </Pressable>
-              </View>
-            </>
-          ) : null}
-        </Animated.View>
+            <View style={styles.actions}>
+              <Pressable
+                onPress={handleUpload}
+                disabled={uploading}
+                style={({ pressed }) => [
+                  styles.createAction,
+                  pressed && { opacity: 0.7 },
+                  uploading && { opacity: 0.5 },
+                  !hasMessage && { opacity: 0.45 },
+                ]}
+              >
+                <Text style={styles.createText}>CREATE&gt;</Text>
+              </Pressable>
+            </View>
+          </Animated.ScrollView>
+        ) : (
+          <Animated.View
+            style={[
+              styles.content,
+              keyboardVisible && styles.contentKeyboard,
+              { paddingBottom: contentBottomPadding },
+              { transform: [{ translateY: keyboardOffset }] },
+            ]}
+          >
+            {renderCamera()}
+          </Animated.View>
+        )}
       </View>
     </TouchableWithoutFeedback>
   );
@@ -288,6 +326,18 @@ function createStyles(colors) {
     contentKeyboard: {
       justifyContent: 'flex-start',
       paddingBottom: spacing.lg,
+      paddingTop: spacing.lg,
+    },
+    scrollFrame: {
+      flex: 1,
+      padding: spacing.sm,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      gap: spacing.lg,
+      justifyContent: 'flex-start',
+    },
+    scrollContentKeyboard: {
       paddingTop: spacing.lg,
     },
     stage: {
@@ -378,16 +428,37 @@ function createStyles(colors) {
       letterSpacing: 0.6,
       fontFamily: 'SpaceMono',
     },
-    subtitle: {
-      fontSize: 16,
-      fontWeight: '800',
-      color: colors.text,
-      marginTop: spacing.sm,
-      paddingHorizontal: spacing.md,
-    },
     noteBlock: {
       width: '100%',
-      gap: 6,
+    },
+    geoLockToggle: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.md,
+      backgroundColor: colors.bg,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm + 2,
+    },
+    geoLockText: {
+      flex: 1,
+      gap: 2,
+    },
+    geoLockLabel: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: colors.text,
+      textTransform: 'uppercase',
+      letterSpacing: 0.45,
+    },
+    geoLockHint: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
+      lineHeight: 15,
     },
     input: {
       width: '100%',

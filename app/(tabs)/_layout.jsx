@@ -58,6 +58,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="active_challenges"
+        options={{
+          title: 'Quests',
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "flame" : "flame.fill"} color={color} />,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="vote"
         options={{
           title: 'Vote',

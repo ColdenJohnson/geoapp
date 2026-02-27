@@ -156,8 +156,11 @@ export default function HomeScreen() {
 
   useEffect(() => {
     (async () => {
-      const allPins = await fetchAllLocationPins();
-      setPins(allPins);
+      const [geoLockedPins, nonGeoLockedPins] = await Promise.all([
+        fetchAllLocationPins({ isGeoLocked: true }),
+        fetchAllLocationPins({ isGeoLocked: false }),
+      ]);
+      setPins([...(Array.isArray(geoLockedPins) ? geoLockedPins : []), ...(Array.isArray(nonGeoLockedPins) ? nonGeoLockedPins : [])]);
     })();
   }, []);
 
@@ -289,16 +292,22 @@ export default function HomeScreen() {
       const { setMessageResolver } = require('../../lib/promiseStore');
       setMessageResolver(resolve);
     });
+    const geoLockPromise = new Promise((resolve) => {
+      const { setGeoLockResolver } = require('../../lib/promiseStore');
+      setGeoLockResolver(resolve);
+    });
 
     router.push('/enter_message');
 
-    Promise.all([uploadPromise, messagePromise])
-      .then(async ([fileUrl, message]) => {
+    Promise.all([uploadPromise, messagePromise, geoLockPromise])
+      .then(async ([fileUrl, message, isGeoLocked]) => {
         if (!fileUrl) {
           return;
         }
         showToast('Uploading...', 60000);
-        const created = await newChallenge(location, fileUrl, message);
+        const created = await newChallenge(location, fileUrl, message, {
+          isGeoLocked: typeof isGeoLocked === 'boolean' ? isGeoLocked : true,
+        });
         if (!created) {
           throw new Error('newChallenge returned falsey');
         }
@@ -324,17 +333,24 @@ export default function HomeScreen() {
   }
 
   async function viewPhotoChallenge(pin) {
-    if (!userCoords || !pin?.location) {
+    if (!pin?.location) {
       showToast('Location unavailable. Unable to open this challenge.');
       return;
     }
-    const distanceToPin = getDistance(userCoords, {
-      latitude: pin.location.latitude,
-      longitude: pin.location.longitude,
-    });
-    if (!Number.isFinite(distanceToPin) || distanceToPin > NEAR_THRESHOLD_METERS) {
-      showToast(`Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`);
-      return;
+    const isGeoLocked = pin?.isGeoLocked !== false;
+    if (isGeoLocked) {
+      if (!userCoords) {
+        showToast('Location unavailable. Unable to open this challenge.');
+        return;
+      }
+      const distanceToPin = getDistance(userCoords, {
+        latitude: pin.location.latitude,
+        longitude: pin.location.longitude,
+      });
+      if (!Number.isFinite(distanceToPin) || distanceToPin > NEAR_THRESHOLD_METERS) {
+        showToast(`Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`);
+        return;
+      }
     }
     router.push({
       pathname: '/view_photochallenge',
@@ -403,6 +419,7 @@ export default function HomeScreen() {
     if (!pin?.location) return null;
     const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
     const isFriendPin = isFriendOrOwnPin(pin);
+    const isGeoLocked = pin?.isGeoLocked !== false;
     return (
       <Marker
         key={pin._id}
@@ -412,7 +429,7 @@ export default function HomeScreen() {
         }}
         title={"Photo Challenge"}
         description={pin.message || 'Geo Pin'}
-        pinColor={isFriendPin ? colors.primary_darkened : colors.primary}
+        pinColor={isGeoLocked ? (isFriendPin ? colors.primary_darkened : colors.primary) : '#2563EB'}
       >
         <Callout
           tooltip
