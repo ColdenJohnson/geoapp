@@ -18,7 +18,7 @@ const DIVIDER_CLAMP_PADDING = 2;
 const DRAG_RESPONSE_MULTIPLIER = 1.3;
 const COMMIT_EXPAND_DURATION_MS = 100;
 const COMMIT_HOLD_DURATION_MS = 350;
-const META_REVEAL_DISTANCE = 60;
+const PHOTO_SIDE_CROP_PX = 25;
 const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
 function clamp(value, min, max) {
@@ -194,17 +194,9 @@ export default function DuelDeck({
     return { opacity };
   });
 
-  const leftMetaStyle = useAnimatedStyle(() => {
-    const dragReveal = clamp(dividerX.value / META_REVEAL_DISTANCE, 0, 1);
-    const winnerReveal = winnerIndex.value === 0 ? dismissProgress.value : 0;
-    return { opacity: Math.max(dragReveal, winnerReveal) };
-  });
+  const leftMetaStyle = useAnimatedStyle(() => ({ opacity: 1 }));
 
-  const rightMetaStyle = useAnimatedStyle(() => {
-    const dragReveal = clamp((-dividerX.value) / META_REVEAL_DISTANCE, 0, 1);
-    const winnerReveal = winnerIndex.value === 1 ? dismissProgress.value : 0;
-    return { opacity: Math.max(dragReveal, winnerReveal) };
-  });
+  const rightMetaStyle = useAnimatedStyle(() => ({ opacity: 1 }));
 
   const leftWinnerStyle = useAnimatedStyle(() => ({
     opacity: winnerIndex.value === 0 ? dismissProgress.value : 0,
@@ -223,12 +215,17 @@ export default function DuelDeck({
       <View style={[styles.deckArea, deckStyle]} onLayout={handleDeckLayout}>
         <Animated.View style={[styles.pane, styles.leftPane, leftPaneStyle]}>
           <Animated.View style={[styles.fullFrame, styles.leftFrame, fullFrameStyle, cardStyle]}>
-            <Image
-              source={{ uri: photos[0]?.file_url }}
-              style={[styles.photo, imageStyle]}
-              resizeMode="cover"
-              cachePolicy="memory-disk"
-            />
+            <View style={styles.photoViewport}>
+              <View style={styles.photoCropFrame}>
+                <Image
+                  source={{ uri: photos[0]?.file_url }}
+                  style={[styles.photo, imageStyle]}
+                  contentFit="contain"
+                  contentPosition="center"
+                  cachePolicy="memory-disk"
+                />
+              </View>
+            </View>
             <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
             <Animated.View style={[styles.metaSlot, leftMetaStyle]} pointerEvents="none">
               {typeof renderMeta === 'function' ? renderMeta(photos[0], 0) : null}
@@ -244,12 +241,17 @@ export default function DuelDeck({
 
         <Animated.View style={[styles.pane, styles.rightPane, rightPaneStyle]}>
           <Animated.View style={[styles.fullFrame, styles.rightFrame, fullFrameStyle, cardStyle]}>
-            <Image
-              source={{ uri: photos[1]?.file_url }}
-              style={[styles.photo, imageStyle]}
-              resizeMode="cover"
-              cachePolicy="memory-disk"
-            />
+            <View style={styles.photoViewport}>
+              <View style={styles.photoCropFrame}>
+                <Image
+                  source={{ uri: photos[1]?.file_url }}
+                  style={[styles.photo, imageStyle]}
+                  contentFit="contain"
+                  contentPosition="center"
+                  cachePolicy="memory-disk"
+                />
+              </View>
+            </View>
             <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
             <Animated.View style={[styles.metaSlot, rightMetaStyle]} pointerEvents="none">
               {typeof renderMeta === 'function' ? renderMeta(photos[1], 1) : null}
@@ -300,9 +302,23 @@ function createStyles(colors) {
       position: 'absolute',
       top: 0,
       bottom: 0,
+      backgroundColor: '#000000',
     },
     leftFrame: { left: 0 },
     rightFrame: { right: 0 },
+    photoViewport: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#000000',
+      overflow: 'hidden',
+    },
+    photoCropFrame: {
+      ...StyleSheet.absoluteFillObject,
+      // Increase this value to intentionally crop more from the left/right sides.
+      left: -PHOTO_SIDE_CROP_PX,
+      right: -PHOTO_SIDE_CROP_PX,
+    },
     photo: {
       width: '100%',
       height: '100%',

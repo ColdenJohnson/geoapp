@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { voteGlobalDuel, isTokenFresh } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import DuelDeck from '@/components/vote/DuelDeck';
+import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import {
   advanceGlobalDuelQueue,
   DEFAULT_PRELOAD_COUNT,
@@ -42,6 +44,9 @@ export default function GlobalVoteScreen() {
   const renderCounterRef = useRef(0);
   const isDevEnv = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
   const isScreenFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
+  const bottomTabOverflow = useBottomTabOverflow();
+  const voteBottomPadding = Math.max(0, insets.bottom + bottomTabOverflow);
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -320,34 +325,11 @@ export default function GlobalVoteScreen() {
           <View style={styles.centered}>
             <Text style={styles.emptyText}>Need at least two photos to start global voting.</Text>
           </View>
+        // Keep this DuelDeck unmount guard in place; removing it causes jitter in other parts of the app.
+        // Do not remove this code.
         ) : !isScreenFocused ? null : (
           <View style={styles.voteStage}>
-            <DuelDeck
-              pair={photos}
-              renderId={renderId}
-              voteToken={duel?.voteToken}
-              disabled={loading || submitting}
-              onVote={chooseByIndex}
-              deckStyle={styles.deckArea}
-              renderMeta={(photo) => (
-                <View style={styles.meta}>
-                  <Text style={styles.metaLabel}>{isPinRandom ? 'Local' : 'Global'} Elo</Text>
-                  <Text style={styles.metaHandle}>
-                    {Number.isFinite(isPinRandom ? photo?.local_elo : photo?.global_elo)
-                      ? isPinRandom
-                        ? photo.local_elo
-                        : photo.global_elo
-                      : 1000}
-                  </Text>
-                  <Text style={styles.metaDetail}>
-                    W {isPinRandom ? photo?.local_wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
-                    {isPinRandom ? photo?.local_losses ?? 0 : photo?.global_losses ?? 0}
-                  </Text>
-                </View>
-              )}
-            />
-
-            <View style={styles.topOverlay} pointerEvents="none">
+            <View style={styles.topChrome} pointerEvents="none">
               <Text style={styles.kicker}>Voting Session</Text>
               <Text style={styles.sessionTitle}>{voteSessionTitle}</Text>
               {Number.isFinite(remainingVotes) ? (
@@ -355,8 +337,34 @@ export default function GlobalVoteScreen() {
               ) : null}
             </View>
 
-            <View style={styles.bottomOverlay} pointerEvents="none">
-              <Text style={styles.helperText}>Slide to reveal the winner</Text>
+            <View style={[styles.deckStage, { paddingBottom: voteBottomPadding }]}>
+              <DuelDeck
+                pair={photos}
+                renderId={renderId}
+                voteToken={duel?.voteToken}
+                disabled={loading || submitting}
+                onVote={chooseByIndex}
+                deckStyle={styles.deckArea}
+                renderMeta={(photo) => (
+                  <View style={styles.meta}>
+                    <Text style={styles.metaLabel}>{isPinRandom ? 'Local' : 'Global'} Elo</Text>
+                    <Text style={styles.metaHandle}>
+                      {Number.isFinite(isPinRandom ? photo?.local_elo : photo?.global_elo)
+                        ? isPinRandom
+                          ? photo.local_elo
+                          : photo.global_elo
+                        : 1000}
+                    </Text>
+                    <Text style={styles.metaDetail}>
+                      W {isPinRandom ? photo?.local_wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
+                      {isPinRandom ? photo?.local_losses ?? 0 : photo?.global_losses ?? 0}
+                    </Text>
+                  </View>
+                )}
+              />
+              <View style={styles.helperRow} pointerEvents="none">
+                <Text style={styles.helperText}>Slide to reveal the winner</Text>
+              </View>
             </View>
           </View>
         )}
@@ -373,6 +381,17 @@ function createStyles(colors) {
       backgroundColor: '#000000',
     },
     voteStage: { flex: 1, backgroundColor: '#000000' },
+    topChrome: {
+      paddingTop: 8,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+      backgroundColor: '#000000',
+    },
+    deckStage: {
+      flex: 1,
+      width: '100%',
+      backgroundColor: '#000000',
+    },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     emptyText: {
       color: 'rgba(255, 255, 255, 0.84)',
@@ -413,14 +432,6 @@ function createStyles(colors) {
       fontWeight: '700',
       letterSpacing: 0.3,
     },
-    topOverlay: {
-      position: 'absolute',
-      top: 26,
-      left: 14,
-      right: 14,
-      alignItems: 'center',
-      zIndex: 20,
-    },
     kicker: {
       fontSize: 10,
       fontWeight: '900',
@@ -445,11 +456,11 @@ function createStyles(colors) {
       fontWeight: '800',
       letterSpacing: 1.4,
     },
-    bottomOverlay: {
+    helperRow: {
       position: 'absolute',
-      bottom: 30,
       left: 0,
       right: 0,
+      bottom: 14,
       alignItems: 'center',
       zIndex: 20,
     },
