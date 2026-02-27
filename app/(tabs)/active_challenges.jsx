@@ -68,6 +68,7 @@ export default function ActiveChallengesScreen() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [uploadingPinId, setUploadingPinId] = useState(null);
   const cardPan = useRef(new Animated.ValueXY()).current;
+  const swipeAnimatingPinId = useRef(null);
 
   const cardWidth = Math.min(windowWidth - 36, 330);
   const cardRotate = cardPan.x.interpolate({
@@ -175,6 +176,7 @@ export default function ActiveChallengesScreen() {
   const commitSwipe = useCallback((direction) => {
     if (swipeLocked || challenges.length === 0) return;
     const topChallenge = challenges[0];
+    swipeAnimatingPinId.current = topChallenge.pinId;
     const exitX = direction === 'accept' ? cardWidth + 180 : -cardWidth - 180;
     setIsAnimating(true);
     Animated.timing(cardPan, {
@@ -182,12 +184,15 @@ export default function ActiveChallengesScreen() {
       duration: 200,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      cardPan.setValue({ x: 0, y: 0 });
       cycleTopChallenge();
-      setIsAnimating(false);
-      if (finished && direction === 'accept') {
-        beginUploadForChallenge(topChallenge);
-      }
+      requestAnimationFrame(() => {
+        cardPan.setValue({ x: 0, y: 0 });
+        swipeAnimatingPinId.current = null;
+        setIsAnimating(false);
+        if (finished && direction === 'accept') {
+          beginUploadForChallenge(topChallenge);
+        }
+      });
     });
   }, [beginUploadForChallenge, cardPan, cardWidth, challenges, cycleTopChallenge, swipeLocked]);
 
@@ -227,9 +232,11 @@ export default function ActiveChallengesScreen() {
   }), [cardPan, challenges.length, commitSwipe, swipeLocked]);
 
   const stack = challenges.slice(0, STACK_DEPTH);
+  const panTargetPinId = swipeAnimatingPinId.current ?? stack[0]?.pinId ?? null;
 
   const renderChallengeCard = useCallback((challenge, stackIndex) => {
     const isTop = stackIndex === 0;
+    const tracksPan = challenge.pinId === panTargetPinId;
     const stackScale = 1 - stackIndex * 0.05;
     const stackOffsetY = stackIndex * 12;
     const staticTransform = [
@@ -237,7 +244,7 @@ export default function ActiveChallengesScreen() {
       { translateY: stackOffsetY },
       { rotate: `${stackIndex * 1.5}deg` },
     ];
-    const topTransforms = isTop
+    const topTransforms = tracksPan
       ? [{ translateX: cardPan.x }, { translateY: cardPan.y }, { rotate: cardRotate }]
       : [];
 
@@ -255,7 +262,7 @@ export default function ActiveChallengesScreen() {
         ]}
         {...(isTop && !swipeLocked ? panResponder.panHandlers : {})}
       >
-        {isTop ? (
+        {isTop && tracksPan ? (
           <>
             <Animated.View style={[styles.selectBadge, { opacity: selectOpacity }]}>
               <Text style={styles.selectBadgeText}>SELECT</Text>
@@ -282,9 +289,6 @@ export default function ActiveChallengesScreen() {
 
           <View style={styles.dimLayer} pointerEvents="none" />
           <View style={styles.topMeta}>
-            <View style={styles.promptChip}>
-              <Text style={styles.promptChipText}>Active Quest</Text>
-            </View>
             <View style={styles.handleChip}>
               <Text style={styles.handleChipText}>{challenge.creatorHandle}</Text>
             </View>
@@ -297,12 +301,6 @@ export default function ActiveChallengesScreen() {
           </View>
 
           <View style={styles.bottomMeta}>
-            <View style={styles.metaRow}>
-              <MaterialIcons name="person" size={13} color="#FFFFFF" />
-              <Text style={styles.creatorNameText} numberOfLines={1}>
-                {challenge.creatorName}
-              </Text>
-            </View>
             <View style={styles.metaRow}>
               <MaterialIcons name="photo-library" size={13} color="#FFFFFF" />
               <Text style={styles.uploadCountText}>
@@ -318,6 +316,7 @@ export default function ActiveChallengesScreen() {
     cardPan.y,
     cardRotate,
     cardWidth,
+    panTargetPinId,
     panResponder.panHandlers,
     selectOpacity,
     skipOpacity,
@@ -330,7 +329,7 @@ export default function ActiveChallengesScreen() {
       <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Active Quests</Text>
+            <Text style={styles.headerTitle}>Quests</Text>
             <Text style={styles.headerSubtitle}>
               Swipe right to accept, left to send it back.
             </Text>
@@ -434,7 +433,7 @@ function createStyles(colors) {
       fontSize: 30,
       lineHeight: 34,
       fontWeight: '900',
-      color: colors.text,
+      color: colors.primary,
       letterSpacing: -0.3,
     },
     headerSubtitle: {
@@ -503,18 +502,18 @@ function createStyles(colors) {
       alignItems: 'center',
       gap: spacing.xs,
     },
-    promptChip: {
+    creatorChip: {
       borderRadius: radii.pill,
       backgroundColor: 'rgba(255,255,255,0.92)',
       paddingHorizontal: 10,
       paddingVertical: 6,
+      maxWidth: 170,
     },
-    promptChipText: {
+    creatorChipText: {
       color: colors.primary,
-      fontSize: 9,
-      textTransform: 'uppercase',
-      letterSpacing: 1.2,
-      fontWeight: '900',
+      fontSize: 10,
+      letterSpacing: 0.4,
+      fontWeight: '800',
     },
     handleChip: {
       borderRadius: radii.pill,
@@ -526,7 +525,7 @@ function createStyles(colors) {
       maxWidth: 160,
     },
     handleChipText: {
-      color: '#FFFFFF',
+      color: colors.primary,
       fontSize: 10,
       textTransform: 'uppercase',
       letterSpacing: 1.1,
@@ -551,7 +550,7 @@ function createStyles(colors) {
       bottom: 20,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-end',
       gap: spacing.sm,
     },
     metaRow: {
@@ -565,12 +564,6 @@ function createStyles(colors) {
       paddingVertical: 6,
       borderRadius: radii.pill,
       maxWidth: 175,
-    },
-    creatorNameText: {
-      color: '#FFFFFF',
-      fontWeight: '800',
-      fontSize: 12,
-      flexShrink: 1,
     },
     uploadCountText: {
       color: '#FFFFFF',
