@@ -15,6 +15,8 @@ const MAPPING = {
   'chevron.right': 'chevron-right',
   'trophy': 'emoji-events',
   'trophy.fill': 'emoji-events',
+  'flame': 'local-fire-department',
+  'flame.fill': 'local-fire-department',
   'person.2': 'people',
   'person.2.fill': 'people',
 } as Partial<
