@@ -1,4 +1,4 @@
-import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 
@@ -173,114 +173,120 @@ export default function FriendsTabScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing || friendsLoading} onRefresh={onRefresh} />}
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Text style={styles.pageTitle}>Friends</Text>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          refreshControl={<RefreshControl refreshing={refreshing || friendsLoading} onRefresh={onRefresh} />}
+        >
+          <Text style={styles.pageTitle}>Friends</Text>
 
-        <View style={[formStyles.card, styles.friendsCard]}>
-          <View style={styles.summaryRow}>
-            <TouchableOpacity onPress={() => router.push('/friends')}>
-              <Text style={styles.sectionTitle}>Friends</Text>
-            </TouchableOpacity>
-            <View style={styles.summaryRight}>
-              <Text style={styles.summaryCount}>{friends.length}</Text>
+          <View style={[formStyles.card, styles.friendsCard]}>
+            <View style={styles.summaryRow}>
+              <TouchableOpacity onPress={() => router.push('/friends')}>
+                <Text style={styles.sectionTitle}>Friends</Text>
+              </TouchableOpacity>
+              <View style={styles.summaryRight}>
+                <Text style={styles.summaryCount}>{friends.length}</Text>
+              </View>
             </View>
-          </View>
-          <TextInput
-            style={[formStyles.input, styles.searchInput]}
-            placeholder="Search by handle"
-            value={friendSearchInput}
-            onChangeText={setFriendSearchInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            onSubmitEditing={runFriendSearchImmediate}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.primary}
-            cursorColor={colors.text}
-          />
-          {searching ? (
-            <View style={styles.centerRow}>
-              <ActivityIndicator size="small" color={colors.text} />
-            </View>
-          ) : searchResults.length ? (
-            searchResults.map((result) => (
-              <View key={`search-${result.uid}`} style={styles.friendRow}>
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{result.display_name || result.handle || 'Unnamed user'}</Text>
-                  {result.handle ? <Text style={styles.friendMeta}>@{result.handle}</Text> : null}
+            <TextInput
+              style={[formStyles.input, styles.searchInput]}
+              placeholder="Search by handle"
+              value={friendSearchInput}
+              onChangeText={setFriendSearchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={runFriendSearchImmediate}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.primary}
+              cursorColor={colors.text}
+            />
+            {searching ? (
+              <View style={styles.centerRow}>
+                <ActivityIndicator size="small" color={colors.text} />
+              </View>
+            ) : searchResults.length ? (
+              searchResults.map((result) => (
+                <View key={`search-${result.uid}`} style={styles.friendRow}>
+                  <View style={styles.friendInfo}>
+                    <Text style={styles.friendName}>{result.display_name || result.handle || 'Unnamed user'}</Text>
+                    {result.handle ? <Text style={styles.friendMeta}>@{result.handle}</Text> : null}
+                  </View>
+                  <CTAButton
+                    title="Add"
+                    onPress={() => sendFriendRequest(result.handle)}
+                    style={styles.smallButton}
+                    textStyle={styles.smallButtonText}
+                    disabled={friendActionBusy}
+                  />
                 </View>
+              ))
+            ) : searchMessage ? (
+              <Text style={styles.emptyText}>{searchMessage}</Text>
+            ) : null}
+
+            <Text style={styles.subSectionTitle}>Recently Added</Text>
+            {renderMiniList(recentFriends, 'No friends yet.')}
+          </View>
+
+          <View style={[formStyles.card, styles.requestsCard]}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.sectionTitle}>Friend Requests</Text>
+              <View style={styles.summaryRight}>
+                <Text style={styles.summaryCount}>{friendRequests.incoming.length + friendRequests.outgoing.length}</Text>
+              </View>
+            </View>
+            <Text style={styles.subSectionTitle}>Incoming</Text>
+            {renderMiniList(recentIncoming, 'No incoming requests.', (request) => (
+              <View style={styles.miniActionRow}>
                 <CTAButton
-                  title="Add"
-                  onPress={() => sendFriendRequest(result.handle)}
+                  title="Accept"
+                  onPress={() => acceptRequest(request.uid)}
+                  style={styles.smallButton}
+                  textStyle={styles.smallButtonText}
+                  disabled={friendActionBusy}
+                />
+                <SecondaryButton
+                  title="Delete"
+                  onPress={() => rejectRequest(request.uid)}
                   style={styles.smallButton}
                   textStyle={styles.smallButtonText}
                   disabled={friendActionBusy}
                 />
               </View>
-            ))
-          ) : searchMessage ? (
-            <Text style={styles.emptyText}>{searchMessage}</Text>
-          ) : null}
+            ))}
 
-          <Text style={styles.subSectionTitle}>Recently Added</Text>
-          {renderMiniList(recentFriends, 'No friends yet.')}
-        </View>
-
-        <View style={[formStyles.card, styles.requestsCard]}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.sectionTitle}>Friend Requests</Text>
-            <View style={styles.summaryRight}>
-              <Text style={styles.summaryCount}>{friendRequests.incoming.length + friendRequests.outgoing.length}</Text>
-            </View>
+            <Text style={styles.subSectionTitle}>Outgoing</Text>
+            {renderMiniList(recentOutgoing, 'No outgoing requests.', (request) => (
+              <View style={styles.miniActionRow}>
+                <Text style={styles.pendingText}>Pending</Text>
+                <SecondaryButton
+                  title="Cancel"
+                  onPress={() => cancelRequest(request.uid)}
+                  style={styles.smallButton}
+                  textStyle={styles.smallButtonText}
+                  disabled={friendActionBusy}
+                />
+              </View>
+            ))}
           </View>
-          <Text style={styles.subSectionTitle}>Incoming</Text>
-          {renderMiniList(recentIncoming, 'No incoming requests.', (request) => (
-            <View style={styles.miniActionRow}>
-              <CTAButton
-                title="Accept"
-                onPress={() => acceptRequest(request.uid)}
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
-                disabled={friendActionBusy}
-              />
-              <SecondaryButton
-                title="Delete"
-                onPress={() => rejectRequest(request.uid)}
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
-                disabled={friendActionBusy}
-              />
-            </View>
-          ))}
 
-          <Text style={styles.subSectionTitle}>Outgoing</Text>
-          {renderMiniList(recentOutgoing, 'No outgoing requests.', (request) => (
-            <View style={styles.miniActionRow}>
-              <Text style={styles.pendingText}>Pending</Text>
-              <SecondaryButton
-                title="Cancel"
-                onPress={() => cancelRequest(request.uid)}
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
-                disabled={friendActionBusy}
-              />
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.listFriendsButtonWrap}>
-          <CTAButton
-            title="List Friends"
-            onPress={() => router.push('/friends')}
-            variant="primary"
-          />
-        </View>
-      </ScrollView>
+          <View style={styles.listFriendsButtonWrap}>
+            <CTAButton
+              title="List Friends"
+              onPress={() => router.push('/friends')}
+              variant="primary"
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -290,6 +296,9 @@ function createStyles(colors) {
     container: {
       flex: 1,
       backgroundColor: colors.surface,
+    },
+    keyboardWrap: {
+      flex: 1,
     },
     content: {
       flexGrow: 1,
