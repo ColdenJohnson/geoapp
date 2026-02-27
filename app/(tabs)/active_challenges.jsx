@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   PanResponder,
   Pressable,
   SafeAreaView,
@@ -26,6 +27,8 @@ import { spacing, radii } from '@/theme/tokens';
 const CARD_ASPECT_RATIO = 9 / 16;
 const SWIPE_THRESHOLD = 110;
 const STACK_DEPTH = 3;
+const SWIPE_ANIMATION_TIMEOUT_MS = 700;
+const SWIPE_DEBUG = typeof __DEV__ !== 'undefined' && __DEV__;
 
 function normalizeChallengePin(pin, index) {
   const pinId = pin?._id ? String(pin._id) : `challenge-${index}`;
@@ -57,7 +60,7 @@ export default function ActiveChallengesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { invalidateStats } = useContext(AuthContext);
@@ -67,10 +70,65 @@ export default function ActiveChallengesScreen() {
   const [loading, setLoading] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [uploadingPinId, setUploadingPinId] = useState(null);
-  const cardPan = useRef(new Animated.ValueXY()).current;
-  const swipeAnimatingPinId = useRef(null);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+  const [swipeAnimatingPinId, setSwipeAnimatingPinId] = useState(null);
+  const [cardPan, setCardPan] = useState(() => new Animated.ValueXY());
+  const stackTransition = useRef(new Animated.Value(1)).current;
+  const swipeCounterRef = useRef(0);
+  const swipeWatchdogRef = useRef(null);
+  const activeSwipeTokenRef = useRef(0);
 
-  const cardWidth = Math.min(windowWidth - 36, 330);
+  const debugLog = useCallback((event, payload = null) => {
+    if (!SWIPE_DEBUG) return;
+    if (payload) {
+      console.log(`[active_challenges] ${event}`, payload);
+      return;
+    }
+    console.log(`[active_challenges] ${event}`);
+  }, []);
+
+  const getPanSnapshot = useCallback(() => {
+    const x = typeof cardPan?.x?.__getValue === 'function' ? Number(cardPan.x.__getValue()) : null;
+    const y = typeof cardPan?.y?.__getValue === 'function' ? Number(cardPan.y.__getValue()) : null;
+    return { x, y };
+  }, [cardPan]);
+
+  const clearSwipeWatchdog = useCallback(() => {
+    if (swipeWatchdogRef.current) {
+      clearTimeout(swipeWatchdogRef.current);
+      swipeWatchdogRef.current = null;
+    }
+  }, []);
+
+  const resetCardPan = useCallback((reason, payload = null) => {
+    cardPan.stopAnimation((value) => {
+      cardPan.setValue({ x: 0, y: 0 });
+      debugLog('pan:reset', {
+        reason,
+        before: value,
+        ...(payload || {}),
+      });
+    });
+  }, [cardPan, debugLog]);
+
+  useEffect(() => () => {
+    clearSwipeWatchdog();
+  }, [clearSwipeWatchdog]);
+
+  useEffect(() => {
+    setCardPan(new Animated.ValueXY());
+  }, []);
+
+  const stageWidth = stageSize.width || Math.max(windowWidth - spacing.md * 2, 0);
+  const stageHeight = stageSize.height || Math.max(windowHeight - 260, 0);
+  const cardWidth = Math.max(
+    180,
+    Math.min(
+      stageWidth * 0.9,
+      stageHeight * CARD_ASPECT_RATIO * 0.92,
+      340,
+    ),
+  );
   const cardRotate = cardPan.x.interpolate({
     inputRange: [-cardWidth, 0, cardWidth],
     outputRange: ['-12deg', '0deg', '12deg'],
@@ -176,25 +234,106 @@ export default function ActiveChallengesScreen() {
   const commitSwipe = useCallback((direction) => {
     if (swipeLocked || challenges.length === 0) return;
     const topChallenge = challenges[0];
-    swipeAnimatingPinId.current = topChallenge.pinId;
+    const swipeId = ++swipeCounterRef.current;
+    const swipeToken = Date.now() + swipeId;
+    activeSwipeTokenRef.current = swipeToken;
+    debugLog('swipe:start', {
+      swipeId,
+      direction,
+      topPinId: topChallenge?.pinId || null,
+      challengesLength: challenges.length,
+      pan: getPanSnapshot(),
+      swipeLocked,
+    });
+    clearSwipeWatchdog();
+    swipeWatchdogRef.current = setTimeout(() => {
+      if (activeSwipeTokenRef.current !== swipeToken) {
+        return;
+      }
+      debugLog('swipe:watchdog-timeout', {
+        swipeId,
+        direction,
+        topPinId: topChallenge?.pinId || null,
+        pan: getPanSnapshot(),
+      });
+      activeSwipeTokenRef.current = 0;
+      resetCardPan('watchdog-timeout', { swipeId });
+      setSwipeAnimatingPinId(null);
+      setIsAnimating(false);
+    }, SWIPE_ANIMATION_TIMEOUT_MS);
+    setSwipeAnimatingPinId(topChallenge.pinId);
     const exitX = direction === 'accept' ? cardWidth + 180 : -cardWidth - 180;
     setIsAnimating(true);
     Animated.timing(cardPan, {
       toValue: { x: exitX, y: 0 },
       duration: 200,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start(({ finished }) => {
-      cycleTopChallenge();
-      requestAnimationFrame(() => {
-        cardPan.setValue({ x: 0, y: 0 });
-        swipeAnimatingPinId.current = null;
+      if (activeSwipeTokenRef.current !== swipeToken) {
+        debugLog('swipe:ignored-stale-callback', { swipeId, finished });
+        return;
+      }
+      activeSwipeTokenRef.current = 0;
+      clearSwipeWatchdog();
+      debugLog('swipe:timing-complete', {
+        swipeId,
+        finished,
+        direction,
+        topPinId: topChallenge?.pinId || null,
+        pan: getPanSnapshot(),
+      });
+      if (!finished) {
+        resetCardPan('timing-finished-false', { swipeId });
+        setSwipeAnimatingPinId(null);
         setIsAnimating(false);
-        if (finished && direction === 'accept') {
+        debugLog('swipe:aborted-reset', { swipeId, pan: getPanSnapshot() });
+        return;
+      }
+      cycleTopChallenge();
+      debugLog('swipe:cycled-deck', {
+        swipeId,
+        nextTopPinId: challenges[1]?.pinId || challenges[0]?.pinId || null,
+      });
+      requestAnimationFrame(() => {
+        resetCardPan('post-cycle-reset', { swipeId });
+        setSwipeAnimatingPinId(null);
+        stackTransition.stopAnimation();
+        stackTransition.setValue(0);
+        Animated.timing(stackTransition, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }).start();
+        setIsAnimating(false);
+        debugLog('swipe:post-cycle-reset', {
+          swipeId,
+          pan: getPanSnapshot(),
+        });
+        requestAnimationFrame(() => {
+          debugLog('swipe:post-cycle-next-frame', {
+            swipeId,
+            pan: getPanSnapshot(),
+          });
+        });
+        if (direction === 'accept') {
           beginUploadForChallenge(topChallenge);
         }
       });
     });
-  }, [beginUploadForChallenge, cardPan, cardWidth, challenges, cycleTopChallenge, swipeLocked]);
+  }, [
+    beginUploadForChallenge,
+    cardPan,
+    cardWidth,
+    challenges,
+    clearSwipeWatchdog,
+    cycleTopChallenge,
+    stackTransition,
+    debugLog,
+    getPanSnapshot,
+    resetCardPan,
+    swipeLocked,
+  ]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => !swipeLocked && challenges.length > 0,
@@ -206,43 +345,102 @@ export default function ActiveChallengesScreen() {
       useNativeDriver: false,
     }),
     onPanResponderRelease: (_, gestureState) => {
+      debugLog('gesture:release', {
+        dx: gestureState.dx,
+        dy: gestureState.dy,
+        topPinId: challenges[0]?.pinId || null,
+        swipeLocked,
+      });
       if (gestureState.dx > SWIPE_THRESHOLD) {
+        debugLog('gesture:decision', { direction: 'accept', reason: 'dx-threshold' });
         commitSwipe('accept');
         return;
       }
       if (gestureState.dx < -SWIPE_THRESHOLD) {
+        debugLog('gesture:decision', { direction: 'skip', reason: 'dx-threshold' });
         commitSwipe('skip');
         return;
       }
+      debugLog('gesture:decision', { direction: 'reset', reason: 'below-threshold' });
       Animated.spring(cardPan, {
         toValue: { x: 0, y: 0 },
-        useNativeDriver: true,
+        useNativeDriver: false,
         damping: 17,
         stiffness: 170,
       }).start();
     },
     onPanResponderTerminate: () => {
+      debugLog('gesture:terminate', {
+        topPinId: challenges[0]?.pinId || null,
+        pan: getPanSnapshot(),
+      });
       Animated.spring(cardPan, {
         toValue: { x: 0, y: 0 },
-        useNativeDriver: true,
+        useNativeDriver: false,
         damping: 17,
         stiffness: 170,
       }).start();
     },
-  }), [cardPan, challenges.length, commitSwipe, swipeLocked]);
+  }), [cardPan, challenges, commitSwipe, debugLog, getPanSnapshot, swipeLocked]);
 
-  const stack = challenges.slice(0, STACK_DEPTH);
-  const panTargetPinId = swipeAnimatingPinId.current ?? stack[0]?.pinId ?? null;
+  const stack = useMemo(() => challenges.slice(0, STACK_DEPTH), [challenges]);
+  const stackPinIds = useMemo(() => stack.map((challenge) => challenge.pinId), [stack]);
+  const panTargetPinId = swipeAnimatingPinId ?? stack[0]?.pinId ?? null;
+
+  useEffect(() => {
+    debugLog('deck:state', {
+      stackPinIds,
+      panTargetPinId,
+      swipeAnimatingPinId,
+      isAnimating,
+      swipeLocked,
+      uploadingPinId,
+    });
+  }, [debugLog, isAnimating, panTargetPinId, stackPinIds, swipeAnimatingPinId, swipeLocked, uploadingPinId]);
+
+  useEffect(() => {
+    if (!swipeAnimatingPinId || isAnimating) return;
+    const animatingPinExistsInStack = stackPinIds.includes(swipeAnimatingPinId);
+    if (animatingPinExistsInStack) return;
+    debugLog('deck:stale-animating-pin-reset', {
+      swipeAnimatingPinId,
+      stackPinIds,
+      pan: getPanSnapshot(),
+    });
+    resetCardPan('stale-animating-pin', { stackPinIds, swipeAnimatingPinId });
+    setSwipeAnimatingPinId(null);
+    setIsAnimating(false);
+  }, [debugLog, getPanSnapshot, isAnimating, resetCardPan, stackPinIds, swipeAnimatingPinId]);
+  const handleStageLayout = useCallback((event) => {
+    const { width, height } = event.nativeEvent.layout;
+    setStageSize((prev) => {
+      if (prev.width === width && prev.height === height) {
+        return prev;
+      }
+      return { width, height };
+    });
+  }, []);
 
   const renderChallengeCard = useCallback((challenge, stackIndex) => {
     const isTop = stackIndex === 0;
-    const tracksPan = challenge.pinId === panTargetPinId;
-    const stackScale = 1 - stackIndex * 0.05;
-    const stackOffsetY = stackIndex * 12;
+    const tracksPan = challenge.pinId === panTargetPinId || (!isAnimating && isTop);
+    const fromStackIndex = Math.min(stackIndex + 1, STACK_DEPTH);
+    const stackScale = stackTransition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [1 - fromStackIndex * 0.05, 1 - stackIndex * 0.05],
+    });
+    const stackOffsetY = stackTransition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [fromStackIndex * 12, stackIndex * 12],
+    });
+    const stackRotate = stackTransition.interpolate({
+      inputRange: [0, 1],
+      outputRange: [`${fromStackIndex * 1.5}deg`, `${stackIndex * 1.5}deg`],
+    });
     const staticTransform = [
       { scale: stackScale },
       { translateY: stackOffsetY },
-      { rotate: `${stackIndex * 1.5}deg` },
+      { rotate: stackRotate },
     ];
     const topTransforms = tracksPan
       ? [{ translateX: cardPan.x }, { translateY: cardPan.y }, { rotate: cardRotate }]
@@ -316,11 +514,13 @@ export default function ActiveChallengesScreen() {
     cardPan.y,
     cardRotate,
     cardWidth,
+    stackTransition,
     panTargetPinId,
     panResponder.panHandlers,
     selectOpacity,
     skipOpacity,
     styles,
+    isAnimating,
     swipeLocked,
   ]);
 
@@ -343,7 +543,7 @@ export default function ActiveChallengesScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.stackStage}>
+        <View style={styles.stackStage} onLayout={handleStageLayout}>
           {loading ? (
             <View style={styles.centeredState}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -449,6 +649,7 @@ function createStyles(colors) {
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
+      overflow: 'visible',
     },
     centeredState: {
       alignItems: 'center',
