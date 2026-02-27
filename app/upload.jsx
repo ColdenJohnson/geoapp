@@ -15,6 +15,11 @@ import { uploadImage } from '@/lib/uploadHelpers';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
 import { spacing, radii } from '@/theme/tokens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const PHOTO_RATIO = '9:16';
+const PHOTO_ASPECT_RATIO = 9 / 16;
+const EXTRA_BOTTOM_BUFFER = spacing.md;
 
 export default function Upload({ initialUri = null }) {
   const [facing, setFacing] = useState ("back");
@@ -23,6 +28,7 @@ export default function Upload({ initialUri = null }) {
   const [uploading, setUploading] = useState(false);
   const ref = useRef(null);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { next, prompt } = useLocalSearchParams();
   const promptText = useMemo(() => {
     if (typeof prompt === 'string') return prompt.trim();
@@ -91,7 +97,7 @@ export default function Upload({ initialUri = null }) {
   const takePicture = async () => {
     const photo = await ref.current?.takePictureAsync({
       skipProcessing: true,
-      ratio: "4:3"
+      ratio: PHOTO_RATIO
     });
     setUri(photo?.uri);
     console.log('Photo captured:', photo?.uri);
@@ -140,7 +146,7 @@ export default function Upload({ initialUri = null }) {
           facing={facing}
           mute={false}
           responsiveOrientationWhenOrientationLocked
-          ratio="4:3"
+          ratio={PHOTO_RATIO}
         />
       </View>
       <View style={{ height: 12 }} />
@@ -197,7 +203,7 @@ export default function Upload({ initialUri = null }) {
 
 return (
   <View style={styles.container}>
-    <View style={styles.content}>
+    <View style={[styles.content, { paddingBottom: spacing.sm + insets.bottom + EXTRA_BOTTOM_BUFFER }]}>
       {uri ? renderPreview() : renderCamera()}
     </View>
   </View>
@@ -230,7 +236,7 @@ function createStyles(colors) {
     message: { color: colors.text, textAlign: "center" },
     cameraContainer: {
       width: "100%",
-      aspectRatio: 3 / 4,
+      aspectRatio: PHOTO_ASPECT_RATIO,
       overflow: "hidden",
       borderRadius: radii.lg,
       backgroundColor: "black",
@@ -291,7 +297,7 @@ function createStyles(colors) {
     card: {
       width: "100%",
       maxWidth: 520,
-      aspectRatio: 3 / 4,
+      aspectRatio: PHOTO_ASPECT_RATIO,
       borderRadius: radii.lg,
       overflow: "hidden",
       backgroundColor: colors.bg,

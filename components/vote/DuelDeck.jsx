@@ -318,6 +318,7 @@ function createStyles(colors) {
       // Increase this value to intentionally crop more from the left/right sides.
       left: -PHOTO_SIDE_CROP_PX,
       right: -PHOTO_SIDE_CROP_PX,
+      overflow: 'hidden',
     },
     photo: {
       width: '100%',

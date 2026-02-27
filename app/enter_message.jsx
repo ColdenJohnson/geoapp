@@ -15,6 +15,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CTAButton } from '@/components/ui/Buttons';
 
@@ -25,6 +26,9 @@ import { resolveMessage, resolveUpload } from '../lib/promiseStore';
 import { uploadImage } from '@/lib/uploadHelpers';
 
 const MAX_LEN = 50;
+const PHOTO_RATIO = '9:16';
+const PHOTO_ASPECT_RATIO = 9 / 16;
+const EXTRA_BOTTOM_BUFFER = spacing.md;
 
 export default function EnterMessageScreen({ initialUri = null }) {
   const [message, setMessage] = useState('');
@@ -35,6 +39,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isAtMaxLength = message.length >= MAX_LEN;
@@ -104,7 +109,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
     if (uploading) return;
     const photo = await cameraRef.current?.takePictureAsync({
       skipProcessing: true,
-      ratio: '4:3',
+      ratio: PHOTO_RATIO,
     });
     setUri(photo?.uri ?? null);
   };
@@ -157,7 +162,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
           facing={facing}
           mute={false}
           responsiveOrientationWhenOrientationLocked
-          ratio="4:3"
+          ratio={PHOTO_RATIO}
         />
       </View>
       <View style={{ height: 12 }} />
@@ -216,7 +221,12 @@ export default function EnterMessageScreen({ initialUri = null }) {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
         <Animated.View
-          style={[styles.content, keyboardVisible && styles.contentKeyboard, { transform: [{ translateY: keyboardOffset }] }]}
+          style={[
+            styles.content,
+            keyboardVisible && styles.contentKeyboard,
+            { paddingBottom: (keyboardVisible ? spacing.lg : spacing.sm) + insets.bottom + EXTRA_BOTTOM_BUFFER },
+            { transform: [{ translateY: keyboardOffset }] },
+          ]}
         >
 
           {uri ? renderPreview() : renderCamera()}
@@ -287,7 +297,7 @@ function createStyles(colors) {
     },
     cameraContainer: {
       width: '100%',
-      aspectRatio: 3 / 4,
+      aspectRatio: PHOTO_ASPECT_RATIO,
       overflow: 'hidden',
       borderRadius: radii.lg,
       backgroundColor: 'black',
@@ -335,7 +345,7 @@ function createStyles(colors) {
     card: {
       width: '100%',
       maxWidth: 520,
-      aspectRatio: 3 / 4,
+      aspectRatio: PHOTO_ASPECT_RATIO,
       borderRadius: radii.lg,
       overflow: 'hidden',
       backgroundColor: colors.bg,
