@@ -148,30 +148,30 @@ export default function Upload({ initialUri = null }) {
           responsiveOrientationWhenOrientationLocked
           ratio={PHOTO_RATIO}
         />
+        <View style={styles.cameraControlsOverlay} pointerEvents="box-none">
+          <View style={styles.shutterContainer}>
+            <View style={styles.flipButtonPlaceholder} />
+            <Pressable onPress={takePicture}>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.shutterBtn,
+                    pressed && { opacity: 0.6 },
+                  ]}
+                >
+                  <View
+                    style={styles.shutterBtnInner}
+                  />
+                </View>
+              )}
+            </Pressable>
+            <Pressable onPress={toggleFacing} style={styles.flipButton}>
+              <FontAwesome6 name="rotate-left" size={24} color={colors.text} />
+            </Pressable>
+          </View>
+        </View>
       </View>
-      <View style={{ height: 12 }} />
       <Text style={styles.helper}>Snap a photo to upload your challenge entry.</Text>
-      <View style={styles.shutterContainer}>
-        <View style={{ width: 32 }} />
-
-        <Pressable onPress={takePicture}>
-          {({ pressed }) => (
-            <View
-              style={[
-                styles.shutterBtn,
-                pressed && { opacity: 0.6 },
-              ]}
-            >
-              <View
-                style={styles.shutterBtnInner}
-              />
-            </View>
-          )}
-        </Pressable>
-        <Pressable onPress={toggleFacing}>
-          <FontAwesome6 name="rotate-left" size={28} color={colors.text} />
-        </Pressable>
-      </View>
     </View>
   );
 };
@@ -252,10 +252,17 @@ function createStyles(colors) {
     camera: {
       flex: 1,
     },
+    cameraControlsOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: "flex-end",
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+    },
     helper: {
       color: colors.textMuted,
       textAlign: "center",
       fontWeight: "700",
+      marginTop: spacing.sm,
     },
     promptText: {
       width: '100%',
@@ -266,12 +273,10 @@ function createStyles(colors) {
       fontWeight: '700',
     },
     shutterContainer: {
-      marginTop: spacing.md + 12,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: spacing.lg + 4,
-      width: '100%',
+      width: "100%",
     },
     shutterBtn: {
       borderWidth: 3,
@@ -293,6 +298,20 @@ function createStyles(colors) {
       height: 56,
       borderRadius: 16,
       backgroundColor: colors.primary,
+    },
+    flipButtonPlaceholder: {
+      width: 44,
+      height: 44,
+    },
+    flipButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(12,7,3,0.48)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
     },
     card: {
       width: "100%",

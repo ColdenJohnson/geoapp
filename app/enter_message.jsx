@@ -168,30 +168,30 @@ export default function EnterMessageScreen({ initialUri = null }) {
           responsiveOrientationWhenOrientationLocked
           ratio={PHOTO_RATIO}
         />
+        <View style={styles.cameraControlsOverlay} pointerEvents="box-none">
+          <View style={styles.shutterContainer}>
+            <View style={styles.flipButtonPlaceholder} />
+            <Pressable onPress={takePicture}>
+              {({ pressed }) => (
+                <View
+                  style={[
+                    styles.shutterBtn,
+                    pressed && { opacity: 0.6 },
+                  ]}
+                >
+                  <View
+                    style={styles.shutterBtnInner}
+                  />
+                </View>
+              )}
+            </Pressable>
+            <Pressable onPress={toggleFacing} style={styles.flipButton}>
+              <FontAwesome6 name="rotate-left" size={24} color={colors.text} />
+            </Pressable>
+          </View>
+        </View>
       </View>
-      <View style={{ height: 12 }} />
       <Text style={styles.helper}>Snap a photo to start your challenge.</Text>
-      <View style={styles.shutterContainer}>
-        <View style={{ width: 32 }} />
-
-        <Pressable onPress={takePicture}>
-          {({ pressed }) => (
-            <View
-              style={[
-                styles.shutterBtn,
-                pressed && { opacity: 0.6 },
-              ]}
-            >
-              <View
-                style={styles.shutterBtnInner}
-              />
-            </View>
-          )}
-        </Pressable>
-        <Pressable onPress={toggleFacing}>
-          <FontAwesome6 name="rotate-left" size={28} color={colors.text} />
-        </Pressable>
-      </View>
     </View>
   );
 
@@ -201,6 +201,30 @@ export default function EnterMessageScreen({ initialUri = null }) {
         <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
           <Image source={{ uri }} style={styles.photo} resizeMode="cover" cachePolicy="memory-disk" />
           <View style={[StyleSheet.absoluteFill, styles.cardOverlay]} pointerEvents="none" />
+          <Pressable
+            style={({ pressed }) => [
+              styles.geoLockToggle,
+              styles.geoLockToggleOverlay,
+              pressed && { opacity: 0.7 },
+              uploading && { opacity: 0.5 },
+            ]}
+            onPress={() => setIsGeoLocked((prev) => !prev)}
+            disabled={uploading}
+          >
+            <FontAwesome6
+              name={isGeoLocked ? 'square-check' : 'square'}
+              size={18}
+              color={isGeoLocked ? colors.primary : 'rgba(255,255,255,0.85)'}
+            />
+            <View style={styles.geoLockText}>
+              <Text style={[styles.geoLockLabel, styles.geoLockLabelOverlay]}>Location locked</Text>
+              <Text style={[styles.geoLockHint, styles.geoLockHintOverlay]}>
+                {isGeoLocked
+                  ? 'Only nearby users can join this challenge.'
+                  : 'Anyone can join this challenge from anywhere.'}
+              </Text>
+            </View>
+          </Pressable>
           <Pressable style={styles.closeButton} onPress={() => setUri(null)} hitSlop={12}>
             <FontAwesome6 name="xmark" size={18} color="#FFFFFF" />
           </Pressable>
@@ -239,30 +263,6 @@ export default function EnterMessageScreen({ initialUri = null }) {
             keyboardShouldPersistTaps="handled"
           >
             {renderPreview()}
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.geoLockToggle,
-                pressed && { opacity: 0.7 },
-                uploading && { opacity: 0.5 },
-              ]}
-              onPress={() => setIsGeoLocked((prev) => !prev)}
-              disabled={uploading}
-            >
-              <FontAwesome6
-                name={isGeoLocked ? 'square-check' : 'square'}
-                size={18}
-                color={isGeoLocked ? colors.primary : colors.textMuted}
-              />
-              <View style={styles.geoLockText}>
-                <Text style={styles.geoLockLabel}>Location locked</Text>
-                <Text style={styles.geoLockHint}>
-                  {isGeoLocked
-                    ? 'Only nearby users can join this challenge.'
-                    : 'Anyone can join this challenge from anywhere.'}
-                </Text>
-                </View>
-              </Pressable>
             <View style={styles.noteBlock}>
               <TextInput
                 ref={inputRef}
@@ -363,12 +363,16 @@ function createStyles(colors) {
     camera: {
       flex: 1,
     },
+    cameraControlsOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: 'flex-end',
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+    },
     shutterContainer: {
-      marginTop: spacing.md + 12,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: spacing.lg + 4,
       width: '100%',
     },
     shutterBtn: {
@@ -391,6 +395,20 @@ function createStyles(colors) {
       height: 56,
       borderRadius: 16,
       backgroundColor: colors.primary,
+    },
+    flipButtonPlaceholder: {
+      width: 44,
+      height: 44,
+    },
+    flipButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(12,7,3,0.48)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.2)',
     },
     card: {
       width: '100%',
@@ -432,7 +450,6 @@ function createStyles(colors) {
       width: '100%',
     },
     geoLockToggle: {
-      width: '100%',
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: spacing.sm,
@@ -442,6 +459,14 @@ function createStyles(colors) {
       backgroundColor: colors.bg,
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.sm + 2,
+    },
+    geoLockToggleOverlay: {
+      position: 'absolute',
+      left: spacing.sm,
+      right: spacing.sm,
+      bottom: spacing.sm,
+      backgroundColor: 'rgba(12,7,3,0.52)',
+      borderColor: 'rgba(255,255,255,0.24)',
     },
     geoLockText: {
       flex: 1,
@@ -459,6 +484,12 @@ function createStyles(colors) {
       fontWeight: '700',
       color: colors.textMuted,
       lineHeight: 15,
+    },
+    geoLockLabelOverlay: {
+      color: '#FFFFFF',
+    },
+    geoLockHintOverlay: {
+      color: 'rgba(255,255,255,0.84)',
     },
     input: {
       width: '100%',
@@ -493,6 +524,6 @@ function createStyles(colors) {
       color: colors.primary,
       fontFamily: 'SpaceMono',
     },
-    helper: { color: colors.textMuted, textAlign: 'center', fontWeight: '700' },
+    helper: { color: colors.textMuted, textAlign: 'center', fontWeight: '700', marginTop: spacing.sm },
   });
 }
