@@ -24,7 +24,7 @@ import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii } from '@/theme/tokens';
 
-const CARD_ASPECT_RATIO = 9 / 16;
+const CARD_ASPECT_RATIO = 3 / 4;
 const SWIPE_THRESHOLD = 110;
 const STACK_DEPTH = 3;
 const SWIPE_ANIMATION_TIMEOUT_MS = 700;

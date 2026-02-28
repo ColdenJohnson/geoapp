@@ -17,8 +17,8 @@ import { CTAButton } from '@/components/ui/Buttons';
 import { spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const PHOTO_RATIO = '9:16';
-const PHOTO_ASPECT_RATIO = 9 / 16;
+const PHOTO_RATIO = '3:4';
+const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
 
 export default function Upload({ initialUri = null }) {
