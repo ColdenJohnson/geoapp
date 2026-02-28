@@ -18,7 +18,7 @@ const DIVIDER_CLAMP_PADDING = 2;
 const DRAG_RESPONSE_MULTIPLIER = 1.3;
 const COMMIT_EXPAND_DURATION_MS = 100;
 const COMMIT_HOLD_DURATION_MS = 350;
-const PHOTO_SIDE_CROP_PX = 25;
+const PHOTO_SIDE_CROP_PX = 20;
 const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
 function clamp(value, min, max) {

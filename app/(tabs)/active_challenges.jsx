@@ -23,7 +23,7 @@ import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii } from '@/theme/tokens';
 
-const CARD_ASPECT_RATIO = 3 /4;
+const CARD_ASPECT_RATIO = 3 / 4;
 const SWIPE_THRESHOLD = 110;
 const STACK_DEPTH = 3;
 

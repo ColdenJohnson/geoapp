@@ -26,8 +26,8 @@ import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseSto
 import { uploadImage } from '@/lib/uploadHelpers';
 
 const MAX_LEN = 50;
-const PHOTO_RATIO = '9:16';
-const PHOTO_ASPECT_RATIO = 9 / 16;
+const PHOTO_RATIO = '3:4';
+const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
 
 export default function EnterMessageScreen({ initialUri = null }) {
