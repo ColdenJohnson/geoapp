@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useContext } from 'react';
-import { StyleSheet, View, ActivityIndicator, FlatList, RefreshControl, Modal, Pressable, SafeAreaView, Text } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, FlatList, RefreshControl, Pressable, SafeAreaView, Text } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,6 +7,7 @@ import { fetchPhotosByPinId, addPhoto } from '@/lib/api';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
+import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
@@ -284,18 +285,11 @@ export default function ViewPhotoChallengeScreen() {
         <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} disabled={uploading} />
       </BottomBar>
 
-
-      {/* Fullscreen image viewer */}
-      <Modal visible={viewerVisible} transparent={true} animationType="fade" onRequestClose={() => setViewerVisible(false)}>
-        <Pressable style={styles.viewerBackdrop} onPress={() => setViewerVisible(false)}>
-          <Image
-            source={selectedUrl ? { uri: selectedUrl } : undefined}
-            style={styles.viewerImage}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-          />
-        </Pressable>
-      </Modal>
+      <FullscreenImageViewer
+        visible={viewerVisible}
+        imageUrl={selectedUrl}
+        onClose={() => setViewerVisible(false)}
+      />
 
       <Toast message={toastMessage} bottomOffset={140} />
     </SafeAreaView>
@@ -358,15 +352,5 @@ function createStyles(colors) {
     metaTitle: { fontSize: 13, fontWeight: '800', letterSpacing: 0.6, color: colors.text },
     metaDetail: { fontSize: 12, color: colors.textMuted, fontWeight: '700' },
     metaHandle: { fontSize: 11, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.8 },
-    viewerBackdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.9)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    viewerImage: {
-      width: '100%',
-      height: '100%',
-    },
   });
 }
