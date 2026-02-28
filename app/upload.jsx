@@ -166,7 +166,7 @@ export default function Upload({ initialUri = null }) {
               )}
             </Pressable>
             <Pressable onPress={toggleFacing} style={styles.flipButton}>
-              <FontAwesome6 name="rotate-left" size={24} color={colors.text} />
+              <FontAwesome6 name="rotate-left" size={24} color={'#F6EFE8'} />
             </Pressable>
           </View>
         </View>
