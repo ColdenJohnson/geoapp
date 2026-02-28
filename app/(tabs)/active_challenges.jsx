@@ -289,12 +289,24 @@ export default function ActiveChallengesScreen() {
         debugLog('swipe:aborted-reset', { swipeId, pan: getPanSnapshot() });
         return;
       }
+      // TODO(active_challenges): Known visual glitch window starts here.
+      // During the frame(s) after deck rotation and before post-cycle reset,
+      // the incoming top card can briefly render at an out-of-flow position
+      // (outside the expected transition path) before settling and animating in.
+      // Logs that capture this window:
+      // - swipe:timing-complete
+      // - swipe:cycled-deck
+      // - deck:state (isAnimating=true with reversed stackPinIds)
       cycleTopChallenge();
       debugLog('swipe:cycled-deck', {
         swipeId,
         nextTopPinId: challenges[1]?.pinId || challenges[0]?.pinId || null,
       });
       requestAnimationFrame(() => {
+        // TODO(active_challenges): End of known glitch window.
+        // Normalization starts here (pan reset + transition bootstrap + unlock).
+        // If flicker appears before this callback, investigate initial transform values
+        // used by the incoming top card right after cycleTopChallenge().
         resetCardPan('post-cycle-reset', { swipeId });
         setSwipeAnimatingPinId(null);
         stackTransition.stopAnimation();
@@ -385,6 +397,9 @@ export default function ActiveChallengesScreen() {
 
   const stack = useMemo(() => challenges.slice(0, STACK_DEPTH), [challenges]);
   const stackPinIds = useMemo(() => stack.map((challenge) => challenge.pinId), [stack]);
+  // TODO(active_challenges): During dismiss handoff, verify this target aligns with
+  // the incoming top card's first rendered transform to avoid one-frame jumps to
+  // out-of-flow positions before the stage-in transition starts.
   const panTargetPinId = swipeAnimatingPinId ?? stack[0]?.pinId ?? null;
 
   useEffect(() => {
