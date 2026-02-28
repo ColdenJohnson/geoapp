@@ -1,4 +1,4 @@
-import { SafeAreaView, StyleSheet, TouchableOpacity, View, Text, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { SafeAreaView, StyleSheet, TouchableOpacity, View, Text, ScrollView, RefreshControl, ActivityIndicator, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -11,6 +11,7 @@ import emptyPfp from '@/assets/images/empty_pfp.png';
 import auth from '@react-native-firebase/auth';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
+import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { spacing, fontSizes } from '@/theme/tokens';
 
@@ -27,6 +28,8 @@ export default function UserProfileScreen() {
     refreshTopPhotos
   } = useContext(AuthContext);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [selectedUrl, setSelectedUrl] = useState(null);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -108,7 +111,16 @@ export default function UserProfileScreen() {
           {displayedTopPhotos.length ? (
             <View style={styles.topPhotosGrid}>
               {displayedTopPhotos.map((photo, index) => (
-                <View key={photo?._id || `${index}`} style={styles.topPhotoTile}>
+                <Pressable
+                  key={photo?._id || `${index}`}
+                  style={styles.topPhotoTile}
+                  onPress={() => {
+                    if (!photo?.file_url) return;
+                    setSelectedUrl(photo.file_url);
+                    setViewerVisible(true);
+                  }}
+                  disabled={!photo?.file_url}
+                >
                   <Image
                     source={photo?.file_url ? { uri: photo.file_url } : undefined}
                     style={styles.topPhotoImage}
@@ -123,7 +135,7 @@ export default function UserProfileScreen() {
                       Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
                     </Text>
                   </View>
-                </View>
+                </Pressable>
               ))}
               {displayedTopPhotos.length < 2 ? (
                 <View style={[styles.topPhotoTile, styles.topPhotoPlaceholder]}>
@@ -163,6 +175,11 @@ export default function UserProfileScreen() {
           </View>
         </View>
       </ScrollView>
+      <FullscreenImageViewer
+        visible={viewerVisible}
+        imageUrl={selectedUrl}
+        onClose={() => setViewerVisible(false)}
+      />
     </SafeAreaView>
   );
 }
