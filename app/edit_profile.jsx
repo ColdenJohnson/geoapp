@@ -1,6 +1,6 @@
 import { StyleSheet, TextInput, TouchableOpacity, Pressable, View, Text, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +10,7 @@ import { updateUserProfile, setUserHandle, deleteMyAccount } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { CTAButton } from '@/components/ui/Buttons';
+import { PreferenceToggleRow } from '@/components/ui/PreferenceToggleRow';
 import { spacing, fontSizes } from '@/theme/tokens';
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,17 +27,68 @@ export default function EditProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [handleStatus, setHandleStatus] = useState(null);
+  const defaultPrivacySyncInFlightRef = useRef(false);
+  const desiredDefaultPrivateRef = useRef(null);
+  const acknowledgedDefaultPrivateRef = useRef(null);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
+  const isDefaultPinPrivate = profile?.default_pin_private === true;
 
   useEffect(() => {
     setFormDisplayName(profile?.display_name || '');
     setFormBio((profile?.bio || '').slice(0, BIO_MAX_LENGTH));
     setHandleInput(profile?.handle || '');
   }, [profile?.display_name, profile?.bio, profile?.handle]);
+
+  useEffect(() => {
+    const value = profile?.default_pin_private === true;
+    acknowledgedDefaultPrivateRef.current = value;
+    desiredDefaultPrivateRef.current = value;
+  }, [profile?.default_pin_private]);
+
+  const flushDefaultPrivacyUpdates = useCallback(async () => {
+    if (!user?.uid || defaultPrivacySyncInFlightRef.current) return;
+    defaultPrivacySyncInFlightRef.current = true;
+    try {
+      while (
+        typeof desiredDefaultPrivateRef.current === 'boolean' &&
+        desiredDefaultPrivateRef.current !== acknowledgedDefaultPrivateRef.current
+      ) {
+        const target = desiredDefaultPrivateRef.current;
+        const updated = await updateUserProfile(user.uid, { default_pin_private: target });
+        if (!updated || typeof updated?.default_pin_private !== 'boolean') {
+          const fallback = typeof acknowledgedDefaultPrivateRef.current === 'boolean'
+            ? acknowledgedDefaultPrivateRef.current
+            : false;
+          desiredDefaultPrivateRef.current = fallback;
+          setProfile((prev) => ({ ...(prev || {}), default_pin_private: fallback }));
+          break;
+        }
+        const persisted = updated.default_pin_private === true;
+        acknowledgedDefaultPrivateRef.current = persisted;
+        setProfile(updated);
+      }
+    } finally {
+      defaultPrivacySyncInFlightRef.current = false;
+      if (
+        typeof desiredDefaultPrivateRef.current === 'boolean' &&
+        desiredDefaultPrivateRef.current !== acknowledgedDefaultPrivateRef.current
+      ) {
+        flushDefaultPrivacyUpdates();
+      }
+    }
+  }, [setProfile, user?.uid]);
+
+  const onToggleDefaultPinPrivacy = useCallback((nextValue) => {
+    if (!user?.uid) return;
+    const optimisticValue = !!nextValue;
+    desiredDefaultPrivateRef.current = optimisticValue;
+    setProfile((prev) => ({ ...(prev || {}), default_pin_private: optimisticValue }));
+    flushDefaultPrivacyUpdates();
+  }, [flushDefaultPrivacyUpdates, setProfile, user?.uid]);
 
   async function uploadImageToStorage(uri) {
     // Minimal: no compression here; reuse your existing pattern from Upload tab
@@ -232,6 +284,17 @@ export default function EditProfileScreen() {
             />
             <Text style={styles.bioCounter}>{`${formBio.length}/${BIO_MAX_LENGTH}`}</Text>
           </View>
+
+          <View style={[formStyles.card, styles.preferenceCard]}>
+            <Text style={styles.sectionTitle}>Upload Defaults</Text>
+            <PreferenceToggleRow
+              label="New pins private by default"
+              description="When enabled, new pins you create are friends-only unless you change privacy on that pin later."
+              value={isDefaultPinPrivate}
+              onValueChange={onToggleDefaultPinPrivacy}
+              disabled={!user?.uid}
+            />
+          </View>
         </View>
 
         <Pressable
@@ -355,6 +418,9 @@ function createStyles(colors) {
     },
     formCard: {
       paddingTop: spacing.lg,
+    },
+    preferenceCard: {
+      marginTop: spacing.sm,
     },
     deletePressable: {
       marginTop: spacing.md,

@@ -91,7 +91,6 @@ export default function UserProfileScreen() {
           ) : null}
         </View>
 
-        {/* Profile Details */}
         <View style={[formStyles.card, styles.statsCard]}>
           <Text style={styles.sectionTitle}>Stats</Text>
           <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? profile?.pin_count ?? 0}</Text>

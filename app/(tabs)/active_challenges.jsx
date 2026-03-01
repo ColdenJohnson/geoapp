@@ -15,7 +15,14 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { addPhoto, fetchAllLocationPins, fetchSavedQuests, saveQuest, unsaveQuest } from '@/lib/api';
+import {
+  addPhoto,
+  fetchAllLocationPins,
+  fetchFriendPrivateLocationPins,
+  fetchSavedQuests,
+  saveQuest,
+  unsaveQuest
+} from '@/lib/api';
 import { setUploadResolver } from '@/lib/promiseStore';
 import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
@@ -145,7 +152,22 @@ export default function ActiveChallengesScreen() {
     try {
       const rows = mode === 'saved'
         ? await fetchSavedQuests()
-        : await fetchAllLocationPins({ isGeoLocked: false });
+        : await Promise.all([
+            fetchAllLocationPins({ isGeoLocked: false }),
+            fetchFriendPrivateLocationPins({ isGeoLocked: false }),
+          ]).then(([publicRows, privateRows]) => {
+            const merged = [
+              ...(Array.isArray(publicRows) ? publicRows : []),
+              ...(Array.isArray(privateRows) ? privateRows : []),
+            ];
+            return Array.from(
+              new Map(
+                merged
+                  .filter((pin) => pin?._id)
+                  .map((pin) => [String(pin._id), pin])
+              ).values()
+            );
+          });
       const sorted = Array.isArray(rows) && mode !== 'saved'
         ? [...rows].sort((a, b) => {
             const left = Date.parse(a?.updatedAt || 0);

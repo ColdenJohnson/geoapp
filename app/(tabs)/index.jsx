@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useRouter} from 'expo-router';
 
-import { newChallenge, fetchAllLocationPins, addPhoto } from '../../lib/api';
+import { newChallenge, fetchAllLocationPins, fetchFriendPrivateLocationPins, addPhoto } from '../../lib/api';
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
 
@@ -156,11 +156,22 @@ export default function HomeScreen() {
 
   useEffect(() => {
     (async () => {
-      const [geoLockedPins, nonGeoLockedPins] = await Promise.all([
+      const [geoLockedPins, nonGeoLockedPins, privateGeoLockedPins, privateNonGeoLockedPins] = await Promise.all([
         fetchAllLocationPins({ isGeoLocked: true }),
         fetchAllLocationPins({ isGeoLocked: false }),
+        fetchFriendPrivateLocationPins({ isGeoLocked: true }),
+        fetchFriendPrivateLocationPins({ isGeoLocked: false }),
       ]);
-      setPins([...(Array.isArray(geoLockedPins) ? geoLockedPins : []), ...(Array.isArray(nonGeoLockedPins) ? nonGeoLockedPins : [])]);
+      const combined = [
+        ...(Array.isArray(geoLockedPins) ? geoLockedPins : []),
+        ...(Array.isArray(nonGeoLockedPins) ? nonGeoLockedPins : []),
+        ...(Array.isArray(privateGeoLockedPins) ? privateGeoLockedPins : []),
+        ...(Array.isArray(privateNonGeoLockedPins) ? privateNonGeoLockedPins : []),
+      ];
+      const deduped = Array.from(
+        new Map(combined.filter((pin) => pin?._id).map((pin) => [String(pin._id), pin])).values()
+      );
+      setPins(deduped);
     })();
   }, []);
 
@@ -429,7 +440,7 @@ export default function HomeScreen() {
         }}
         title={"Photo Challenge"}
         description={pin.message || 'Geo Pin'}
-        pinColor={isGeoLocked ? (isFriendPin ? colors.primary_darkened : colors.primary) : '#2563EB'}
+        pinColor={pin?.isPrivate ? '#EC4899' : (isGeoLocked ? (isFriendPin ? colors.primary_darkened : colors.primary) : '#2563EB')}
       >
         <Callout
           tooltip

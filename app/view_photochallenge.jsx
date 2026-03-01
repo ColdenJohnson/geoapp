@@ -1,20 +1,17 @@
-import { useEffect, useState, useMemo, useContext } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo, useContext } from 'react';
 import { StyleSheet, View, ActivityIndicator, FlatList, RefreshControl, Pressable, SafeAreaView, Text } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId } from '@/lib/api';
+import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId, setPinPrivacy } from '@/lib/api';
+import { readPinPhotosCache, writePinPhotosCache, readPinMetaCache, writePinMetaCache } from '@/lib/pinChallengeCache';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
+import { PreferenceToggleRow } from '@/components/ui/PreferenceToggleRow';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
-
-const PIN_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const pinPhotosCacheKey = (pinId) => `pin_photos_cache_${pinId}`;
-const pinPhotosMemoryCache = new Map();
 
 function sortPhotosByGlobalElo(rows) {
   if (!Array.isArray(rows)) return [];
@@ -71,11 +68,14 @@ export default function ViewPhotoChallengeScreen() {
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [challengeMeta, setChallengeMeta] = useState(null);
+  const privacySyncInFlightRef = useRef(false);
+  const desiredPrivacyRef = useRef(null);
+  const acknowledgedPrivacyRef = useRef(null);
   const router = useRouter();
   const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { invalidateStats } = useContext(AuthContext);
+  const { user, invalidateStats } = useContext(AuthContext);
   const promptParamText = typeof promptParam === 'string' && promptParam.trim()
     ? promptParam.trim()
     : null;
@@ -84,6 +84,12 @@ export default function ViewPhotoChallengeScreen() {
     : null;
   const promptText = promptParamText || challengeMeta?.message || 'Prompt';
   const handleText = handleParamText || challengeMeta?.created_by_handle || null;
+  const isOwner = Boolean(
+    user?.uid &&
+    typeof challengeMeta?.created_by === 'string' &&
+    challengeMeta.created_by === user.uid
+  );
+  const isPrivateChallenge = challengeMeta?.isPrivate === true;
   const optimisticPhotoUrls = useMemo(() => {
     if (typeof optimisticPhotoUrlsParam !== 'string') return [];
     try {
@@ -107,12 +113,7 @@ export default function ViewPhotoChallengeScreen() {
       const ordered = sortPhotosByGlobalElo(Array.isArray(data) ? data : []);
       setServerPhotos(ordered);
       prefetchPhotoUrls(ordered);
-      const fetchedAt = Date.now();
-      pinPhotosMemoryCache.set(String(pinId), { photos: ordered, fetchedAt });
-      await AsyncStorage.setItem(
-        pinPhotosCacheKey(pinId),
-        JSON.stringify({ photos: ordered, fetchedAt })
-      );
+      await writePinPhotosCache(pinId, ordered);
       return true;
     } catch (e) {
       console.error('Failed to fetch photos for pin', pinId, e);
@@ -131,54 +132,22 @@ export default function ViewPhotoChallengeScreen() {
         return;
       }
 
-      let hadCache = false;
-      let cacheIsFresh = false;
-      const memoryCached = pinPhotosMemoryCache.get(String(pinId));
-      if (Array.isArray(memoryCached?.photos)) {
-        hadCache = true;
-        cacheIsFresh =
-          Number.isFinite(memoryCached?.fetchedAt) &&
-          Date.now() - memoryCached.fetchedAt <= PIN_PHOTOS_CACHE_TTL_MS;
-        setServerPhotos(memoryCached.photos);
+      const { photos: cachedPhotos, hadCache, isFresh } = await readPinPhotosCache(pinId);
+      if (hadCache && !cancelled) {
+        const ordered = sortPhotosByGlobalElo(cachedPhotos);
+        setServerPhotos(ordered);
         setLoading(false);
-        prefetchPhotoUrls(memoryCached.photos);
-      }
-
-      if (!hadCache) {
-        setLoading(true);
-        try {
-          const raw = await AsyncStorage.getItem(pinPhotosCacheKey(pinId));
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed?.photos)) {
-              hadCache = true;
-              cacheIsFresh =
-                Number.isFinite(parsed?.fetchedAt) &&
-                Date.now() - parsed.fetchedAt <= PIN_PHOTOS_CACHE_TTL_MS;
-              const ordered = sortPhotosByGlobalElo(parsed.photos);
-              pinPhotosMemoryCache.set(String(pinId), {
-                photos: ordered,
-                fetchedAt: Number.isFinite(parsed?.fetchedAt) ? parsed.fetchedAt : null,
-              });
-              if (!cancelled) {
-                setServerPhotos(ordered);
-                setLoading(false);
-              }
-              prefetchPhotoUrls(ordered);
-            }
-          }
-        } catch (error) {
-          console.warn('Failed to hydrate pin photos cache', error);
-        }
+        prefetchPhotoUrls(ordered);
       }
       if (cancelled) return;
 
       if (!hadCache) {
+        setLoading(true);
         await load({ showSpinner: true });
         return;
       }
 
-      if (!cacheIsFresh) {
+      if (!isFresh) {
         await load({ showSpinner: false });
       }
     }
@@ -197,23 +166,112 @@ export default function ViewPhotoChallengeScreen() {
         setChallengeMeta(null);
         return;
       }
-      if (promptParamText && handleParamText) {
-        return;
-      }
       try {
         const challenge = await fetchChallengeByPinId(pinId);
-        if (cancelled || !challenge) return;
+        if (cancelled) return;
+        if (!challenge) {
+          showToast('This challenge is private or unavailable.', 2500);
+          router.back();
+          return;
+        }
+        void writePinMetaCache(pinId, challenge);
+        const initialIsPrivate = challenge?.isPrivate === true;
+        acknowledgedPrivacyRef.current = initialIsPrivate;
+        desiredPrivacyRef.current = initialIsPrivate;
         setChallengeMeta(challenge);
       } catch (error) {
         console.error('Failed to fetch challenge metadata for pin', pinId, error);
       }
     }
 
-    loadChallengeMeta();
+    async function hydrateAndLoadChallengeMeta() {
+      if (!pinId) {
+        setChallengeMeta(null);
+        return;
+      }
+
+      const { meta: cachedMeta, hadCache, isFresh } = await readPinMetaCache(pinId);
+      if (hadCache && cachedMeta && typeof cachedMeta === 'object' && !cancelled) {
+        setChallengeMeta(cachedMeta);
+        const cachedIsPrivate = cachedMeta?.isPrivate === true;
+        acknowledgedPrivacyRef.current = cachedIsPrivate;
+        desiredPrivacyRef.current = cachedIsPrivate;
+      }
+      if (cancelled) return;
+
+      if (hadCache && isFresh) {
+        return;
+      }
+      await loadChallengeMeta();
+    }
+
+    hydrateAndLoadChallengeMeta();
     return () => {
       cancelled = true;
     };
-  }, [pinId, promptParamText, handleParamText]);
+  }, [pinId, router, showToast]);
+  const flushPrivacyUpdates = useCallback(async () => {
+    if (!pinId || !isOwner || privacySyncInFlightRef.current) return;
+    privacySyncInFlightRef.current = true;
+    try {
+      while (
+        typeof desiredPrivacyRef.current === 'boolean' &&
+        desiredPrivacyRef.current !== acknowledgedPrivacyRef.current
+      ) {
+        const targetPrivacy = desiredPrivacyRef.current;
+        const updatedPin = await setPinPrivacy(pinId, targetPrivacy);
+        if (!updatedPin || typeof updatedPin?.isPrivate !== 'boolean') {
+          const fallback = typeof acknowledgedPrivacyRef.current === 'boolean'
+            ? acknowledgedPrivacyRef.current
+            : false;
+          desiredPrivacyRef.current = fallback;
+          setChallengeMeta((prev) => {
+            const next = {
+              ...(prev || {}),
+              isPrivate: fallback,
+            };
+            void writePinMetaCache(pinId, next);
+            return next;
+          });
+          break;
+        }
+        const persisted = updatedPin.isPrivate === true;
+        acknowledgedPrivacyRef.current = persisted;
+        setChallengeMeta((prev) => {
+          const next = {
+            ...(prev || {}),
+            ...updatedPin,
+            isPrivate: persisted,
+          };
+          void writePinMetaCache(pinId, next);
+          return next;
+        });
+      }
+    } finally {
+      privacySyncInFlightRef.current = false;
+      if (
+        typeof desiredPrivacyRef.current === 'boolean' &&
+        desiredPrivacyRef.current !== acknowledgedPrivacyRef.current
+      ) {
+        flushPrivacyUpdates();
+      }
+    }
+  }, [isOwner, pinId]);
+
+  const onTogglePrivacy = useCallback((nextValue) => {
+    if (!pinId || !isOwner) return;
+    const optimisticValue = !!nextValue;
+    desiredPrivacyRef.current = optimisticValue;
+    setChallengeMeta((prev) => {
+      const next = {
+        ...(prev || {}),
+        isPrivate: optimisticValue,
+      };
+      void writePinMetaCache(pinId, next);
+      return next;
+    });
+    flushPrivacyUpdates();
+  }, [flushPrivacyUpdates, isOwner, pinId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -311,6 +369,15 @@ export default function ViewPhotoChallengeScreen() {
 
       {/* Bottom, always-on-screen action bar (not absolute) */}
       <BottomBar>
+        {isOwner ? (
+          <PreferenceToggleRow
+            label="Private (friends only)"
+            value={isPrivateChallenge}
+            onValueChange={onTogglePrivacy}
+            disabled={!pinId || !isOwner}
+            style={styles.privacyFooterRow}
+          />
+        ) : null}
         <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} disabled={uploading} />
       </BottomBar>
 
@@ -350,6 +417,9 @@ function createStyles(colors) {
       fontWeight: '800',
       letterSpacing: 0.8,
       textTransform: 'uppercase',
+    },
+    privacyFooterRow: {
+      marginBottom: 10,
     },
     container: { flex: 1, backgroundColor: colors.surface },
     listContent: { padding: 14, gap: 14, paddingBottom: 100 },
