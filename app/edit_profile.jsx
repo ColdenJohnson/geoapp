@@ -146,49 +146,33 @@ export default function EditProfileScreen() {
     router.back();
 
     void (async () => {
-      let updatedProfile = baseProfile;
-      let hadError = false;
+      try {
+        let updatedProfile = baseProfile;
 
-      const updates = {};
-      if (nextDisplayName !== (baseProfile?.display_name || '')) updates.display_name = nextDisplayName;
-      const normalizedBio = typeof nextBio === 'string' ? nextBio.slice(0, BIO_MAX_LENGTH) : '';
-      if (normalizedBio !== (baseProfile?.bio || '')) updates.bio = normalizedBio;
+        const updates = {};
+        if (nextDisplayName !== (baseProfile?.display_name || '')) updates.display_name = nextDisplayName;
+        const normalizedBio = typeof nextBio === 'string' ? nextBio.slice(0, BIO_MAX_LENGTH) : '';
+        if (normalizedBio !== (baseProfile?.bio || '')) updates.bio = normalizedBio;
 
-      if (Object.keys(updates).length > 0) {
-        const updated = await updateUserProfile(uid, updates);
-        if (updated) {
-          updatedProfile = updated;
-        } else {
-          hadError = true;
-          console.error('Failed to save profile updates.');
+        if (Object.keys(updates).length > 0) {
+          const updated = await updateUserProfile(uid, updates);
+          if (updated) updatedProfile = updated;
         }
-      }
 
-      let trimmed = nextHandleInput.trim();
-      if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
-      if (trimmed && trimmed !== (baseProfile?.handle || '')) {
-        const resp = await setUserHandle(trimmed);
-        if (resp?.success) {
-          updatedProfile = { ...(updatedProfile || baseProfile || {}), handle: resp.handle };
-        } else {
-          hadError = true;
-          console.error('Failed to save handle:', resp?.error || 'Unknown');
+        let trimmed = nextHandleInput.trim();
+        if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
+        if (trimmed && trimmed !== (baseProfile?.handle || '')) {
+          const resp = await setUserHandle(trimmed);
+          if (resp?.success) {
+            updatedProfile = { ...(updatedProfile || baseProfile || {}), handle: resp.handle };
+          }
         }
-      }
 
-    if (updatedProfile) {
-      setProfile(updatedProfile);
-    }
-
-    setSaving(false);
-    if (!hadError) {
-      goBackOrHome(router);
-    }
-      if (updatedProfile) {
-        setProfile(updatedProfile);
-      }
-      if (hadError) {
-        console.error('Edit profile save completed with errors.');
+        if (updatedProfile) {
+          setProfile(updatedProfile);
+        }
+      } catch (error) {
+        console.error('Edit profile background save failed:', error);
       }
     })();
   };
