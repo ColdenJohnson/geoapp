@@ -129,6 +129,11 @@ export default function ActiveChallengesScreen() {
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
+  const saveOpacity = cardPan.y.interpolate({
+    inputRange: [-SWIPE_UP_THRESHOLD, -30],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
   const footerSafePadding = Math.max(0, insets.bottom + bottomTabOverflow);
   const toastBottomOffset = footerSafePadding + 22;
   const swipeLocked = loading || isAnimating || uploadingPinId !== null;
@@ -379,6 +384,9 @@ export default function ActiveChallengesScreen() {
             <Animated.View style={[styles.skipBadge, { opacity: skipOpacity }]}>
               <Text style={styles.skipBadgeText}>SKIP</Text>
             </Animated.View>
+            <Animated.View style={[styles.saveBadge, { opacity: saveOpacity }]}>
+              <Text style={styles.saveBadgeText}>{queueMode === 'saved' ? 'REMOVE' : 'SAVE'}</Text>
+            </Animated.View>
           </>
         ) : null}
 
@@ -432,6 +440,8 @@ export default function ActiveChallengesScreen() {
     panResponder.panHandlers,
     selectOpacity,
     skipOpacity,
+    saveOpacity,
+    queueMode,
     styles,
     swipeLocked,
   ]);
@@ -733,6 +743,24 @@ function createStyles(colors) {
       transform: [{ rotate: '14deg' }],
     },
     skipBadgeText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '900',
+      letterSpacing: 0.6,
+    },
+    saveBadge: {
+      position: 'absolute',
+      top: 28,
+      alignSelf: 'center',
+      zIndex: 12,
+      borderRadius: radii.pill,
+      borderWidth: 3,
+      borderColor: 'rgba(255,255,255,0.82)',
+      backgroundColor: 'rgba(0,0,0,0.38)',
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+    },
+    saveBadgeText: {
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '900',
