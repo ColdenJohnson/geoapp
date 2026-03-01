@@ -90,6 +90,7 @@ export default function HomeScreen() {
       showToast('No valid challenge nearby.');
       return;
     }
+    const hadUploadedBefore = pin?.viewer_has_uploaded === true;
 
     const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve);
@@ -112,7 +113,11 @@ export default function HomeScreen() {
           Array.isArray(prev)
             ? prev.map((p) =>
                 p?._id === pinId
-                  ? { ...p, photo_count: Math.max(0, Number(p?.photo_count || 0) + 1) }
+                  ? {
+                    ...p,
+                    photo_count: Math.max(0, Number(p?.photo_count || 0) + 1),
+                    viewer_has_uploaded: true,
+                  }
                   : p
               )
             : prev
@@ -131,7 +136,11 @@ export default function HomeScreen() {
             Array.isArray(prev)
               ? prev.map((p) =>
                   p?._id === pinId
-                    ? { ...p, photo_count: Math.max(0, Number(p?.photo_count || 0) - 1) }
+                    ? {
+                      ...p,
+                      photo_count: Math.max(0, Number(p?.photo_count || 0) - 1),
+                      viewer_has_uploaded: hadUploadedBefore,
+                    }
                     : p
                 )
               : prev
@@ -349,6 +358,7 @@ export default function HomeScreen() {
       return;
     }
     const isGeoLocked = pin?.isGeoLocked !== false;
+    const viewerHasUploaded = pin?.viewer_has_uploaded === true;
     if (isGeoLocked) {
       if (!userCoords) {
         showToast('Location unavailable. Unable to open this challenge.');
@@ -358,7 +368,7 @@ export default function HomeScreen() {
         latitude: pin.location.latitude,
         longitude: pin.location.longitude,
       });
-      if (!Number.isFinite(distanceToPin) || distanceToPin > NEAR_THRESHOLD_METERS) {
+      if (!Number.isFinite(distanceToPin) || (distanceToPin > NEAR_THRESHOLD_METERS && !viewerHasUploaded)) {
         showToast(`Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`);
         return;
       }

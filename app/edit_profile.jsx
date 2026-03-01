@@ -24,7 +24,6 @@ export default function EditProfileScreen() {
   const [formDisplayName, setFormDisplayName] = useState('');
   const [formBio, setFormBio] = useState('');
   const [handleInput, setHandleInput] = useState('');
-  const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [handleStatus, setHandleStatus] = useState(null);
@@ -136,41 +135,46 @@ export default function EditProfileScreen() {
     }
   };
 
-  const saveChanges = async () => {
+  const saveChanges = () => {
     if (!user?.uid) return;
-    if (saving) return;
-    setSaving(true);
     setHandleStatus(null);
+    const uid = user.uid;
+    const baseProfile = profile;
+    const nextDisplayName = formDisplayName;
+    const nextBio = formBio;
+    const nextHandleInput = handleInput;
+    router.back();
 
-    let updatedProfile = profile;
-    let hadError = false;
+    void (async () => {
+      let updatedProfile = baseProfile;
+      let hadError = false;
 
-    const updates = {};
-    if (formDisplayName !== (profile?.display_name || '')) updates.display_name = formDisplayName;
-    const normalizedBio = typeof formBio === 'string' ? formBio.slice(0, BIO_MAX_LENGTH) : '';
-    if (normalizedBio !== (profile?.bio || '')) updates.bio = normalizedBio;
+      const updates = {};
+      if (nextDisplayName !== (baseProfile?.display_name || '')) updates.display_name = nextDisplayName;
+      const normalizedBio = typeof nextBio === 'string' ? nextBio.slice(0, BIO_MAX_LENGTH) : '';
+      if (normalizedBio !== (baseProfile?.bio || '')) updates.bio = normalizedBio;
 
-    if (Object.keys(updates).length > 0) {
-      const updated = await updateUserProfile(user.uid, updates);
-      if (updated) {
-        updatedProfile = updated;
-      } else {
-        hadError = true;
-        Alert.alert('Profile', 'Failed to save profile updates.');
+      if (Object.keys(updates).length > 0) {
+        const updated = await updateUserProfile(uid, updates);
+        if (updated) {
+          updatedProfile = updated;
+        } else {
+          hadError = true;
+          console.error('Failed to save profile updates.');
+        }
       }
-    }
 
-    let trimmed = handleInput.trim();
-    if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
-    if (trimmed && trimmed !== (profile?.handle || '')) {
-      const resp = await setUserHandle(trimmed);
-      if (resp?.success) {
-        updatedProfile = { ...(updatedProfile || profile || {}), handle: resp.handle };
-      } else {
-        hadError = true;
-        setHandleStatus(resp?.error || 'Failed to save handle.');
+      let trimmed = nextHandleInput.trim();
+      if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
+      if (trimmed && trimmed !== (baseProfile?.handle || '')) {
+        const resp = await setUserHandle(trimmed);
+        if (resp?.success) {
+          updatedProfile = { ...(updatedProfile || baseProfile || {}), handle: resp.handle };
+        } else {
+          hadError = true;
+          console.error('Failed to save handle:', resp?.error || 'Unknown');
+        }
       }
-    }
 
     if (updatedProfile) {
       setProfile(updatedProfile);
@@ -180,6 +184,13 @@ export default function EditProfileScreen() {
     if (!hadError) {
       goBackOrHome(router);
     }
+      if (updatedProfile) {
+        setProfile(updatedProfile);
+      }
+      if (hadError) {
+        console.error('Edit profile save completed with errors.');
+      }
+    })();
   };
 
   const confirmDeleteAccount = () => {
@@ -321,11 +332,10 @@ export default function EditProfileScreen() {
               variant="primary"
             />
             <CTAButton
-              title={saving ? 'Saving...' : 'Save'}
+              title="Save"
               onPress={saveChanges}
               variant="filled"
               style={styles.actionButtonLast}
-              disabled={saving}
             />
           </View>
         </View>
