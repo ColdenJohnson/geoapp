@@ -86,6 +86,21 @@ export default function ActiveChallengesScreen() {
     outputRange: ['-12deg', '0deg', '12deg'],
     extrapolate: 'clamp',
   });
+  const nextCardScale = cardPan.x.interpolate({
+    inputRange: [-cardWidth, 0, cardWidth],
+    outputRange: [1, 0.95, 1],
+    extrapolate: 'clamp',
+  });
+  const nextCardTranslateY = cardPan.x.interpolate({
+    inputRange: [-cardWidth, 0, cardWidth],
+    outputRange: [0, 12, 0],
+    extrapolate: 'clamp',
+  });
+  const nextCardRotate = cardPan.x.interpolate({
+    inputRange: [-cardWidth, 0, cardWidth],
+    outputRange: ['0deg', '1.5deg', '0deg'],
+    extrapolate: 'clamp',
+  });
   const selectOpacity = cardPan.x.interpolate({
     inputRange: [30, SWIPE_THRESHOLD],
     outputRange: [0, 1],
@@ -255,17 +270,20 @@ export default function ActiveChallengesScreen() {
 
   const renderChallengeCard = useCallback((challenge, stackIndex) => {
     const isTop = stackIndex === 0;
+    const isSecond = stackIndex === 1;
     const tracksPan = challenge.pinId === panTargetPinId;
     const stackScale = 1 - stackIndex * 0.05;
     const stackOffsetY = stackIndex * 12;
-    const staticTransform = [
+    const baseTransforms = [
       { scale: stackScale },
       { translateY: stackOffsetY },
       { rotate: `${stackIndex * 1.5}deg` },
     ];
-    const topTransforms = tracksPan
+    const transforms = tracksPan
       ? [{ translateX: cardPan.x }, { translateY: cardPan.y }, { rotate: cardRotate }]
-      : [];
+      : isSecond
+        ? [{ scale: nextCardScale }, { translateY: nextCardTranslateY }, { rotate: nextCardRotate }]
+        : baseTransforms;
 
     return (
       <Animated.View
@@ -276,7 +294,8 @@ export default function ActiveChallengesScreen() {
             width: cardWidth,
             aspectRatio: CARD_ASPECT_RATIO,
             zIndex: STACK_DEPTH - stackIndex,
-            transform: [...staticTransform, ...topTransforms],
+            opacity: tracksPan && !isTop ? 0 : 1, // this is not actually necessary to make no flashing but am leaving it in as added gate: as long as the 2nd card is 'activated' by movement ahead of time it's ok.
+            transform: transforms,
           },
         ]}
         {...(isTop && !swipeLocked ? panResponder.panHandlers : {})}
@@ -336,6 +355,9 @@ export default function ActiveChallengesScreen() {
     cardRotate,
     cardWidth,
     panTargetPinId,
+    nextCardScale,
+    nextCardTranslateY,
+    nextCardRotate,
     panResponder.panHandlers,
     selectOpacity,
     skipOpacity,
