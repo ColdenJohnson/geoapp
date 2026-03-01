@@ -1,5 +1,6 @@
-import { SafeAreaView, StyleSheet, TouchableOpacity, View, Text, ScrollView, RefreshControl, ActivityIndicator, Pressable } from 'react-native';
+import { SafeAreaView, StyleSheet, TouchableOpacity, View, Text, ScrollView, RefreshControl, ActivityIndicator, Pressable, Alert, Share } from 'react-native';
 import { Image } from 'expo-image';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useCallback, useContext, useMemo, useState } from 'react';
@@ -14,6 +15,7 @@ import { CTAButton } from '@/components/ui/Buttons';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { spacing, fontSizes } from '@/theme/tokens';
+import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 
 export default function UserProfileScreen() {
   const {
@@ -62,6 +64,29 @@ export default function UserProfileScreen() {
     () => (Array.isArray(topPhotos) ? topPhotos.slice(0, 2) : []),
     [topPhotos]
   );
+  const normalizedHandle = useMemo(() => normalizeHandle(profile?.handle), [profile?.handle]);
+  const shareProfileUrl = useMemo(() => {
+    if (!normalizedHandle) return null;
+    return `${PUBLIC_BASE_URL}/friends_tab?handle=${encodeURIComponent(normalizedHandle)}`;
+  }, [normalizedHandle]);
+
+  const onShareProfile = useCallback(async () => {
+    if (!shareProfileUrl) {
+      Alert.alert('Share Profile', 'Set a unique handle before sharing your profile.');
+      return;
+    }
+    const message = `Let's Quest together. Join me on SideQuest!`;
+    try {
+      await Share.share({
+        title: 'Add me on SideQuest',
+        message,
+        url: shareProfileUrl,
+      });
+    } catch (error) {
+      console.warn('Failed to share profile', error);
+      Alert.alert('Share Profile', 'Unable to open the share menu right now.');
+    }
+  }, [shareProfileUrl]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -89,6 +114,22 @@ export default function UserProfileScreen() {
           {typeof profile?.bio === 'string' && profile.bio.trim() ? (
             <Text style={styles.bioText}>{profile.bio.trim()}</Text>
           ) : null}
+        </View>
+        <View style={styles.shareRow}>
+          <Pressable
+            onPress={onShareProfile}
+            style={({ pressed }) => [styles.sharePressable, pressed && styles.sharePressablePressed]}
+          >
+            <Text style={styles.sharePressableText}>Share Profile</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/edit_profile')}
+            style={({ pressed }) => [styles.editIconPressable, pressed && styles.sharePressablePressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Edit Profile"
+          >
+            <MaterialIcons name="edit" size={20} color={colors.primary} />
+          </Pressable>
         </View>
 
         <View style={[formStyles.card, styles.statsCard]}>
@@ -147,12 +188,6 @@ export default function UserProfileScreen() {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <CTAButton
-            title="Edit Profile"
-            onPress={() => router.push('/edit_profile')}
-            variant="primary"
-          />
-
           {/* Sign Out button, theoretically. */}
           <View style={styles.actionRow}>
             <CTAButton
@@ -254,6 +289,45 @@ function createStyles(colors) {
       fontWeight: '600',
       maxWidth: 320,
       alignSelf: 'center',
+    },
+    shareRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      alignSelf: 'center',
+      marginTop: -spacing.sm,
+      marginBottom: spacing.lg,
+    },
+    sharePressable: {
+      minHeight: 40,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      minWidth: 168,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editIconPressable: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sharePressablePressed: {
+      opacity: 0.9,
+    },
+    sharePressableText: {
+      color: colors.primary,
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 0.4,
     },
     statsCard: {
       marginBottom: spacing.lg,
@@ -419,4 +493,11 @@ function createStyles(colors) {
       marginRight: 0,
     },
   });
+}
+
+function normalizeHandle(rawHandle) {
+  if (typeof rawHandle !== 'string') return '';
+  const trimmed = rawHandle.trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
 }

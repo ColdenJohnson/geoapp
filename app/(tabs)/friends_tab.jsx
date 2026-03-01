@@ -1,6 +1,6 @@
 import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AuthContext } from '@/hooks/AuthContext';
 import {
@@ -23,6 +23,7 @@ export default function FriendsTabScreen() {
     refreshFriends,
     invalidateFriends,
   } = useContext(AuthContext);
+  const { handle: sharedHandleParam } = useLocalSearchParams();
   const [friendSearchInput, setFriendSearchInput] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchMessage, setSearchMessage] = useState(null);
@@ -33,6 +34,11 @@ export default function FriendsTabScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
+  const prefilledHandleRef = useRef('');
+  const sharedHandle = useMemo(
+    () => (Array.isArray(sharedHandleParam) ? sharedHandleParam[0] : sharedHandleParam),
+    [sharedHandleParam]
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -107,6 +113,15 @@ export default function FriendsTabScreen() {
     }, 250);
     return () => clearTimeout(timer);
   }, [friendSearchInput]);
+
+  useEffect(() => {
+    let normalized = typeof sharedHandle === 'string' ? sharedHandle.trim() : '';
+    if (normalized.startsWith('@')) normalized = normalized.slice(1);
+    if (!normalized || normalized === prefilledHandleRef.current) return;
+    prefilledHandleRef.current = normalized;
+    setFriendSearchInput(normalized);
+    runFriendSearch(normalized, { showLoading: true, allowShort: true });
+  }, [sharedHandle]);
 
   const runFriendSearchImmediate = () => {
     let trimmed = friendSearchInput.trim();
