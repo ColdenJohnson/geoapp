@@ -12,6 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.coldenjohnson.geode",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "associatedDomains": ["applinks:geode-backend-834952308922.us-central1.run.app"],
       "infoPlist": {
         "NSCameraUsageDescription": "SideQuest needs camera access to take and upload challenge photos.",
         "NSPhotoLibraryUsageDescription": "SideQuest needs access to your photos so you can select and upload challenge submissions and update your profile photo.",
