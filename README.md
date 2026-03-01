@@ -210,6 +210,9 @@ EXPO_PUBLIC_BASE_URL=https://geode-backend-834952308922.us-central1.run.app
 If the backend address changes, update the respective file and restart the dev server (for dev) or rebuild the app (for production).
 
 ## When installing new packages:
+try not to do, but sometimes required ((when editing app.json)):
+npx expo prebuild --clean
+
 `npx expo install __`
 
 `npx pod-install ios`
