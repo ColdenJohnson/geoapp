@@ -15,7 +15,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { addPhoto, fetchAllLocationPins } from '@/lib/api';
+import { addPhoto, fetchAllLocationPins, fetchSavedQuests, saveQuest, unsaveQuest } from '@/lib/api';
 import { setUploadResolver } from '@/lib/promiseStore';
 import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
@@ -25,6 +25,7 @@ import { spacing, radii } from '@/theme/tokens';
 
 const CARD_ASPECT_RATIO = 3 / 4;
 const SWIPE_THRESHOLD = 110;
+const SWIPE_UP_THRESHOLD = 110;
 const STACK_DEPTH = 3;
 
 function normalizeChallengePin(pin, index) {
@@ -67,6 +68,7 @@ export default function ActiveChallengesScreen() {
   const [loading, setLoading] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [uploadingPinId, setUploadingPinId] = useState(null);
+  const [queueMode, setQueueMode] = useState('all');
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const cardPan = useRef(new Animated.ValueXY()).current;
   const swipeAnimatingPinId = useRef(null);
@@ -81,24 +83,40 @@ export default function ActiveChallengesScreen() {
       400,
     ),
   );
+  const cardHeight = cardWidth / CARD_ASPECT_RATIO;
   const cardRotate = cardPan.x.interpolate({
     inputRange: [-cardWidth, 0, cardWidth],
     outputRange: ['-12deg', '0deg', '12deg'],
     extrapolate: 'clamp',
   });
-  const nextCardScale = cardPan.x.interpolate({
+  const horizontalPromoteProgress = cardPan.x.interpolate({
     inputRange: [-cardWidth, 0, cardWidth],
-    outputRange: [1, 0.95, 1],
+    outputRange: [1, 0, 1],
     extrapolate: 'clamp',
   });
-  const nextCardTranslateY = cardPan.x.interpolate({
-    inputRange: [-cardWidth, 0, cardWidth],
-    outputRange: [0, 12, 0],
+  const verticalPromoteProgress = cardPan.y.interpolate({
+    inputRange: [-cardHeight, 0, cardHeight],
+    outputRange: [1, 0, 0],
     extrapolate: 'clamp',
   });
-  const nextCardRotate = cardPan.x.interpolate({
-    inputRange: [-cardWidth, 0, cardWidth],
-    outputRange: ['0deg', '1.5deg', '0deg'],
+  const nextCardPromoteProgress = Animated.add(horizontalPromoteProgress, verticalPromoteProgress).interpolate({
+    inputRange: [0, 1, 2],
+    outputRange: [0, 1, 1],
+    extrapolate: 'clamp',
+  });
+  const nextCardScale = nextCardPromoteProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.95, 1],
+    extrapolate: 'clamp',
+  });
+  const nextCardTranslateY = nextCardPromoteProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [12, 0],
+    extrapolate: 'clamp',
+  });
+  const nextCardRotate = nextCardPromoteProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['1.5deg', '0deg'],
     extrapolate: 'clamp',
   });
   const selectOpacity = cardPan.x.interpolate({
@@ -115,19 +133,23 @@ export default function ActiveChallengesScreen() {
   const toastBottomOffset = footerSafePadding + 22;
   const swipeLocked = loading || isAnimating || uploadingPinId !== null;
 
-  const loadChallenges = useCallback(async ({ showSpinner = true } = {}) => {
+  const loadChallenges = useCallback(async ({ showSpinner = true, mode = 'all' } = {}) => {
     if (showSpinner) {
       setLoading(true);
     }
     try {
-      const rows = await fetchAllLocationPins({ isGeoLocked: false });
-      const sorted = Array.isArray(rows)
+      const rows = mode === 'saved'
+        ? await fetchSavedQuests()
+        : await fetchAllLocationPins({ isGeoLocked: false });
+      const sorted = Array.isArray(rows) && mode !== 'saved'
         ? [...rows].sort((a, b) => {
             const left = Date.parse(a?.updatedAt || 0);
             const right = Date.parse(b?.updatedAt || 0);
             return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
           })
-        : [];
+        : Array.isArray(rows)
+          ? rows
+          : [];
       setChallenges(sorted.map((pin, index) => normalizeChallengePin(pin, index)));
       return true;
     } catch (error) {
@@ -141,16 +163,20 @@ export default function ActiveChallengesScreen() {
   }, []);
 
   useEffect(() => {
-    loadChallenges({ showSpinner: true });
-  }, [loadChallenges]);
+    loadChallenges({ showSpinner: true, mode: queueMode });
+  }, [loadChallenges, queueMode]);
 
-  const cycleTopChallenge = useCallback(() => {
+  const advanceChallengeQueue = useCallback((direction) => {
     setChallenges((prev) => {
-      if (!Array.isArray(prev) || prev.length < 2) return prev;
+      if (!Array.isArray(prev) || prev.length === 0) return prev;
+      if (direction === 'save' && queueMode === 'saved') {
+        return prev.slice(1);
+      }
+      if (prev.length < 2) return prev;
       const [first, ...rest] = prev;
       return [...rest, first];
     });
-  }, []);
+  }, [queueMode]);
 
   const applyUploadToChallenge = useCallback((pinId, fileUrl) => {
     setChallenges((prev) => {
@@ -198,18 +224,44 @@ export default function ActiveChallengesScreen() {
     }
   }, [applyUploadToChallenge, hideToast, invalidateStats, router, showToast]);
 
+  const handleUpSwipeAction = useCallback(async (challenge) => {
+    if (!challenge?.pinId) return;
+    if (queueMode === 'saved') {
+      const result = await unsaveQuest(challenge.pinId);
+      if (!result?.success) {
+        showToast('Unsave failed', 2500);
+        return;
+      }
+      showToast('Removed from saved', 2200);
+      return;
+    }
+    const result = await saveQuest(challenge.pinId);
+    if (!result?.success) {
+      showToast('Save failed', 2500);
+      return;
+    }
+    if (!result?.alreadySaved) {
+      showToast('Saved for later', 2200);
+    }
+  }, [queueMode, showToast]);
+
   const commitSwipe = useCallback((direction) => {
     if (swipeLocked || challenges.length === 0) return;
     const topChallenge = challenges[0];
     swipeAnimatingPinId.current = topChallenge.pinId;
+    const isSave = direction === 'save';
     const exitX = direction === 'accept' ? cardWidth + 180 : -cardWidth - 180;
+    const exitY = -Math.max(cardHeight, 240) - 180;
+    const toValue = isSave
+      ? { x: 0, y: exitY }
+      : { x: exitX, y: 0 };
     setIsAnimating(true);
     Animated.timing(cardPan, {
-      toValue: { x: exitX, y: 0 },
+      toValue,
       duration: 200,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      cycleTopChallenge();
+      advanceChallengeQueue(direction);
       requestAnimationFrame(() => {
         cardPan.setValue({ x: 0, y: 0 });
         swipeAnimatingPinId.current = null;
@@ -217,20 +269,39 @@ export default function ActiveChallengesScreen() {
         if (finished && direction === 'accept') {
           beginUploadForChallenge(topChallenge);
         }
+        if (finished && direction === 'save') {
+          handleUpSwipeAction(topChallenge);
+        }
       });
     });
-  }, [beginUploadForChallenge, cardPan, cardWidth, challenges, cycleTopChallenge, swipeLocked]);
+  }, [
+    advanceChallengeQueue,
+    beginUploadForChallenge,
+    cardHeight,
+    cardPan,
+    cardWidth,
+    challenges,
+    handleUpSwipeAction,
+    swipeLocked,
+  ]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => !swipeLocked && challenges.length > 0,
     onMoveShouldSetPanResponder: (_, gestureState) =>
       !swipeLocked &&
       challenges.length > 0 &&
-      Math.abs(gestureState.dx) > 6,
+      (Math.abs(gestureState.dx) > 6 || Math.abs(gestureState.dy) > 6),
     onPanResponderMove: Animated.event([null, { dx: cardPan.x, dy: cardPan.y }], {
       useNativeDriver: false,
     }),
     onPanResponderRelease: (_, gestureState) => {
+      if (
+        gestureState.dy < -SWIPE_UP_THRESHOLD &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.05
+      ) {
+        commitSwipe('save');
+        return;
+      }
       if (gestureState.dx > SWIPE_THRESHOLD) {
         commitSwipe('accept');
         return;
@@ -370,14 +441,16 @@ export default function ActiveChallengesScreen() {
       <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Quests</Text>
+            <Text style={styles.headerTitle}>{queueMode === 'saved' ? 'Saved Quests' : 'Quests'}</Text>
             <Text style={styles.headerSubtitle}>
-              Swipe right to accept, left to send it back.
+              {queueMode === 'saved'
+                ? 'Swipe up to remove from saved.'
+                : 'Swipe right to accept, left to send back, up to save.'}
             </Text>
           </View>
           <Pressable
             style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.55 : 1 }]}
-            onPress={() => loadChallenges({ showSpinner: true })}
+            onPress={() => loadChallenges({ showSpinner: true, mode: queueMode })}
             disabled={loading}
           >
             <MaterialIcons name="refresh" size={22} color={colors.text} />
@@ -393,7 +466,9 @@ export default function ActiveChallengesScreen() {
           ) : stack.length === 0 ? (
             <View style={styles.centeredState}>
               <MaterialIcons name="explore-off" size={32} color={colors.textMuted} />
-              <Text style={styles.stateText}>No non-geo challenges yet.</Text>
+              <Text style={styles.stateText}>
+                {queueMode === 'saved' ? 'No saved challenges yet.' : 'No non-geo challenges yet.'}
+              </Text>
             </View>
           ) : (
             stack
@@ -417,6 +492,23 @@ export default function ActiveChallengesScreen() {
             disabled={swipeLocked || stack.length === 0}
           >
             <MaterialIcons name="close" size={28} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.footerButton,
+              queueMode === 'saved' ? styles.savedFilterButtonActive : styles.savedFilterButton,
+              { opacity: pressed || swipeLocked ? 0.75 : 1 },
+            ]}
+            onPress={() => {
+              setQueueMode((prev) => (prev === 'saved' ? 'all' : 'saved'));
+            }}
+            disabled={swipeLocked}
+          >
+            <MaterialIcons
+              name={queueMode === 'saved' ? 'bookmark' : 'bookmark-border'}
+              size={26}
+              color={queueMode === 'saved' ? colors.primaryTextOn : colors.primary}
+            />
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -669,6 +761,14 @@ function createStyles(colors) {
     skipFooterButton: {
       borderColor: colors.border,
       backgroundColor: colors.bg,
+    },
+    savedFilterButton: {
+      borderColor: colors.primary,
+      backgroundColor: colors.bg,
+    },
+    savedFilterButtonActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
     },
     acceptFooterButton: {
       borderColor: colors.primary,
