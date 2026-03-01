@@ -47,8 +47,10 @@ function normalizeChallengePin(pin, index) {
     ? pin.created_by_name.trim()
     : 'Anonymous';
   const uploadsCount = Number.isFinite(pin?.photo_count) ? Math.max(0, pin.photo_count) : 0;
-  const teaserPhoto = typeof pin?.most_recent_photo_url === 'string' && pin.most_recent_photo_url
-    ? pin.most_recent_photo_url
+  const teaserPhoto = typeof pin?.top_global_photo?.file_url === 'string' && pin.top_global_photo.file_url
+    ? pin.top_global_photo.file_url
+    : typeof pin?.most_recent_photo_url === 'string' && pin.most_recent_photo_url
+      ? pin.most_recent_photo_url
     : null;
 
   return {
