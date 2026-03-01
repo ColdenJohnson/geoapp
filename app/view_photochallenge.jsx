@@ -3,7 +3,7 @@ import { StyleSheet, View, ActivityIndicator, FlatList, RefreshControl, Pressabl
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchPhotosByPinId, addPhoto } from '@/lib/api';
+import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId } from '@/lib/api';
 import { setUploadResolver } from '../lib/promiseStore';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton } from '@/components/ui/Buttons';
@@ -70,17 +70,20 @@ export default function ViewPhotoChallengeScreen() {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [challengeMeta, setChallengeMeta] = useState(null);
   const router = useRouter();
   const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { invalidateStats } = useContext(AuthContext);
-  const promptText = typeof promptParam === 'string' && promptParam.trim()
-    ? promptParam
-    : 'Prompt';
-  const handleText = typeof handleParam === 'string' && handleParam.trim()
-    ? handleParam
+  const promptParamText = typeof promptParam === 'string' && promptParam.trim()
+    ? promptParam.trim()
     : null;
+  const handleParamText = typeof handleParam === 'string' && handleParam.trim()
+    ? handleParam.trim()
+    : null;
+  const promptText = promptParamText || challengeMeta?.message || 'Prompt';
+  const handleText = handleParamText || challengeMeta?.created_by_handle || null;
   const optimisticPhotoUrls = useMemo(() => {
     if (typeof optimisticPhotoUrlsParam !== 'string') return [];
     try {
@@ -185,6 +188,32 @@ export default function ViewPhotoChallengeScreen() {
       cancelled = true;
     };
   }, [pinId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadChallengeMeta() {
+      if (!pinId) {
+        setChallengeMeta(null);
+        return;
+      }
+      if (promptParamText && handleParamText) {
+        return;
+      }
+      try {
+        const challenge = await fetchChallengeByPinId(pinId);
+        if (cancelled || !challenge) return;
+        setChallengeMeta(challenge);
+      } catch (error) {
+        console.error('Failed to fetch challenge metadata for pin', pinId, error);
+      }
+    }
+
+    loadChallengeMeta();
+    return () => {
+      cancelled = true;
+    };
+  }, [pinId, promptParamText, handleParamText]);
 
   const onRefresh = async () => {
     setRefreshing(true);
