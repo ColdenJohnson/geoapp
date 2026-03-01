@@ -16,6 +16,7 @@ import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
 import { spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { goBackOrHome } from '@/lib/navigation';
 
 const PHOTO_RATIO = '3:4';
 const PHOTO_ASPECT_RATIO = 3 / 4;
@@ -127,7 +128,7 @@ export default function Upload({ initialUri = null }) {
       router.push(String(next));
     } else {
       console.log('No next specified, going back');
-      router.back();
+      goBackOrHome(router);
     }
   };
 

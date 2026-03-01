@@ -21,6 +21,7 @@ import { CTAButton } from '@/components/ui/Buttons';
 
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii } from '@/theme/tokens';
+import { goBackOrHome } from '@/lib/navigation';
 
 import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseStore';
 import { uploadImage } from '@/lib/uploadHelpers';
@@ -154,7 +155,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
       }
     })();
 
-    router.back();
+    goBackOrHome(router);
   };
 
   const renderCamera = () => (
@@ -186,7 +187,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
               )}
             </Pressable>
             <Pressable onPress={toggleFacing} style={styles.flipButton}>
-              <FontAwesome6 name="rotate-left" size={24} color={colors.text} />
+              <FontAwesome6 name="rotate-left" size={24} color={'#F6EFE8'} />
             </Pressable>
           </View>
         </View>

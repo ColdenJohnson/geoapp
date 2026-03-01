@@ -5,7 +5,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { fetchPhotosByPinId, addPhoto, fetchChallengeByPinId, setPinPrivacy } from '@/lib/api';
 import { readPinPhotosCache, writePinPhotosCache, readPinMetaCache, writePinMetaCache } from '@/lib/pinChallengeCache';
 import { setUploadResolver } from '../lib/promiseStore';
+import { goBackOrHome } from '@/lib/navigation';
 import BottomBar from '@/components/ui/BottomBar';
+import AppHeader from '@/components/ui/AppHeader';
 import { CTAButton } from '@/components/ui/Buttons';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { PreferenceToggleRow } from '@/components/ui/PreferenceToggleRow';
@@ -323,12 +325,12 @@ export default function ViewPhotoChallengeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <Text style={styles.headerText}>{promptText}</Text>
-        <Text style={styles.headerHandle}>
-          {handleText ? `@${handleText}` : 'anon'}
-        </Text>
-      </View>
+      <AppHeader
+        onBack={() => goBackOrHome(router)}
+        backText={router?.canGoBack?.() ? 'Back' : 'Home'}
+        title={promptText}
+        subtitle={handleText ? `@${handleText}` : 'anon'}
+      />
       <View style={styles.container}>
         {loading ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 24 }} />
@@ -395,29 +397,6 @@ export default function ViewPhotoChallengeScreen() {
 function createStyles(colors) {
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: colors.surface },
-    header: {
-      paddingHorizontal: 18,
-      paddingTop: 14,
-      paddingBottom: 14,
-      backgroundColor: colors.bg,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.barBorder,
-    },
-    headerText: {
-      fontSize: 20,
-      fontWeight: '900',
-      color: colors.primary,
-      letterSpacing: 0.4,
-      fontFamily: 'SpaceMono',
-    },
-    headerHandle: {
-      marginTop: 4,
-      fontSize: 11,
-      color: colors.textMuted,
-      fontWeight: '800',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
-    },
     privacyFooterRow: {
       marginBottom: 10,
     },

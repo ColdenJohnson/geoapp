@@ -41,7 +41,7 @@ describe('Upload screen', () => {
 
     const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
 
-    fireEvent.press(getByText('Upload'));
+    fireEvent.press(getByText('UPLOAD>'));
 
     expect(router.back).toHaveBeenCalled();
 

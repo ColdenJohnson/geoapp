@@ -29,11 +29,21 @@ function RootLayoutContent({ loaded }) {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       {user ? (
         <>
-          <Stack>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+            }}
+          >
             <Stack.Screen name="(tabs)" options={{ headerShown: false, title:"Map"}} />
             <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
             <Stack.Screen name="friends" options={{ headerShown: false }} />
-            <Stack.Screen name="enter_message" options={{ title: 'Create a new challenge' }} />
+            <Stack.Screen name="enter_message" options={{ title: 'Create a new Quest' }} />
+            <Stack.Screen name="upload" options={{ title: 'Upload Photo' }} />
+            <Stack.Screen 
+              name="view_photochallenge" 
+              options={{ 
+                title: 'View Quest',
+              }} />
           </Stack>
           <StatusBar style="auto" />
         </>

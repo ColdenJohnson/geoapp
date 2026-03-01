@@ -1,4 +1,4 @@
-import { StyleSheet, TextInput, TouchableOpacity, Pressable, View, Text, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, Pressable, View, Text, Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import { spacing, fontSizes } from '@/theme/tokens';
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
+import { goBackOrHome } from '@/lib/navigation';
 
 const BIO_MAX_LENGTH = 100;
 
@@ -177,7 +178,7 @@ export default function EditProfileScreen() {
 
     setSaving(false);
     if (!hadError) {
-      router.back();
+      goBackOrHome(router);
     }
   };
 
@@ -212,7 +213,10 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -220,6 +224,7 @@ export default function EditProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       >
         <View style={styles.body}>
           <Text style={styles.pageTitle}>Edit Profile</Text>
@@ -311,7 +316,7 @@ export default function EditProfileScreen() {
           <View style={styles.actionRow}>
             <CTAButton
               title="Cancel"
-              onPress={() => router.back()}
+              onPress={() => goBackOrHome(router)}
               style={styles.actionButton}
               variant="primary"
             />
@@ -325,7 +330,7 @@ export default function EditProfileScreen() {
           </View>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

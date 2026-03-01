@@ -15,6 +15,7 @@ jest.mock('expo-router', () => {
     push: jest.fn(),
     replace: jest.fn(),
     back: jest.fn(),
+    canGoBack: jest.fn(() => true),
   };
 
   return {
@@ -110,6 +111,15 @@ jest.mock('expo-notifications', () => {
 jest.mock('expo-constants', () => ({
   expoConfig: { extra: { eas: { projectId: 'mock-project-id' } } },
 }));
+
+jest.mock('react-native-safe-area-context', () => {
+  const React = require('react');
+  return {
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaProvider: ({ children }) => <>{children}</>,
+    SafeAreaView: ({ children }) => <>{children}</>,
+  };
+});
 
 // Use the recommended mock for Reanimated to avoid native dependency issues
 jest.mock('react-native-reanimated', () => {
