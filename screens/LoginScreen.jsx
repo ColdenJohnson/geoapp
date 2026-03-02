@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useContext } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
 import { View, TextInput, Text, StyleSheet, Alert, Pressable, Image, TouchableWithoutFeedback, Keyboard } from 'react-native';
@@ -6,7 +6,6 @@ import auth from '@react-native-firebase/auth';
 import CountryPicker, { DARK_THEME, DEFAULT_THEME } from 'react-native-country-picker-modal';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { AuthContext } from '@/hooks/AuthContext';
 import { useIsDarkMode, usePalette } from '@/hooks/usePalette';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton, OutlineIconButton } from '@/components/ui/Buttons';
@@ -29,7 +28,6 @@ export default function LoginScreen() {
   const [countryCode, setCountryCode] = useState('US');
   const [callingCode, setCallingCode] = useState('1');
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
-  const { setUser } = useContext(AuthContext);
   const colors = usePalette();
   const isDarkMode = useIsDarkMode();
   const countryPickerTheme = useMemo(() => (
@@ -62,7 +60,7 @@ export default function LoginScreen() {
       if (user) {
         const token = await user.getIdToken();
         await AsyncStorage.setItem('user_token', token);
-        setUser({ token });
+        // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
       }
     } catch (err) {
       setErrorMsg(err?.message || String(err));
@@ -120,7 +118,7 @@ export default function LoginScreen() {
       if (user) {
         const token = await user.getIdToken();
         await AsyncStorage.setItem('user_token', token);
-        setUser({ token });
+        // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
       }
     } catch (err) {
       setErrorMsg(err?.message || String(err));

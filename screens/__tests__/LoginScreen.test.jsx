@@ -62,7 +62,7 @@ describe('LoginScreen', () => {
     );
     expect(auth().currentUser.getIdToken).toHaveBeenCalled();
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('user_token', 'token-abc');
-    expect(contextValue.setUser).toHaveBeenCalledWith({ token: 'token-abc' });
+    expect(contextValue.setUser).not.toHaveBeenCalled();
   });
 
   it('renders error when login fails', async () => {
