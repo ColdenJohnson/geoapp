@@ -19,6 +19,7 @@ const DRAG_RESPONSE_MULTIPLIER = 1.3;
 const COMMIT_EXPAND_DURATION_MS = 100;
 const COMMIT_HOLD_DURATION_MS = 350;
 const PHOTO_SIDE_CROP_PX = 20;
+const PHOTO_ASPECT_RATIO = 3 / 4;
 const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
 function clamp(value, min, max) {
@@ -39,10 +40,11 @@ export default function DuelDeck({
   overlayStyle,
 }) {
   const incomingPhotos = useMemo(() => (Array.isArray(pair) ? pair.slice(0, 2) : []), [pair]);
+  const { width: windowWidth } = useWindowDimensions();
   const [photos, setPhotos] = useState(() => incomingPhotos);
+  const [deckBounds, setDeckBounds] = useState(() => ({ width: Math.max(1, windowWidth), height: 0 }));
   const pendingPhotosRef = useRef(null);
   const voteLockedRef = useRef(false);
-  const { width: windowWidth } = useWindowDimensions();
 
   const dividerX = useSharedValue(0);
   const dismissProgress = useSharedValue(0);
@@ -53,11 +55,31 @@ export default function DuelDeck({
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  useEffect(() => {
-    if (windowWidth > 0) {
-      deckWidth.value = windowWidth;
+  const photoStageSize = useMemo(() => {
+    const fallbackWidth = Math.max(1, windowWidth);
+    const availableWidth = Number.isFinite(deckBounds.width) && deckBounds.width > 0
+      ? deckBounds.width
+      : fallbackWidth;
+    const availableHeight = Number.isFinite(deckBounds.height) && deckBounds.height > 0
+      ? deckBounds.height
+      : availableWidth / PHOTO_ASPECT_RATIO;
+
+    let width = availableWidth;
+    let height = width / PHOTO_ASPECT_RATIO;
+    if (height > availableHeight) {
+      height = availableHeight;
+      width = height * PHOTO_ASPECT_RATIO;
     }
-  }, [windowWidth, deckWidth]);
+
+    return {
+      width: Math.max(1, width),
+      height: Math.max(1, height),
+    };
+  }, [deckBounds.height, deckBounds.width, windowWidth]);
+
+  useEffect(() => {
+    deckWidth.value = photoStageSize.width;
+  }, [photoStageSize.width, deckWidth]);
 
   useEffect(() => {
     if (IS_DEV_LOG) {
@@ -117,11 +139,17 @@ export default function DuelDeck({
   const handleDeckLayout = useCallback(
     (event) => {
       const width = event?.nativeEvent?.layout?.width;
-      if (Number.isFinite(width) && width > 0) {
-        deckWidth.value = width;
-      }
+      const height = event?.nativeEvent?.layout?.height;
+      setDeckBounds((current) => {
+        const nextWidth = Number.isFinite(width) && width > 0 ? width : current.width;
+        const nextHeight = Number.isFinite(height) && height > 0 ? height : current.height;
+        if (Math.abs(current.width - nextWidth) < 0.5 && Math.abs(current.height - nextHeight) < 0.5) {
+          return current;
+        }
+        return { width: nextWidth, height: nextHeight };
+      });
     },
-    [deckWidth]
+    [setDeckBounds]
   );
 
   const panGesture = Gesture.Pan()
@@ -214,67 +242,69 @@ export default function DuelDeck({
   return (
     <GestureDetector gesture={panGesture}>
       <View style={[styles.deckArea, deckStyle]} onLayout={handleDeckLayout}>
-        <Animated.View style={[styles.pane, styles.leftPane, leftPaneStyle]}>
-          <Animated.View style={[styles.fullFrame, styles.leftFrame, fullFrameStyle, cardStyle]}>
-            <View style={styles.photoViewport}>
-              <View style={styles.photoCropFrame}>
-                <Image
-                  source={{ uri: photos[0]?.file_url }}
-                  style={[styles.photo, imageStyle]}
-                  contentFit="contain"
-                  contentPosition="center"
-                  cachePolicy="memory-disk"
-                />
+        <View style={[styles.photoStage, photoStageSize]}>
+          <Animated.View style={[styles.pane, styles.leftPane, leftPaneStyle]}>
+            <Animated.View style={[styles.fullFrame, styles.leftFrame, fullFrameStyle, cardStyle]}>
+              <View style={styles.photoViewport}>
+                <View style={styles.photoCropFrame}>
+                  <Image
+                    source={{ uri: photos[0]?.file_url }}
+                    style={[styles.photo, imageStyle]}
+                    contentFit="contain"
+                    contentPosition="center"
+                    cachePolicy="memory-disk"
+                  />
+                </View>
               </View>
-            </View>
-            <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
-            <Animated.View style={[styles.metaSlot, leftMetaStyle]} pointerEvents="none">
-              {typeof renderMeta === 'function' ? renderMeta(photos[0], 0) : null}
-            </Animated.View>
-            <Animated.View style={[styles.winnerOverlay, leftWinnerStyle]} pointerEvents="none">
-              <View style={styles.winnerBadge}>
-                <Text style={styles.winnerCheck}>✓</Text>
-              </View>
-              <Text style={styles.winnerText}>WINNER!</Text>
+              <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
+              <Animated.View style={[styles.metaSlot, leftMetaStyle]} pointerEvents="none">
+                {typeof renderMeta === 'function' ? renderMeta(photos[0], 0) : null}
+              </Animated.View>
+              <Animated.View style={[styles.winnerOverlay, leftWinnerStyle]} pointerEvents="none">
+                <View style={styles.winnerBadge}>
+                  <Text style={styles.winnerCheck}>✓</Text>
+                </View>
+                <Text style={styles.winnerText}>WINNER!</Text>
+              </Animated.View>
             </Animated.View>
           </Animated.View>
-        </Animated.View>
 
-        <Animated.View style={[styles.pane, styles.rightPane, rightPaneStyle]}>
-          <Animated.View style={[styles.fullFrame, styles.rightFrame, fullFrameStyle, cardStyle]}>
-            <View style={styles.photoViewport}>
-              <View style={styles.photoCropFrame}>
-                <Image
-                  source={{ uri: photos[1]?.file_url }}
-                  style={[styles.photo, imageStyle]}
-                  contentFit="contain"
-                  contentPosition="center"
-                  cachePolicy="memory-disk"
-                />
+          <Animated.View style={[styles.pane, styles.rightPane, rightPaneStyle]}>
+            <Animated.View style={[styles.fullFrame, styles.rightFrame, fullFrameStyle, cardStyle]}>
+              <View style={styles.photoViewport}>
+                <View style={styles.photoCropFrame}>
+                  <Image
+                    source={{ uri: photos[1]?.file_url }}
+                    style={[styles.photo, imageStyle]}
+                    contentFit="contain"
+                    contentPosition="center"
+                    cachePolicy="memory-disk"
+                  />
+                </View>
               </View>
-            </View>
-            <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
-            <Animated.View style={[styles.metaSlot, rightMetaStyle]} pointerEvents="none">
-              {typeof renderMeta === 'function' ? renderMeta(photos[1], 1) : null}
-            </Animated.View>
-            <Animated.View style={[styles.winnerOverlay, rightWinnerStyle]} pointerEvents="none">
-              <View style={styles.winnerBadge}>
-                <Text style={styles.winnerCheck}>✓</Text>
-              </View>
-              <Text style={styles.winnerText}>WINNER!</Text>
+              <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
+              <Animated.View style={[styles.metaSlot, rightMetaStyle]} pointerEvents="none">
+                {typeof renderMeta === 'function' ? renderMeta(photos[1], 1) : null}
+              </Animated.View>
+              <Animated.View style={[styles.winnerOverlay, rightWinnerStyle]} pointerEvents="none">
+                <View style={styles.winnerBadge}>
+                  <Text style={styles.winnerCheck}>✓</Text>
+                </View>
+                <Text style={styles.winnerText}>WINNER!</Text>
+              </Animated.View>
             </Animated.View>
           </Animated.View>
-        </Animated.View>
 
-        <Animated.View style={[styles.dividerRail, dividerStyle]} pointerEvents="none">
-          <Animated.View style={[styles.handleBubble, handleBubbleStyle]}>
-            <Text style={styles.handleGlyph}>VS</Text>
+          <Animated.View style={[styles.dividerRail, dividerStyle]} pointerEvents="none">
+            <Animated.View style={[styles.handleBubble, handleBubbleStyle]}>
+              <Text style={styles.handleGlyph}>VS</Text>
+            </Animated.View>
+            <Animated.View style={[styles.hintRow, hintStyle]}>
+              <Text style={styles.hintArrow}>‹</Text>
+              <Text style={styles.hintArrow}>›</Text>
+            </Animated.View>
           </Animated.View>
-          <Animated.View style={[styles.hintRow, hintStyle]}>
-            <Text style={styles.hintArrow}>‹</Text>
-            <Text style={styles.hintArrow}>›</Text>
-          </Animated.View>
-        </Animated.View>
+        </View>
       </View>
     </GestureDetector>
   );
@@ -288,6 +318,14 @@ function createStyles(colors) {
       justifyContent: 'center',
       alignSelf: 'center',
       width: '100%',
+      overflow: 'hidden',
+      backgroundColor: colors.surface,
+    },
+    photoStage: {
+      position: 'relative',
+      alignSelf: 'center',
+      alignItems: 'center',
+      justifyContent: 'center',
       overflow: 'hidden',
       backgroundColor: colors.surface,
     },
@@ -326,7 +364,7 @@ function createStyles(colors) {
       height: '100%',
     },
     photoShade: {
-      backgroundColor: 'transparent',
+      backgroundColor: 'rgba(0, 0, 0, 0.24)',
     },
     metaSlot: {
       position: 'absolute',
