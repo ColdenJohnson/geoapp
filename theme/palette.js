@@ -29,6 +29,12 @@ export const light = {
   success: '#1F9D69',
   warning: '#D97706',
   danger:  '#DC2626',
+
+  // profile badges
+  badgeEarnedBg: '#FF6B35',
+  badgeEarnedIcon: '#FFFFFF',
+  badgeLockedBg: '#B8B2AC',
+  badgeLockedIcon: '#FDFCFB',
 };
 
 export const dark = {
@@ -53,4 +59,10 @@ export const dark = {
   success: '#34D399',
   warning: '#FBBF24',
   danger:  '#F87171',
+
+  // profile badges
+  badgeEarnedBg: '#FF8A5C',
+  badgeEarnedIcon: '#1A100A',
+  badgeLockedBg: '#6D6258',
+  badgeLockedIcon: '#F6EFE8',
 };

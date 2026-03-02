@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,6 +16,13 @@ import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { spacing, fontSizes } from '@/theme/tokens';
 import { PUBLIC_BASE_URL } from '@/lib/apiClient';
+
+const PROFILE_BADGES = [
+  { id: 'photos_10', label: '10 Photos', icon: 'photo-camera' },
+  { id: 'photos_100', label: '100 Photos', icon: 'collections' },
+  { id: 'elo_1100', label: '1100 Elo', icon: 'emoji-events' },
+  { id: 'elo_1200', label: '1200 Elo', icon: 'emoji-events' },
+];
 
 export default function UserProfileScreen() {
   const {
@@ -37,6 +44,8 @@ export default function UserProfileScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const authUser = auth().currentUser;
+  const refreshTopPhotosRef = useRef(refreshTopPhotos);
+  refreshTopPhotosRef.current = refreshTopPhotos;
   const contactValue =
     user?.email ||
     authUser?.phoneNumber ||
@@ -55,10 +64,10 @@ export default function UserProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      refreshTopPhotos({ force: false }).catch((error) => {
+      refreshTopPhotosRef.current({ force: false }).catch((error) => {
         console.warn('Failed to refresh top photos', error);
       });
-    }, [refreshTopPhotos])
+    }, [])
   );
   const displayedTopPhotos = useMemo(
     () => (Array.isArray(topPhotos) ? topPhotos.slice(0, 2) : []),
@@ -69,6 +78,14 @@ export default function UserProfileScreen() {
     if (!normalizedHandle) return null;
     return `${PUBLIC_BASE_URL}/friends_tab?handle=${encodeURIComponent(normalizedHandle)}`;
   }, [normalizedHandle]);
+  const earnedBadgeIdSet = useMemo(() => {
+    const earnedIds = Array.isArray(stats?.earned_badges) ? stats.earned_badges : [];
+    return new Set(earnedIds);
+  }, [stats?.earned_badges]);
+  const earnedBadgeCount = useMemo(
+    () => PROFILE_BADGES.filter((badge) => earnedBadgeIdSet.has(badge.id)).length,
+    [earnedBadgeIdSet]
+  );
 
   const onShareProfile = useCallback(async () => {
     if (!shareProfileUrl) {
@@ -136,6 +153,42 @@ export default function UserProfileScreen() {
           <Text style={styles.sectionTitle}>Stats</Text>
           <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? profile?.pin_count ?? 0}</Text>
           <Text style={styles.statsText}>Photos posted: {stats?.photo_count ?? profile?.photo_count ?? 0}</Text>
+        </View>
+
+        <View style={[formStyles.card, styles.badgesCard]}>
+          <View style={styles.badgesHeaderRow}>
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <View style={styles.badgesCountPill}>
+              <MaterialIcons name="emoji-events" size={14} color={colors.primary} />
+              <Text style={styles.badgesCountText}>
+                {earnedBadgeCount}/{PROFILE_BADGES.length}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.badgesGrid}>
+            {PROFILE_BADGES.map((badge) => {
+              const isEarned = earnedBadgeIdSet.has(badge.id);
+              return (
+                <View key={badge.id} style={styles.badgeItem}>
+                  <View
+                    style={[
+                      styles.badgeIconWrap,
+                      {
+                        backgroundColor: isEarned ? colors.badgeEarnedBg : colors.badgeLockedBg,
+                      },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={badge.icon}
+                      size={20}
+                      color={isEarned ? colors.badgeEarnedIcon : colors.badgeLockedIcon}
+                    />
+                  </View>
+                  <Text style={styles.badgeLabel}>{badge.label}</Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
 
         <View style={[formStyles.card, styles.topPhotosCard]}>
@@ -332,6 +385,9 @@ function createStyles(colors) {
     statsCard: {
       marginBottom: spacing.lg,
     },
+    badgesCard: {
+      marginBottom: spacing.lg,
+    },
     topPhotosCard: {
       marginBottom: spacing.lg,
     },
@@ -421,6 +477,60 @@ function createStyles(colors) {
       color: colors.textMuted,
       lineHeight: 24,
       fontWeight: '700',
+    },
+    badgesHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    badgesCountPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+    },
+    badgesCountText: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '900',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
+    badgesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginHorizontal: -spacing.xs,
+      marginTop: spacing.xs,
+    },
+    badgeItem: {
+      width: '25%',
+      paddingHorizontal: spacing.xs,
+      paddingTop: spacing.md,
+      alignItems: 'center',
+    },
+    badgeIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    badgeLabel: {
+      marginTop: spacing.xs,
+      color: colors.textMuted,
+      textAlign: 'center',
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 0.7,
+      textTransform: 'uppercase',
+      lineHeight: 13,
     },
     topPhotosGrid: {
       flexDirection: 'row',

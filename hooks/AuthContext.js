@@ -23,6 +23,7 @@ export function AuthProvider({ children }) {
   const [topPhotosDirty, setTopPhotosDirty] = useState(false);
   const [topPhotosFetchedAt, setTopPhotosFetchedAt] = useState(null);
   const preloadRef = useRef({ friends: false, stats: false, topPhotos: false });
+  const pendingStatsRefreshRef = useRef(false);
 
   const friendsCacheKey = (uid) => `friends_cache_${uid}`;
   const statsCacheKey = (uid) => `stats_cache_${uid}`;
@@ -112,6 +113,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     preloadRef.current = { friends: false, stats: false, topPhotos: false };
     setTopPhotosDirty(false);
+    pendingStatsRefreshRef.current = false;
   }, [user?.uid]);
 
   useEffect(() => {
@@ -203,7 +205,13 @@ export function AuthProvider({ children }) {
 
   async function refreshStats({ force = false } = {}) {
     if (!user?.uid) return null;
-    if (statsLoading) return null;
+    if (statsLoading) {
+      if (force) {
+        setStatsDirty(true);
+        pendingStatsRefreshRef.current = true;
+      }
+      return null;
+    }
     if (!force && !statsDirty) return null;
     setStatsLoading(true);
     try {
@@ -285,6 +293,14 @@ export function AuthProvider({ children }) {
       refreshTopPhotos({ force: false });
     }
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    if (statsLoading) return;
+    if (!pendingStatsRefreshRef.current) return;
+    pendingStatsRefreshRef.current = false;
+    refreshStats({ force: true });
+  }, [user?.uid, statsLoading]);
 
   return (
     <AuthContext.Provider value={{
