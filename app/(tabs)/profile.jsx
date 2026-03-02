@@ -149,12 +149,6 @@ export default function UserProfileScreen() {
           </Pressable>
         </View>
 
-        <View style={[formStyles.card, styles.statsCard]}>
-          <Text style={styles.sectionTitle}>Stats</Text>
-          <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? profile?.pin_count ?? 0}</Text>
-          <Text style={styles.statsText}>Photos posted: {stats?.photo_count ?? profile?.photo_count ?? 0}</Text>
-        </View>
-
         <View style={[formStyles.card, styles.badgesCard]}>
           <View style={styles.badgesHeaderRow}>
             <Text style={styles.sectionTitle}>Achievements</Text>
@@ -189,6 +183,12 @@ export default function UserProfileScreen() {
               );
             })}
           </View>
+        </View>
+
+        <View style={[formStyles.card, styles.statsCard]}>
+          <Text style={styles.sectionTitle}>Stats</Text>
+          <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? profile?.pin_count ?? 0}</Text>
+          <Text style={styles.statsText}>Photos posted: {stats?.photo_count ?? profile?.photo_count ?? 0}</Text>
         </View>
 
         <View style={[formStyles.card, styles.topPhotosCard]}>

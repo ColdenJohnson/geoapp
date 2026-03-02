@@ -10,7 +10,7 @@ export const light = {
   // map pins
   pinGeoLocked: '#FF6B35',
   pinGeoLockedFriend: '#e2460e',
-  pinPrivate: '#638475',
+  pinPrivate: '#661A00',
   pinOpen: '#FFE1D6',
 
   // text
