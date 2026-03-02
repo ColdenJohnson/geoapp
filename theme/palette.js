@@ -10,8 +10,8 @@ export const light = {
   // map pins
   pinGeoLocked: '#FF6B35',
   pinGeoLockedFriend: '#e2460e',
-  pinPrivate: '#FFE1D6',
-  pinOpen: '#FFF0EB',
+  pinPrivate: '#638475',
+  pinOpen: '#FFE1D6',
 
   // text
   text: '#1A1A1A',
@@ -38,8 +38,8 @@ export const dark = {
   // map pins
   pinGeoLocked: '#FF8A5C',
   pinGeoLockedFriend: '#FF6B35',
-  pinPrivate: '#FFE1D6',
-  pinOpen: '#FFF0EB',
+  pinPrivate: '#575A4B',
+  pinOpen: '#FFE1D6',
 
   text: '#F6EFE8',
   textMuted: '#B7A89A',
