@@ -185,7 +185,8 @@ export default function DuelDeck({
     const active = absX >= threshold;
     return {
       transform: [{ scale: 1 + Math.min(absX / 420, 0.22) }],
-      backgroundColor: active ? colors.primary : '#FFFFFF',
+      backgroundColor: active ? colors.primary : colors.bg,
+      borderColor: active ? colors.primary : colors.surface,
     };
   });
 
@@ -288,7 +289,7 @@ function createStyles(colors) {
       alignSelf: 'center',
       width: '100%',
       overflow: 'hidden',
-      backgroundColor: '#000000',
+      backgroundColor: colors.surface,
     },
     pane: {
       position: 'absolute',
@@ -302,7 +303,7 @@ function createStyles(colors) {
       position: 'absolute',
       top: 0,
       bottom: 0,
-      backgroundColor: '#000000',
+      backgroundColor: colors.surface,
     },
     leftFrame: { left: 0 },
     rightFrame: { right: 0 },
@@ -310,7 +311,7 @@ function createStyles(colors) {
       ...StyleSheet.absoluteFillObject,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#000000',
+      backgroundColor: colors.surface,
       overflow: 'hidden',
     },
     photoCropFrame: {
@@ -325,7 +326,7 @@ function createStyles(colors) {
       height: '100%',
     },
     photoShade: {
-      backgroundColor: 'rgba(0, 0, 0, 0.24)',
+      backgroundColor: 'transparent',
     },
     metaSlot: {
       position: 'absolute',
@@ -367,7 +368,7 @@ function createStyles(colors) {
       top: 0,
       bottom: 0,
       width: 2,
-      backgroundColor: 'rgba(255, 255, 255, 0.34)',
+      backgroundColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 30,
@@ -377,10 +378,10 @@ function createStyles(colors) {
       height: 64,
       borderRadius: 32,
       borderWidth: 4,
-      borderColor: '#FFFFFF',
+      borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#000000',
+      shadowColor: colors.text,
       shadowOffset: { width: 0, height: 8 },
       shadowRadius: 16,
       shadowOpacity: 0.25,
@@ -390,7 +391,7 @@ function createStyles(colors) {
     handleGlyph: {
       fontSize: 18,
       fontWeight: '900',
-      color: '#0f172a',
+      color: colors.text,
       letterSpacing: 0.8,
     },
     hintRow: {
@@ -403,7 +404,7 @@ function createStyles(colors) {
     },
     hintArrow: {
       fontSize: 29,
-      color: 'rgba(255, 255, 255, 0.82)',
+      color: "#ffffff",
       fontWeight: '800',
       lineHeight: 29,
     },

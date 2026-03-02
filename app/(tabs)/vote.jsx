@@ -375,37 +375,38 @@ export default function GlobalVoteScreen() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    safe: { flex: 1, backgroundColor: '#000000' },
+    safe: { flex: 1, backgroundColor: colors.surface },
     container: {
       flex: 1,
-      backgroundColor: '#000000',
+      backgroundColor: colors.surface,
     },
-    voteStage: { flex: 1, backgroundColor: '#000000' },
+    voteStage: { flex: 1, backgroundColor: colors.surface, justifyContent: 'flex-end' },
     topChrome: {
       paddingTop: 8,
       paddingHorizontal: 14,
       alignItems: 'center',
-      backgroundColor: '#000000',
+      backgroundColor: colors.surface,
     },
     deckStage: {
       flex: 1,
       width: '100%',
-      backgroundColor: '#000000',
+      backgroundColor: colors.surface,
+      justifyContent: 'flex-end',
     },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     emptyText: {
-      color: 'rgba(255, 255, 255, 0.84)',
+      color: colors.text,
       fontSize: 16,
       fontWeight: '700',
       lineHeight: 24,
       textAlign: 'center',
       paddingHorizontal: 24,
     },
-    loadingText: { color: 'rgba(255, 255, 255, 0.7)', textAlign: 'center', fontSize: 14, fontWeight: '800' },
+    loadingText: { color: colors.textMuted, textAlign: 'center', fontSize: 14, fontWeight: '800' },
     deckArea: {
       flex: 1,
       width: '100%',
-      backgroundColor: '#000000',
+      backgroundColor: colors.surface,
     },
     meta: {
       gap: 2,
@@ -443,7 +444,7 @@ function createStyles(colors) {
       marginTop: 4,
       fontSize: 24,
       fontWeight: '800',
-      color: '#FFFFFF',
+      color: colors.text,
       textAlign: 'center',
       paddingHorizontal: 20,
       letterSpacing: 0.3,
@@ -451,7 +452,7 @@ function createStyles(colors) {
     remainingVotes: {
       marginTop: 8,
       fontSize: 10,
-      color: 'rgba(255, 255, 255, 0.68)',
+      color: colors.textMuted,
       textTransform: 'uppercase',
       fontWeight: '800',
       letterSpacing: 1.4,
