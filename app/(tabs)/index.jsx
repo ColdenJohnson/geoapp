@@ -257,6 +257,13 @@ export default function HomeScreen() {
     if (!showFriendsOnly) return pinsForDisplay;
     return pinsForDisplay.filter((pin) => isFriendOrOwnPin(pin));
   }, [isFriendOrOwnPin, pinsForDisplay, showFriendsOnly]);
+  const handleFriendsFilterPress = useCallback(() => {
+    if (!showFriendsOnly && friendUidSet.size === 0) {
+      showToast('Add some friends to see their pins!');
+      return;
+    }
+    setShowFriendsOnly((prev) => !prev);
+  }, [friendUidSet, showFriendsOnly, showToast]);
 
   // TODO: To make location watcher run app-wide, put this into a LocationProvider at app root/some type of API (not sure, figure this out)
   // TODO: UseFocusEffect vs UseEffect -- usefocuseffect stops when user navigates away from the screen
@@ -492,7 +499,7 @@ export default function HomeScreen() {
               showFriendsOnly ? styles.filterButtonActive : null,
               { opacity: pressed ? 0.5 : 1 },
             ]}
-            onPress={() => setShowFriendsOnly((prev) => !prev)}
+            onPress={handleFriendsFilterPress}
           >
             <MaterialIcons
               name="people"
