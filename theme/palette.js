@@ -7,6 +7,12 @@ export const light = {
   primary_darkened: '#e2460e',
   primaryTextOn: '#FFFFFF',
 
+  // map pins
+  pinGeoLocked: '#FF6B35',
+  pinGeoLockedFriend: '#e2460e',
+  pinPrivate: '#FFE1D6',
+  pinOpen: '#FFF0EB',
+
   // text
   text: '#1A1A1A',
   textMuted: '#6E6963',
@@ -28,6 +34,12 @@ export const light = {
 export const dark = {
   primary: '#FF8A5C',
   primaryTextOn: '#1A100A',
+
+  // map pins
+  pinGeoLocked: '#FF8A5C',
+  pinGeoLockedFriend: '#FF6B35',
+  pinPrivate: '#FFE1D6',
+  pinOpen: '#FFF0EB',
 
   text: '#F6EFE8',
   textMuted: '#B7A89A',

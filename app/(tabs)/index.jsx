@@ -438,7 +438,7 @@ export default function HomeScreen() {
     }}
     title="Your Location"
     description="You are here"
-    pinColor="blue"
+    pinColor={colors.pinOpen}
   />
 )}
 
@@ -457,7 +457,7 @@ export default function HomeScreen() {
         }}
         title={"Photo Challenge"}
         description={pin.message || 'Geo Pin'}
-        pinColor={pin?.isPrivate ? '#EC4899' : (isGeoLocked ? (isFriendPin ? colors.primary_darkened : colors.primary) : '#2563EB')}
+        pinColor={pin?.isPrivate ? colors.pinPrivate : (isGeoLocked ? (isFriendPin ? colors.pinGeoLockedFriend : colors.pinGeoLocked) : colors.pinOpen)}
       >
         <Callout
           tooltip
