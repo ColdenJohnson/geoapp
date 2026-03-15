@@ -17,6 +17,7 @@ import {
   getRemainingGlobalVotes,
   setRemainingGlobalVotes,
   clearGlobalDuelQueue,
+  reserveGlobalDuelPair,
 } from '@/lib/globalDuelQueue';
 
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
@@ -212,6 +213,7 @@ export default function GlobalVoteScreen() {
       if (isActiveRef.current) {
         setSubmitting(true);
       }
+      const reservedPairKey = reserveGlobalDuelPair(activeDuel);
       if (Number.isFinite(remainingVotes)) {
         // TODO: Ensure these are properly set and pulled before next queue render, get an error with failed to submit on 7th vote
         const nextRemaining = Math.max(0, remainingVotes - 1);
@@ -232,6 +234,7 @@ export default function GlobalVoteScreen() {
           renderId,
           winnerPhotoId: winnerId,
           loserPhotoId: loserId,
+          pairKey: reservedPairKey,
           token: tokenPrefix(activeDuel?.voteToken),
           advancedQueueAlready,
         });
@@ -245,6 +248,10 @@ export default function GlobalVoteScreen() {
           bucketType: activeDuel.bucketType,
           pinId: activeDuel.pinId,
         });
+        if (Number.isFinite(result?.remainingVotes)) {
+          setRemainingVotes(result.remainingVotes);
+          setRemainingGlobalVotes(result.remainingVotes);
+        }
         const invalid = result?.invalidVoteToken;
         if ((result?.success || invalid) && !advanceImmediately) {
           advanceQueue();
@@ -257,13 +264,22 @@ export default function GlobalVoteScreen() {
           setLoading(false);
           return;
         }
-        if (!result?.success && !invalid && isDevEnv) {
-          console.warn('Global vote failed without advancing queue', result?.error);
+        if (!result?.success && !invalid) {
+          console.error('Global vote POST failed after optimistic reserve', {
+            pairKey: reservedPairKey,
+            photoIds: extractPhotoIds(activeDuel),
+            status: result?.status,
+            error: result?.error || 'unknown_error',
+          });
+          if (isDevEnv) {
+            console.warn('Global vote failed without advancing queue', result?.error);
+          }
         }
       } catch (error) {
-        console.error('Failed to submit global vote', error);
+        console.error('Failed to submit global vote after optimistic reserve', error);
         if (IS_DEV_LOG) {
           console.log('[global-duel] submit-error', {
+            pairKey: reservedPairKey,
             status: error?.response?.status,
             error: error?.message,
           });

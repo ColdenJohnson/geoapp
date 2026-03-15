@@ -5,6 +5,7 @@ import {
   PanResponder,
   Pressable,
   SafeAreaView,
+  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,14 +28,24 @@ import {
 import { setUploadResolver } from '@/lib/promiseStore';
 import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import {
+  PressHoldActionMenu,
+  PRESS_HOLD_ACTION_MENU_DEFAULT_SIZE,
+  getPressHoldActionMenuOptionAtPoint,
+  getPressHoldActionMenuPosition,
+} from '@/components/ui/PressHoldActionMenu';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
+import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 import { spacing, radii } from '@/theme/tokens';
 
 const CARD_ASPECT_RATIO = 3 / 4;
 const SWIPE_THRESHOLD = 110;
 const SWIPE_UP_THRESHOLD = 110;
 const STACK_DEPTH = 3;
+const LONG_PRESS_DELAY_MS = 380;
+const LONG_PRESS_CANCEL_DISTANCE = 8;
+const TAP_OPEN_MAX_DISTANCE = 8;
 
 function normalizeChallengePin(pin, index) {
   const pinId = pin?._id ? String(pin._id) : `challenge-${index}`;
@@ -52,11 +64,13 @@ function normalizeChallengePin(pin, index) {
     : typeof pin?.most_recent_photo_url === 'string' && pin.most_recent_photo_url
       ? pin.most_recent_photo_url
     : null;
+  const creatorHandleRaw = handle.startsWith('@') ? handle.slice(1) : handle;
 
   return {
     pinId,
     prompt,
-    creatorHandle: handle.startsWith('@') ? handle : `@${handle}`,
+    creatorHandle: `@${creatorHandleRaw}`,
+    creatorHandleRaw,
     creatorName,
     uploadsCount,
     teaserPhoto,
@@ -79,8 +93,15 @@ export default function ActiveChallengesScreen() {
   const [uploadingPinId, setUploadingPinId] = useState(null);
   const [queueMode, setQueueMode] = useState('all');
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
+  const [challengeOptions, setChallengeOptions] = useState(null);
+  const [challengeMenuSize, setChallengeMenuSize] = useState(PRESS_HOLD_ACTION_MENU_DEFAULT_SIZE);
+  const [activeChallengeOptionId, setActiveChallengeOptionId] = useState(null);
   const cardPan = useRef(new Animated.ValueXY()).current;
   const swipeAnimatingPinId = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
+  const challengeOptionLayoutsRef = useRef({});
+  const lastMenuTouchPointRef = useRef(null);
 
   const stageWidth = stageSize.width || Math.max(windowWidth - spacing.sm * 2, 0);
   const stageHeight = stageSize.height || Math.max(windowHeight - 200, 0);
@@ -146,6 +167,125 @@ export default function ActiveChallengesScreen() {
   const footerSafePadding = Math.max(0, insets.bottom + bottomTabOverflow);
   const toastBottomOffset = footerSafePadding + 22;
   const swipeLocked = loading || isAnimating || uploadingPinId !== null;
+  const interactionLocked = swipeLocked || challengeOptions !== null;
+  const challengeOptionsPosition = useMemo(() => {
+    if (!challengeOptions) return null;
+
+    return getPressHoldActionMenuPosition({
+      anchorX: challengeOptions.x,
+      anchorY: challengeOptions.y,
+      menuSize: challengeMenuSize,
+      windowWidth,
+      windowHeight,
+      topInset: insets.top,
+      bottomInset: footerSafePadding,
+    });
+  }, [challengeMenuSize, challengeOptions, footerSafePadding, insets.top, windowHeight, windowWidth]);
+
+  const challengeOptionSections = useMemo(() => ([
+    {
+      id: 'primary',
+      layout: 'row',
+      options: [
+        {
+          id: 'share',
+          label: 'Share',
+          iconName: 'share',
+        },
+        {
+          id: 'save',
+          label: 'Save',
+          iconName: queueMode === 'saved' ? 'bookmark' : 'bookmark-border',
+        },
+      ],
+    },
+    {
+      id: 'secondary',
+      layout: 'list',
+      options: [
+        {
+          id: 'view_photos',
+          label: 'View Photos',
+          iconName: 'photo-library',
+        },
+        {
+          id: 'report',
+          label: 'Report',
+          iconName: 'outlined-flag',
+          iconColor: colors.danger,
+          iconBackgroundColor: 'rgba(220,38,38,0.09)',
+          textColor: colors.danger,
+        },
+      ],
+    },
+  ]), [colors.danger, queueMode]);
+  const challengeMenuOptionsById = useMemo(
+    () => new Map(
+      challengeOptionSections.flatMap((section) =>
+        (Array.isArray(section?.options) ? section.options : []).map((option) => [option.id, option])
+      )
+    ),
+    [challengeOptionSections]
+  );
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      globalThis.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const setHighlightedChallengeOption = useCallback((optionId) => {
+    setActiveChallengeOptionId((prev) => (prev === optionId ? prev : optionId));
+  }, []);
+
+  const resolveChallengeOptionAtPoint = useCallback((pointX, pointY) => (
+    getPressHoldActionMenuOptionAtPoint({
+      optionLayouts: challengeOptionLayoutsRef.current,
+      pointX,
+      pointY,
+    })
+  ), []);
+
+  const syncChallengeOptionHighlight = useCallback((pointX, pointY) => {
+    lastMenuTouchPointRef.current = { x: pointX, y: pointY };
+    const nextOptionId = resolveChallengeOptionAtPoint(pointX, pointY);
+    setHighlightedChallengeOption(nextOptionId);
+    return nextOptionId;
+  }, [resolveChallengeOptionAtPoint, setHighlightedChallengeOption]);
+
+  const triggerMenuOpenHaptic = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, []);
+
+  const triggerMenuSelectionHaptic = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+  }, []);
+
+  const closeChallengeOptions = useCallback(() => {
+    clearLongPressTimer();
+    longPressTriggeredRef.current = false;
+    challengeOptionLayoutsRef.current = {};
+    lastMenuTouchPointRef.current = null;
+    setActiveChallengeOptionId(null);
+    setChallengeMenuSize(PRESS_HOLD_ACTION_MENU_DEFAULT_SIZE);
+    setChallengeOptions(null);
+  }, [clearLongPressTimer]);
+
+  const resetCardPosition = useCallback(() => {
+    Animated.spring(cardPan, {
+      toValue: { x: 0, y: 0 },
+      useNativeDriver: true,
+      damping: 17,
+      stiffness: 170,
+    }).start();
+  }, [cardPan]);
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+    };
+  }, [clearLongPressTimer]);
 
   const loadChallenges = useCallback(async ({ showSpinner = true, mode = 'all' } = {}) => {
     if (showSpinner) {
@@ -194,6 +334,10 @@ export default function ActiveChallengesScreen() {
   useEffect(() => {
     loadChallenges({ showSpinner: true, mode: queueMode });
   }, [loadChallenges, queueMode]);
+
+  useEffect(() => {
+    closeChallengeOptions();
+  }, [closeChallengeOptions, queueMode]);
 
   const advanceChallengeQueue = useCallback((direction) => {
     setChallenges((prev) => {
@@ -268,8 +412,97 @@ export default function ActiveChallengesScreen() {
     }
   }, [queueMode, showToast]);
 
+  const handleShareChallenge = useCallback(async (challenge) => {
+    if (!challenge?.pinId) return;
+    const shareUrl = `${PUBLIC_BASE_URL}/view_photochallenge/${encodeURIComponent(challenge.pinId)}`;
+    const message = challenge?.prompt
+      ? `Check out this SideQuest quest: "${challenge.prompt}"`
+      : 'Check out this SideQuest quest.';
+
+    try {
+      await Share.share({
+        title: 'View this quest on SideQuest',
+        message,
+        url: shareUrl,
+      });
+    } catch (error) {
+      console.warn('Failed to share challenge', error);
+      showToast('Unable to open share menu', 2500);
+    }
+  }, [showToast]);
+
+  const handleSaveChallenge = useCallback(async (challenge) => {
+    if (!challenge?.pinId) return;
+    const result = await saveQuest(challenge.pinId);
+    if (!result?.success) {
+      showToast('Save failed', 2500);
+      return;
+    }
+    if (result?.alreadySaved || queueMode === 'saved') {
+      showToast('Already saved', 2200);
+      return;
+    }
+    showToast('Saved for later', 2200);
+  }, [queueMode, showToast]);
+
+  const handleViewPhotos = useCallback((challenge) => {
+    if (!challenge?.pinId) return;
+    router.push({
+      pathname: '/view_photochallenge',
+      params: {
+        pinId: challenge.pinId,
+        message: challenge.prompt,
+        created_by_handle: challenge.creatorHandleRaw || '',
+      },
+    });
+  }, [router]);
+
+  const handleChallengeMenuSelection = useCallback(async (option, challengeOverride = null) => {
+    const challenge = challengeOverride || challengeOptions?.challenge;
+    if (!option?.id || !challenge) {
+      closeChallengeOptions();
+      return;
+    }
+
+    closeChallengeOptions();
+    triggerMenuSelectionHaptic();
+
+    if (option.id === 'share') {
+      await handleShareChallenge(challenge);
+      return;
+    }
+    if (option.id === 'save') {
+      await handleSaveChallenge(challenge);
+      return;
+    }
+    if (option.id === 'view_photos') {
+      handleViewPhotos(challenge);
+      return;
+    }
+  }, [
+    challengeOptions,
+    closeChallengeOptions,
+    handleSaveChallenge,
+    handleShareChallenge,
+    handleViewPhotos,
+    triggerMenuSelectionHaptic,
+  ]);
+
+  const openChallengeOptions = useCallback((challenge, x, y) => {
+    if (!challenge?.pinId) return;
+    challengeOptionLayoutsRef.current = {};
+    lastMenuTouchPointRef.current = null;
+    setActiveChallengeOptionId(null);
+    setChallengeMenuSize(PRESS_HOLD_ACTION_MENU_DEFAULT_SIZE);
+    cardPan.stopAnimation();
+    cardPan.setValue({ x: 0, y: 0 });
+    setChallengeOptions({ challenge, x, y });
+    triggerMenuOpenHaptic();
+  }, [cardPan, triggerMenuOpenHaptic]);
+
   const commitSwipe = useCallback((direction) => {
     if (swipeLocked || challenges.length === 0) return;
+    closeChallengeOptions();
     const topChallenge = challenges[0];
     swipeAnimatingPinId.current = topChallenge.pinId;
     const isSave = direction === 'save';
@@ -304,20 +537,62 @@ export default function ActiveChallengesScreen() {
     cardPan,
     cardWidth,
     challenges,
+    closeChallengeOptions,
     handleUpSwipeAction,
     swipeLocked,
   ]);
 
+  const startLongPress = useCallback((challenge, x, y) => {
+    clearLongPressTimer();
+    longPressTriggeredRef.current = false;
+    if (swipeLocked || challengeOptions || !challenge?.pinId) return;
+
+    longPressTimerRef.current = globalThis.setTimeout(() => {
+      longPressTimerRef.current = null;
+      longPressTriggeredRef.current = true;
+      openChallengeOptions(challenge, x, y);
+    }, LONG_PRESS_DELAY_MS);
+  }, [challengeOptions, clearLongPressTimer, openChallengeOptions, swipeLocked]);
+
   const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !swipeLocked && challenges.length > 0,
+    onStartShouldSetPanResponder: () => !interactionLocked && challenges.length > 0,
     onMoveShouldSetPanResponder: (_, gestureState) =>
-      !swipeLocked &&
+      !interactionLocked &&
       challenges.length > 0 &&
       (Math.abs(gestureState.dx) > 6 || Math.abs(gestureState.dy) > 6),
-    onPanResponderMove: Animated.event([null, { dx: cardPan.x, dy: cardPan.y }], {
-      useNativeDriver: false,
-    }),
+    onPanResponderGrant: (_, gestureState) => {
+      startLongPress(challenges[0], gestureState.x0, gestureState.y0);
+    },
+    onPanResponderMove: (_, gestureState) => {
+      if (
+        Math.abs(gestureState.dx) > LONG_PRESS_CANCEL_DISTANCE ||
+        Math.abs(gestureState.dy) > LONG_PRESS_CANCEL_DISTANCE
+      ) {
+        clearLongPressTimer();
+      }
+      if (longPressTriggeredRef.current || challengeOptions) {
+        syncChallengeOptionHighlight(gestureState.moveX, gestureState.moveY);
+        return;
+      }
+      cardPan.setValue({ x: gestureState.dx, y: gestureState.dy });
+    },
     onPanResponderRelease: (_, gestureState) => {
+      clearLongPressTimer();
+      if (longPressTriggeredRef.current || challengeOptions) {
+        const selectedOptionId = syncChallengeOptionHighlight(
+          gestureState.moveX || gestureState.x0,
+          gestureState.moveY || gestureState.y0
+        );
+        longPressTriggeredRef.current = false;
+        cardPan.setValue({ x: 0, y: 0 });
+        const selectedOption = challengeMenuOptionsById.get(selectedOptionId);
+        if (selectedOption && challengeOptions?.challenge) {
+          handleChallengeMenuSelection(selectedOption, challengeOptions.challenge);
+          return;
+        }
+        closeChallengeOptions();
+        return;
+      }
       if (
         gestureState.dy < -SWIPE_UP_THRESHOLD &&
         Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.05
@@ -333,22 +608,41 @@ export default function ActiveChallengesScreen() {
         commitSwipe('skip');
         return;
       }
-      Animated.spring(cardPan, {
-        toValue: { x: 0, y: 0 },
-        useNativeDriver: true,
-        damping: 17,
-        stiffness: 170,
-      }).start();
+      if (
+        Math.abs(gestureState.dx) <= TAP_OPEN_MAX_DISTANCE &&
+        Math.abs(gestureState.dy) <= TAP_OPEN_MAX_DISTANCE &&
+        challenges[0]?.pinId
+      ) {
+        openChallengeOptions(
+          challenges[0],
+          gestureState.moveX || gestureState.x0,
+          gestureState.moveY || gestureState.y0
+        );
+        return;
+      }
+      resetCardPosition();
     },
     onPanResponderTerminate: () => {
-      Animated.spring(cardPan, {
-        toValue: { x: 0, y: 0 },
-        useNativeDriver: true,
-        damping: 17,
-        stiffness: 170,
-      }).start();
+      clearLongPressTimer();
+      longPressTriggeredRef.current = false;
+      closeChallengeOptions();
+      resetCardPosition();
     },
-  }), [cardPan, challenges.length, commitSwipe, swipeLocked]);
+  }), [
+    cardPan,
+    challengeOptions,
+    challengeMenuOptionsById,
+    challenges,
+    clearLongPressTimer,
+    closeChallengeOptions,
+    commitSwipe,
+    handleChallengeMenuSelection,
+    interactionLocked,
+    openChallengeOptions,
+    resetCardPosition,
+    startLongPress,
+    syncChallengeOptionHighlight,
+  ]);
 
   const stack = challenges.slice(0, STACK_DEPTH);
   const panTargetPinId = swipeAnimatingPinId.current ?? stack[0]?.pinId ?? null;
@@ -361,10 +655,25 @@ export default function ActiveChallengesScreen() {
       return { width, height };
     });
   }, []);
+  const handleChallengeMenuLayout = useCallback((layout) => {
+    if (!layout?.width || !layout?.height) return;
+    setChallengeMenuSize((prev) => {
+      if (prev.width === layout.width && prev.height === layout.height) {
+        return prev;
+      }
+      return { width: layout.width, height: layout.height };
+    });
+  }, []);
+
+  const handleChallengeMenuOptionLayout = useCallback((optionId, layout) => {
+    if (!optionId || !layout) return;
+    challengeOptionLayoutsRef.current[optionId] = layout;
+  }, []);
 
   const renderChallengeCard = useCallback((challenge, stackIndex) => {
     const isTop = stackIndex === 0;
     const isSecond = stackIndex === 1;
+    const isContextCard = challengeOptions?.challenge?.pinId === challenge.pinId;
     const tracksPan = challenge.pinId === panTargetPinId;
     const stackScale = 1 - stackIndex * 0.05;
     const stackOffsetY = stackIndex * 12;
@@ -384,6 +693,7 @@ export default function ActiveChallengesScreen() {
         key={challenge.pinId}
         style={[
           styles.cardShell,
+          isContextCard ? styles.cardShellContextActive : null,
           {
             width: cardWidth,
             aspectRatio: CARD_ASPECT_RATIO,
@@ -392,7 +702,7 @@ export default function ActiveChallengesScreen() {
             transform: transforms,
           },
         ]}
-        {...(isTop && !swipeLocked ? panResponder.panHandlers : {})}
+        {...(isTop && !interactionLocked ? panResponder.panHandlers : {})}
       >
         {isTop && tracksPan ? (
           <>
@@ -423,6 +733,7 @@ export default function ActiveChallengesScreen() {
           )}
 
           <View style={styles.dimLayer} pointerEvents="none" />
+          {isContextCard ? <View style={styles.contextCardWash} pointerEvents="none" /> : null}
           <View style={styles.topMeta}>
             <View style={styles.handleChip}>
               <Text style={styles.handleChipText}>{challenge.creatorHandle}</Text>
@@ -459,9 +770,10 @@ export default function ActiveChallengesScreen() {
     selectOpacity,
     skipOpacity,
     saveOpacity,
+    challengeOptions,
     queueMode,
     styles,
-    swipeLocked,
+    interactionLocked,
   ]);
 
   return (
@@ -472,8 +784,8 @@ export default function ActiveChallengesScreen() {
             <Text style={styles.headerTitle}>{queueMode === 'saved' ? 'Saved Quests' : 'Quests'}</Text>
             <Text style={styles.headerSubtitle}>
               {queueMode === 'saved'
-                ? 'Swipe up to remove from saved.'
-                : 'Swipe right to accept, left to send back, up to save.'}
+                ? 'Swipe up to remove from saved. Tap or hold for more.'
+                : 'Swipe right to accept, left to send back, up to save. Tap or hold for more.'}
             </Text>
           </View>
           <Pressable
@@ -514,10 +826,10 @@ export default function ActiveChallengesScreen() {
             style={({ pressed }) => [
               styles.footerButton,
               styles.skipFooterButton,
-              { opacity: pressed || swipeLocked || stack.length === 0 ? 0.6 : 1 },
+              { opacity: pressed || interactionLocked || stack.length === 0 ? 0.6 : 1 },
             ]}
             onPress={() => commitSwipe('skip')}
-            disabled={swipeLocked || stack.length === 0}
+            disabled={interactionLocked || stack.length === 0}
           >
             <MaterialIcons name="close" size={28} color={colors.textMuted} />
           </Pressable>
@@ -525,12 +837,12 @@ export default function ActiveChallengesScreen() {
             style={({ pressed }) => [
               styles.footerButton,
               queueMode === 'saved' ? styles.savedFilterButtonActive : styles.savedFilterButton,
-              { opacity: pressed || swipeLocked ? 0.75 : 1 },
+              { opacity: pressed || interactionLocked ? 0.75 : 1 },
             ]}
             onPress={() => {
               setQueueMode((prev) => (prev === 'saved' ? 'all' : 'saved'));
             }}
-            disabled={swipeLocked}
+            disabled={interactionLocked}
           >
             <MaterialIcons
               name={queueMode === 'saved' ? 'bookmark' : 'bookmark-border'}
@@ -542,14 +854,29 @@ export default function ActiveChallengesScreen() {
             style={({ pressed }) => [
               styles.footerButton,
               styles.acceptFooterButton,
-              { opacity: pressed || swipeLocked || stack.length === 0 ? 0.75 : 1 },
+              { opacity: pressed || interactionLocked || stack.length === 0 ? 0.75 : 1 },
             ]}
             onPress={() => commitSwipe('accept')}
-            disabled={swipeLocked || stack.length === 0}
+            disabled={interactionLocked || stack.length === 0}
           >
             <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
           </Pressable>
         </View>
+
+        <PressHoldActionMenu
+          visible={challengeOptions !== null}
+          position={challengeOptionsPosition}
+          menuSize={challengeMenuSize}
+          titleLabel="Quest Options"
+          title={challengeOptions?.challenge?.prompt || ''}
+          subtitle={challengeOptions?.challenge?.creatorHandle || null}
+          sections={challengeOptionSections}
+          activeOptionId={activeChallengeOptionId}
+          onRequestClose={closeChallengeOptions}
+          onMenuLayout={handleChallengeMenuLayout}
+          onOptionLayout={handleChallengeMenuOptionLayout}
+          onOptionPress={handleChallengeMenuSelection}
+        />
 
         <Toast message={toastMessage} bottomOffset={toastBottomOffset} />
       </View>
@@ -636,6 +963,12 @@ function createStyles(colors) {
       shadowRadius: 24,
       elevation: 14,
     },
+    cardShellContextActive: {
+      borderColor: 'rgba(255,107,53,0.38)',
+      shadowOpacity: 0.22,
+      shadowRadius: 28,
+      elevation: 18,
+    },
     cardInner: {
       flex: 1,
       position: 'relative',
@@ -652,6 +985,10 @@ function createStyles(colors) {
     dimLayer: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0, 0, 0, 0.26)',
+    },
+    contextCardWash: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(255, 107, 53, 0.08)',
     },
     topMeta: {
       position: 'absolute',
