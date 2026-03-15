@@ -13,14 +13,14 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
-import { FontAwesome6 } from '@expo/vector-icons';
+import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CTAButton } from '@/components/ui/Buttons';
 
 import { usePalette } from '@/hooks/usePalette';
-import { spacing, radii } from '@/theme/tokens';
+import { fontSizes, spacing, radii } from '@/theme/tokens';
 import { goBackOrHome } from '@/lib/navigation';
 
 import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseStore';
@@ -37,7 +37,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const [facing, setFacing] = useState('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [uploading, setUploading] = useState(false);
-  const [isGeoLocked, setIsGeoLocked] = useState(true);
+  const [isGeoLocked, setIsGeoLocked] = useState(false);
   const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
@@ -100,7 +100,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
       if (!didSubmitUpload.current) {
         resolveMessage('');
         resolveUpload(null);
-        resolveGeoLock(true);
+        resolveGeoLock(false);
       }
     };
   }, [cardScale, keyboardOffset]);
@@ -124,6 +124,17 @@ export default function EnterMessageScreen({ initialUri = null }) {
       setShowEmptyMessageError(false);
     }
   }, [showEmptyMessageError]);
+
+  const renderBackButton = () => (
+    <Pressable
+      onPress={() => goBackOrHome(router)}
+      style={[styles.backButton, { top: insets.top + spacing.sm }]}
+      hitSlop={10}
+    >
+      <MaterialIcons name="arrow-back" size={20} color={colors.text} />
+      <Text style={styles.backText}>Back</Text>
+    </Pressable>
+  );
 
   // TODO: Surface upload failures and validation errors to the user instead of only logging.
   const handleUpload = () => {
@@ -237,6 +248,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   if (!permission || !permission.granted) {
     return (
       <View style={[styles.container, styles.permissionGate]}>
+        {renderBackButton()}
         <Text style={styles.title}>Camera access needed</Text>
         <Text style={styles.helper}>
           We need permission to capture your challenge photo.
@@ -249,6 +261,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
+        {renderBackButton()}
         {uri ? (
           <Animated.ScrollView
             style={[
@@ -318,6 +331,24 @@ function createStyles(colors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.surface },
     permissionGate: { alignItems: 'center', justifyContent: 'center', padding: spacing.lg, gap: spacing.md },
+    backButton: {
+      position: 'absolute',
+      left: spacing.md,
+      zIndex: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.xs,
+      paddingRight: spacing.sm,
+      paddingLeft: spacing.xs,
+    },
+    backText: {
+      color: colors.text,
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
+    },
     content: {
       flex: 1,
       padding: spacing.sm,

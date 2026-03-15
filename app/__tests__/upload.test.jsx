@@ -35,6 +35,14 @@ describe('Upload screen', () => {
     expect(getByText(/We need your permission/i)).toBeTruthy();
   });
 
+  it('renders the corner back button and wires it to navigation', () => {
+    const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
+
+    fireEvent.press(getByText('Back'));
+
+    expect(router.back).toHaveBeenCalled();
+  });
+
   it('uploads existing photo when Upload is pressed', async () => {
     cameraModule.useCameraPermissions.mockReturnValue([{ granted: true }, jest.fn()]);
     uploadImage.mockResolvedValue('https://download');

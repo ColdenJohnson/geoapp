@@ -18,6 +18,7 @@ import storage from '@react-native-firebase/storage';
 import { goBackOrHome } from '@/lib/navigation';
 
 const BIO_MAX_LENGTH = 100;
+const HANDLE_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 export default function EditProfileScreen() {
   const { user, profile, setProfile, setUser } = useContext(AuthContext);
@@ -36,6 +37,12 @@ export default function EditProfileScreen() {
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const isDefaultPinPrivate = profile?.default_pin_private === true;
+  const trimmedHandleInput = typeof handleInput === 'string' ? handleInput.trim().replace(/^@/, '') : '';
+  const isHandleChanged = trimmedHandleInput !== '' && trimmedHandleInput !== (profile?.handle || '');
+  const handleValidationMessage = isHandleChanged && !HANDLE_REGEX.test(trimmedHandleInput)
+    ? 'Handle must be 3-20 letters, numbers, or underscores.'
+    : null;
+  const isSaveDisabled = !!handleValidationMessage;
 
   useEffect(() => {
     setFormDisplayName(profile?.display_name || '');
@@ -136,7 +143,7 @@ export default function EditProfileScreen() {
   };
 
   const saveChanges = () => {
-    if (!user?.uid) return;
+    if (!user?.uid || handleValidationMessage) return;
     setHandleStatus(null);
     const uid = user.uid;
     const baseProfile = profile;
@@ -259,17 +266,22 @@ export default function EditProfileScreen() {
 
             <Text style={styles.sectionTitle}>Unique Handle</Text>
             <TextInput
-              style={formStyles.input}
+              style={[formStyles.input, handleValidationMessage && styles.invalidInput]}
               placeholder="your_handle"
               value={handleInput}
-              onChangeText={setHandleInput}
+              onChangeText={(value) => {
+                setHandleInput(value);
+                if (handleStatus) setHandleStatus(null);
+              }}
               autoCapitalize="none"
               autoCorrect={false}
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.primary}
               cursorColor={colors.text}
             />
-            {handleStatus ? <Text style={styles.statusText}>{handleStatus}</Text> : null}
+            {handleValidationMessage || handleStatus ? (
+              <Text style={styles.statusText}>{handleValidationMessage || handleStatus}</Text>
+            ) : null}
 
             <Text style={styles.sectionTitle}>Bio</Text>
             <TextInput
@@ -320,6 +332,7 @@ export default function EditProfileScreen() {
               onPress={saveChanges}
               variant="filled"
               style={styles.actionButtonLast}
+              disabled={isSaveDisabled}
             />
           </View>
         </View>
@@ -440,9 +453,12 @@ function createStyles(colors) {
       marginTop: spacing.md,
     },
     statusText: {
-      color: colors.primary,
+      color: colors.danger,
       fontWeight: '700',
       marginBottom: spacing.sm,
+    },
+    invalidInput: {
+      borderColor: colors.danger,
     },
     bioCounter: {
       marginTop: spacing.xs,

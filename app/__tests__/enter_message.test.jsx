@@ -37,7 +37,7 @@ describe('EnterMessageScreen', () => {
     fireEvent.press(getByText('CREATE>'));
 
     expect(resolveMessage).toHaveBeenCalledWith('hello world');
-    expect(resolveGeoLock).toHaveBeenCalledWith(true);
+    expect(resolveGeoLock).toHaveBeenCalledWith(false);
     expect(router.back).toHaveBeenCalled();
 
     await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
@@ -53,7 +53,7 @@ describe('EnterMessageScreen', () => {
     fireEvent.changeText(getByPlaceholderText(/challenge prompt/i), 'not geolocked');
     fireEvent.press(getByText('CREATE>'));
 
-    expect(resolveGeoLock).toHaveBeenCalledWith(false);
+    expect(resolveGeoLock).toHaveBeenCalledWith(true);
     await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
   });
 
@@ -65,6 +65,14 @@ describe('EnterMessageScreen', () => {
     expect(getByText(/Camera access needed/i)).toBeTruthy();
   });
 
+  it('renders the corner back button and wires it to navigation', () => {
+    const { getByText } = render(<EnterMessageScreen initialUri="file://mock.jpg" />);
+
+    fireEvent.press(getByText('Back'));
+
+    expect(router.back).toHaveBeenCalled();
+  });
+
   it('resolves both promises when leaving before submit', () => {
     const { unmount } = render(<EnterMessageScreen initialUri="file://mock.jpg" />);
 
@@ -72,6 +80,6 @@ describe('EnterMessageScreen', () => {
 
     expect(resolveUpload).toHaveBeenCalledWith(null);
     expect(resolveMessage).toHaveBeenCalledWith('');
-    expect(resolveGeoLock).toHaveBeenCalledWith(true);
+    expect(resolveGeoLock).toHaveBeenCalledWith(false);
   });
 });

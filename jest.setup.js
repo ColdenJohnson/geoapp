@@ -39,7 +39,7 @@ jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { View, Text } = require('react-native');
   const Icon = ({ name }) => <View><Text>{name}</Text></View>;
-  return { FontAwesome6: Icon };
+  return { FontAwesome6: Icon, MaterialIcons: Icon };
 });
 
 // Camera mocks: grant permissions by default and expose a stub ref API

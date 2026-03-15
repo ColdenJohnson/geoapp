@@ -207,51 +207,45 @@ export default function ActiveChallengesScreen() {
     });
   }, [queueMode]);
 
-  const applyUploadToChallenge = useCallback((pinId, fileUrl) => {
-    setChallenges((prev) => {
-      if (!Array.isArray(prev)) return prev;
-      return prev.map((challenge) => {
-        if (challenge.pinId !== pinId) return challenge;
-        return {
-          ...challenge,
-          uploadsCount: challenge.uploadsCount + 1,
-          teaserPhoto: fileUrl || challenge.teaserPhoto,
-        };
+  const beginUploadForChallenge = useCallback((challenge) => {
+    if (!challenge?.pinId) return;
+    const uploadRequestId = `quest-upload-${challenge.pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setUploadingPinId(challenge.pinId);
+    const uploadPromise = new Promise((resolve) => {
+      setUploadResolver(resolve, uploadRequestId);
+      router.push({
+        pathname: '/upload',
+        params: {
+          prompt: challenge.prompt,
+          uploadRequestId,
+        },
       });
     });
-  }, []);
 
-  const beginUploadForChallenge = useCallback(async (challenge) => {
-    if (!challenge?.pinId) return;
-    setUploadingPinId(challenge.pinId);
-    try {
-      const uploadedPhotoUrl = await new Promise((resolve) => {
-        setUploadResolver(resolve);
-        router.push({
-          pathname: '/upload',
-          params: {
-            prompt: challenge.prompt,
-          },
-        });
+    // Only lock while handing off into the upload flow. Once the user is back on quests,
+    // let the upload finish in the background without freezing the deck.
+    setUploadingPinId(null);
+
+    uploadPromise
+      .then(async (uploadedPhotoUrl) => {
+        if (!uploadedPhotoUrl) {
+          return;
+        }
+        showToast('Uploading photo…', 60000);
+        await addPhoto(challenge.pinId, uploadedPhotoUrl);
+        invalidateStats();
+        hideToast();
+        showToast('Upload success', 2200);
+      })
+      .catch((error) => {
+        console.error('Failed to upload photo to challenge', error);
+        hideToast();
+        showToast('Upload failed', 2500);
+      })
+      .finally(() => {
+        setUploadingPinId(null);
       });
-
-      if (!uploadedPhotoUrl) {
-        return;
-      }
-      showToast('Uploading photo…', 60000);
-      await addPhoto(challenge.pinId, uploadedPhotoUrl);
-      applyUploadToChallenge(challenge.pinId, uploadedPhotoUrl);
-      invalidateStats();
-      hideToast();
-      showToast('Upload success', 2200);
-    } catch (error) {
-      console.error('Failed to upload photo to challenge', error);
-      hideToast();
-      showToast('Upload failed', 2500);
-    } finally {
-      setUploadingPinId(null);
-    }
-  }, [applyUploadToChallenge, hideToast, invalidateStats, router, showToast]);
+  }, [hideToast, invalidateStats, router, showToast]);
 
   const handleUpSwipeAction = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;

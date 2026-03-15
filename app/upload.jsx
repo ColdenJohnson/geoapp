@@ -4,7 +4,7 @@ import {
 } from "expo-camera";
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { FontAwesome6 } from "@expo/vector-icons";
+import { FontAwesome6, MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 // import storage from '@react-native-firebase/storage';
 // import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
@@ -14,7 +14,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { uploadImage } from '@/lib/uploadHelpers';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
-import { spacing, radii } from '@/theme/tokens';
+import { fontSizes, spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { goBackOrHome } from '@/lib/navigation';
 
@@ -30,7 +30,7 @@ export default function Upload({ initialUri = null }) {
   const ref = useRef(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { next, prompt } = useLocalSearchParams();
+  const { next, prompt, uploadRequestId } = useLocalSearchParams();
   const promptText = useMemo(() => {
     if (typeof prompt === 'string') return prompt.trim();
     if (Array.isArray(prompt) && typeof prompt[0] === 'string') return prompt[0].trim();
@@ -44,10 +44,24 @@ export default function Upload({ initialUri = null }) {
   useEffect(() => () => {
     isMounted.current = false;
     if (!didSubmitUpload.current) {
-      resolveUpload(null);
+      if (typeof uploadRequestId === 'string' && uploadRequestId) {
+        resolveUpload(null, uploadRequestId);
+      } else {
+        resolveUpload(null);
+      }
     }
-  }, []);
+  }, [uploadRequestId]);
 
+  const renderBackButton = () => (
+    <Pressable
+      onPress={() => goBackOrHome(router)}
+      style={[styles.backButton, { top: insets.top + spacing.sm }]}
+      hitSlop={10}
+    >
+      <MaterialIcons name="arrow-back" size={20} color={colors.text} />
+      <Text style={styles.backText}>Back</Text>
+    </Pressable>
+  );
 
   // For Dev
 
@@ -85,6 +99,7 @@ export default function Upload({ initialUri = null }) {
   if (!permission.granted) {
     return (
       <View style={[styles.container, styles.permissionGate]}>
+        {renderBackButton()}
         <Text style={styles.message}>We need your permission to show the camera for SideQuest photo upload to work properly.</Text>
         <CTAButton title="Continue" onPress={requestPermission} />
       </View>
@@ -112,10 +127,18 @@ export default function Upload({ initialUri = null }) {
     (async () => {
       try {
         const downloadURL = await uploadImage(uri);
-        resolveUpload(downloadURL); // fulfill the original Promise
+        if (typeof uploadRequestId === 'string' && uploadRequestId) {
+          resolveUpload(downloadURL, uploadRequestId); // fulfill the original Promise
+        } else {
+          resolveUpload(downloadURL); // fulfill the original Promise
+        }
       } catch (err) {
         console.error('Error uploading image:', err);
-        resolveUpload(null);
+        if (typeof uploadRequestId === 'string' && uploadRequestId) {
+          resolveUpload(null, uploadRequestId);
+        } else {
+          resolveUpload(null);
+        }
       } finally {
         if (isMounted.current) {
           setUploading(false);
@@ -204,6 +227,7 @@ export default function Upload({ initialUri = null }) {
 
 return (
   <View style={styles.container}>
+    {renderBackButton()}
     <View style={[styles.content, { paddingBottom: spacing.sm + insets.bottom + EXTRA_BOTTOM_BUFFER }]}>
       {uri ? renderPreview() : renderCamera()}
     </View>
@@ -222,6 +246,24 @@ function createStyles(colors) {
       justifyContent: "center",
       padding: spacing.lg,
       gap: spacing.md,
+    },
+    backButton: {
+      position: "absolute",
+      left: spacing.md,
+      zIndex: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      paddingVertical: spacing.xs,
+      paddingRight: spacing.sm,
+      paddingLeft: spacing.xs,
+    },
+    backText: {
+      color: colors.text,
+      fontSize: fontSizes.sm,
+      fontWeight: "800",
+      letterSpacing: 0.3,
+      textTransform: "uppercase",
     },
     content: {
       flex: 1,
