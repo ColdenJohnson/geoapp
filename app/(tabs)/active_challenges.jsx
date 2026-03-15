@@ -25,6 +25,7 @@ import {
   saveQuest,
   unsaveQuest
 } from '@/lib/api';
+import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { setUploadResolver } from '@/lib/promiseStore';
 import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
@@ -85,7 +86,7 @@ export default function ActiveChallengesScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { invalidateStats } = useContext(AuthContext);
-  const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3000);
+  const { message: toastMessage, show: showToast } = useToast(3000);
 
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -378,18 +379,22 @@ export default function ActiveChallengesScreen() {
         showToast('Uploading photo…', 60000);
         await addPhoto(challenge.pinId, uploadedPhotoUrl);
         invalidateStats();
-        hideToast();
         showToast('Upload success', 2200);
+        router.push(buildViewPhotoChallengeRoute({
+          pinId: challenge.pinId,
+          message: challenge.prompt,
+          createdByHandle: challenge.creatorHandleRaw || '',
+          optimisticPhotoUrls: [uploadedPhotoUrl],
+        }));
       })
       .catch((error) => {
         console.error('Failed to upload photo to challenge', error);
-        hideToast();
         showToast('Upload failed', 2500);
       })
       .finally(() => {
         setUploadingPinId(null);
       });
-  }, [hideToast, invalidateStats, router, showToast]);
+  }, [invalidateStats, router, showToast]);
 
   const handleUpSwipeAction = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
@@ -447,14 +452,11 @@ export default function ActiveChallengesScreen() {
 
   const handleViewPhotos = useCallback((challenge) => {
     if (!challenge?.pinId) return;
-    router.push({
-      pathname: '/view_photochallenge',
-      params: {
-        pinId: challenge.pinId,
-        message: challenge.prompt,
-        created_by_handle: challenge.creatorHandleRaw || '',
-      },
-    });
+    router.push(buildViewPhotoChallengeRoute({
+      pinId: challenge.pinId,
+      message: challenge.prompt,
+      createdByHandle: challenge.creatorHandleRaw || '',
+    }));
   }, [router]);
 
   const handleChallengeMenuSelection = useCallback(async (option, challengeOverride = null) => {

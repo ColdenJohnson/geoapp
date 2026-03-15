@@ -172,6 +172,7 @@ export default function ViewPhotoChallengeScreen() {
   const photoCommentsRef = useRef([]);
   const isMountedRef = useRef(true);
   const selectedPhotoIdRef = useRef(null);
+  const pendingProfileUidRef = useRef(null);
   const privacySyncInFlightRef = useRef(false);
   const desiredPrivacyRef = useRef(null);
   const acknowledgedPrivacyRef = useRef(null);
@@ -622,6 +623,37 @@ export default function ViewPhotoChallengeScreen() {
     setSelectedPhotoId(String(photo._id));
   }, []);
 
+  const navigateToUserProfile = useCallback((targetUid) => {
+    if (!targetUid) return;
+    if (targetUid === user?.uid) {
+      router.push('/(tabs)/profile');
+      return;
+    }
+    router.push({
+      pathname: '/user_profile/[uid]',
+      params: { uid: targetUid },
+    });
+  }, [router, user?.uid]);
+
+  const openUserProfile = useCallback((targetUid) => {
+    if (!targetUid) return;
+    if (selectedPhotoId) {
+      pendingProfileUidRef.current = targetUid;
+      closePhotoDetail();
+      return;
+    }
+    navigateToUserProfile(targetUid);
+  }, [closePhotoDetail, navigateToUserProfile, selectedPhotoId]);
+
+  useEffect(() => {
+    if (selectedPhotoId || !pendingProfileUidRef.current) {
+      return;
+    }
+    const pendingUid = pendingProfileUidRef.current;
+    pendingProfileUidRef.current = null;
+    navigateToUserProfile(pendingUid);
+  }, [navigateToUserProfile, selectedPhotoId]);
+
   const submitComment = useCallback(async () => {
     const normalizedText = commentDraft.trim();
     if (!selectedPhotoCanComment || !selectedPhotoId || !normalizedText) {
@@ -807,17 +839,29 @@ export default function ViewPhotoChallengeScreen() {
 
   const renderCommentItem = useCallback(({ item }) => (
     <View style={styles.commentRow}>
-      <UserAvatar
-        uri={item?.created_by_photo_url || null}
-        label={getAvatarInitial(item)}
-        size={38}
-        styles={styles}
-      />
+      <Pressable
+        onPress={() => openUserProfile(item?.created_by)}
+        disabled={!item?.created_by}
+        style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+      >
+        <UserAvatar
+          uri={item?.created_by_photo_url || null}
+          label={getAvatarInitial(item)}
+          size={38}
+          styles={styles}
+        />
+      </Pressable>
       <View style={styles.commentBody}>
         <View style={styles.commentMetaRow}>
-          <Text style={styles.commentHandle}>
-            {item?.created_by_handle ? `@${item.created_by_handle}` : 'anon'}
-          </Text>
+          <Pressable
+            onPress={() => openUserProfile(item?.created_by)}
+            disabled={!item?.created_by}
+            style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.72 : 1 })}
+          >
+            <Text style={styles.commentHandle}>
+              {item?.created_by_handle ? `@${item.created_by_handle}` : 'anon'}
+            </Text>
+          </Pressable>
           <Text style={styles.commentTimestamp}>{formatShortDate(item?.createdAt)}</Text>
         </View>
         <Text style={styles.commentText}>{item?.text || ''}</Text>
@@ -846,7 +890,7 @@ export default function ViewPhotoChallengeScreen() {
         </>
       </Pressable>
     </View>
-  ), [colors.primary, colors.textMuted, onPressLikeComment, styles]);
+  ), [colors.primary, colors.textMuted, onPressLikeComment, openUserProfile, styles]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -916,7 +960,7 @@ export default function ViewPhotoChallengeScreen() {
             style={styles.privacyFooterRow}
           />
         ) : null}
-        <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} disabled={uploading} />
+        <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} disabled={uploading || !pinId} />
       </BottomBar>
 
       <Modal

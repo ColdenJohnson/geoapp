@@ -1,4 +1,4 @@
-import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl, TouchableOpacity, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -46,6 +46,14 @@ export default function FriendsTabScreen() {
     setRefreshing(false);
   }, [refreshFriends]);
 
+  const openUserProfile = useCallback((uid) => {
+    if (!uid) return;
+    router.push({
+      pathname: '/user_profile/[uid]',
+      params: { uid },
+    });
+  }, [router]);
+
   const recentFriends = useMemo(() => {
     return [...friends]
       .sort((a, b) => new Date(b?.accepted_at || 0) - new Date(a?.accepted_at || 0))
@@ -77,10 +85,15 @@ export default function FriendsTabScreen() {
     }
     return items.map((item) => (
       <View key={`${item.uid}-${item.handle || 'row'}`} style={styles.friendRow}>
-        <View style={styles.friendInfo}>
-          <Text style={styles.friendName}>{item.display_name || item.handle || 'Unnamed user'}</Text>
-          {item.handle ? <Text style={styles.friendMeta}>@{item.handle}</Text> : null}
-        </View>
+        <Pressable
+          onPress={() => openUserProfile(item.uid)}
+          style={({ pressed }) => [styles.friendInfoPressable, pressed && styles.friendInfoPressed]}
+        >
+          <View style={styles.friendInfo}>
+            <Text style={styles.friendName}>{item.display_name || item.handle || 'Unnamed user'}</Text>
+            {item.handle ? <Text style={styles.friendMeta}>@{item.handle}</Text> : null}
+          </View>
+        </Pressable>
         {rightAction ? rightAction(item) : null}
       </View>
     ));
@@ -230,10 +243,15 @@ export default function FriendsTabScreen() {
             ) : searchResults.length ? (
               searchResults.map((result) => (
                 <View key={`search-${result.uid}`} style={styles.friendRow}>
-                  <View style={styles.friendInfo}>
-                    <Text style={styles.friendName}>{result.display_name || result.handle || 'Unnamed user'}</Text>
-                    {result.handle ? <Text style={styles.friendMeta}>@{result.handle}</Text> : null}
-                  </View>
+                  <Pressable
+                    onPress={() => openUserProfile(result.uid)}
+                    style={({ pressed }) => [styles.friendInfoPressable, pressed && styles.friendInfoPressed]}
+                  >
+                    <View style={styles.friendInfo}>
+                      <Text style={styles.friendName}>{result.display_name || result.handle || 'Unnamed user'}</Text>
+                      {result.handle ? <Text style={styles.friendMeta}>@{result.handle}</Text> : null}
+                    </View>
+                  </Pressable>
                   <CTAButton
                     title="Add"
                     onPress={() => sendFriendRequest(result.handle)}
@@ -354,6 +372,12 @@ function createStyles(colors) {
     friendInfo: {
       flex: 1,
       paddingRight: spacing.sm,
+    },
+    friendInfoPressable: {
+      flex: 1,
+    },
+    friendInfoPressed: {
+      opacity: 0.72,
     },
     friendName: {
       color: colors.text,

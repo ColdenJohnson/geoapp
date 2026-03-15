@@ -1,4 +1,4 @@
-import { SectionList, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl } from 'react-native';
+import { SectionList, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl, Pressable } from 'react-native';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +25,14 @@ export default function FriendsScreen() {
     await refreshFriends({ force: true });
     setRefreshing(false);
   }, [refreshFriends]);
+
+  const openUserProfile = useCallback((uid) => {
+    if (!uid) return;
+    router.push({
+      pathname: '/user_profile/[uid]',
+      params: { uid },
+    });
+  }, [router]);
 
   const sections = useMemo(() => ([
     { title: 'Friends', data: friends, type: 'friends' },
@@ -64,12 +72,30 @@ export default function FriendsScreen() {
 
   const renderItem = ({ item, section }) => {
     if (!item?.uid) return null;
+    const infoContent = (
+      <View style={styles.rowInfo}>
+        <Text style={styles.rowName}>{item.display_name || item.handle || 'Unnamed user'}</Text>
+        {item.handle ? <Text style={styles.rowMeta}>@{item.handle}</Text> : null}
+      </View>
+    );
+
     return (
       <View style={styles.row}>
-        <View style={styles.rowInfo}>
-          <Text style={styles.rowName}>{item.display_name || item.handle || 'Unnamed user'}</Text>
-          {item.handle ? <Text style={styles.rowMeta}>@{item.handle}</Text> : null}
-        </View>
+        {section.type === 'friends' ? (
+          <Pressable
+            onPress={() => openUserProfile(item.uid)}
+            style={({ pressed }) => [styles.rowPressable, pressed && styles.rowPressablePressed]}
+          >
+            {infoContent}
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => openUserProfile(item.uid)}
+            style={({ pressed }) => [styles.rowInfoPressable, pressed && styles.rowPressablePressed]}
+          >
+            {infoContent}
+          </Pressable>
+        )}
         {section.type === 'incoming' ? (
           <View style={styles.miniActionRow}>
             <CTAButton
@@ -207,6 +233,15 @@ function createStyles(colors) {
     rowInfo: {
       flex: 1,
       paddingRight: spacing.sm,
+    },
+    rowPressable: {
+      flex: 1,
+    },
+    rowInfoPressable: {
+      flex: 1,
+    },
+    rowPressablePressed: {
+      opacity: 0.72,
     },
     rowName: {
       color: colors.text,

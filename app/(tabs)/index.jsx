@@ -1,6 +1,6 @@
-import { StyleSheet, View, Pressable, Alert, Text } from 'react-native';
+import { StyleSheet, View, Pressable, Text, useWindowDimensions } from 'react-native';
 import MapView from 'react-native-maps';
-import {Marker, Callout} from 'react-native-maps';
+import { Marker, Callout, CalloutSubview } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useEffect, useState, useRef, useCallback, useMemo, useContext } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
@@ -12,6 +12,7 @@ import { useRouter} from 'expo-router';
 
 import { newChallenge, fetchAllLocationPins, fetchFriendPrivateLocationPins, addPhoto } from '../../lib/api';
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
+import { buildViewPhotoChallengeRoute } from '../../lib/navigation';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
 
 import { getDistance } from 'geolib';
@@ -25,79 +26,36 @@ export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [pins, setPins] = useState([]); // for all pins
   const [optimisticPhotosByPin, setOptimisticPhotosByPin] = useState({});
+  const [pressedUploadPinId, setPressedUploadPinId] = useState(null);
   const router = useRouter();
   const mapRef = useRef(null);
+  const pressedUploadResetTimeoutRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
 
   const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
   const [showFriendsOnly, setShowFriendsOnly] = useState(false);
   const { message: toastMessage, show: showToast } = useToast(3500);
+  const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const { user, friends, invalidateStats } = useContext(AuthContext);
 
-  // TODO: If there were many more pins, we would need pinsArr to be relatively smaller (returned within a radius)
-  function computeNearestPin(currentLocation, pinsArr) {
-    if (!currentLocation?.coords || !Array.isArray(pinsArr) || pinsArr.length === 0) return null;
-    const { latitude, longitude } = currentLocation.coords;
-    let bestDist = Infinity;
-    let bestPin = null;
-    for (const p of pinsArr) {
-      if (!p?.location) continue;
-      const d = getDistance(
-        { latitude, longitude },
-        { latitude: p.location.latitude, longitude: p.location.longitude }
-      );
-      if (d < bestDist) {
-        bestDist = d;
-        bestPin = p;
-      }
-    }
-    return Number.isFinite(bestDist) ? {pin: bestPin, distance: bestDist} : null;
-  }
-
-  function handleTakePhoto() {
-    const nearestNow = computeNearestPin(location, pins);
-    const closestPin = nearestNow?.pin ?? null;
-    const closestDistance = nearestNow?.distance ?? null;
-    const inRange = Number.isFinite(closestDistance) && closestDistance <= NEAR_THRESHOLD_METERS;
-
-    if (!inRange || !closestPin) {
-      console.log(`Not within ${NEAR_THRESHOLD_METERS}, nearest pin is ${closestDistance} meters away!`); // nearestPin
-      showToast(closestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! Currently ${closestDistance}m away.` : `No challenge nearby!`);
-      Alert.alert(
-                  'Uh-oh!',
-                  closestDistance != null ? `Not within ${NEAR_THRESHOLD_METERS}m of a challenge! \n Would you like to create a new challenge?` : `No challenge nearby! \n Would you like to create a new challenge?`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Create', style: 'default', onPress: async () => {
-                        try {
-                          handleCreateChallengePress();
-                        } catch (e) {
-                          console.error('Create challenge error:', e);
-                        }
-                      } }
-                  ]
-                );
-      return;
-    }
-    uploadPhotoToNearestChallenge(closestPin);
-  }
-
-  // Camera-plus action: go straight into upload for the nearest in-range challenge.
-  function uploadPhotoToNearestChallenge(pin) {
+  function uploadPhotoToChallenge(pin) {
     if (!pin?._id) {
-      showToast('No valid challenge nearby.');
+      showToast('No valid challenge selected.');
       return;
     }
+    const pinId = String(pin._id);
     const hadUploadedBefore = pin?.viewer_has_uploaded === true;
+    const uploadRequestId = `map-upload-${pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const uploadPromise = new Promise((resolve) => {
-      setUploadResolver(resolve);
+      setUploadResolver(resolve, uploadRequestId);
       router.push({
         pathname: '/upload',
         params: {
           prompt: pin?.message || '',
+          uploadRequestId,
         },
       });
     });
@@ -107,12 +65,11 @@ export default function HomeScreen() {
         if (!uploadResult) {
           return;
         }
-        const pinId = pin._id;
         showToast('Uploading photo…', 60000);
         setPins((prev) =>
           Array.isArray(prev)
             ? prev.map((p) =>
-                p?._id === pinId
+                String(p?._id) === pinId
                   ? {
                     ...p,
                     photo_count: Math.max(0, Number(p?.photo_count || 0) + 1),
@@ -131,11 +88,17 @@ export default function HomeScreen() {
           await addPhoto(pinId, uploadResult);
           invalidateStats();
           showToast('Upload success', 2200);
+          router.push(buildViewPhotoChallengeRoute({
+            pinId,
+            message: pin?.message || '',
+            createdByHandle: pin?.created_by_handle || '',
+            optimisticPhotoUrls: [uploadResult],
+          }));
         } catch (error) {
           setPins((prev) =>
             Array.isArray(prev)
               ? prev.map((p) =>
-                  p?._id === pinId
+                  String(p?._id) === pinId
                     ? {
                       ...p,
                       photo_count: Math.max(0, Number(p?.photo_count || 0) - 1),
@@ -158,9 +121,26 @@ export default function HomeScreen() {
         }
       })
       .catch((error) => {
-        console.error('Failed to upload photo to nearest challenge', error);
+        console.error('Failed to upload photo to challenge', error);
         showToast('Upload failed', 2500);
       });
+  }
+
+  function handleUploadPhotoPress(pin) {
+    const pinId = String(pin?._id || '');
+    if (!pinId) {
+      uploadPhotoToChallenge(pin);
+      return;
+    }
+    if (pressedUploadResetTimeoutRef.current) {
+      clearTimeout(pressedUploadResetTimeoutRef.current);
+    }
+    setPressedUploadPinId(pinId);
+    pressedUploadResetTimeoutRef.current = setTimeout(() => {
+      setPressedUploadPinId((current) => (current === pinId ? null : current));
+      pressedUploadResetTimeoutRef.current = null;
+    }, 90);
+    uploadPhotoToChallenge(pin);
   }
 
   useEffect(() => {
@@ -182,6 +162,13 @@ export default function HomeScreen() {
       );
       setPins(deduped);
     })();
+  }, []);
+
+  useEffect(() => () => {
+    if (pressedUploadResetTimeoutRef.current) {
+      clearTimeout(pressedUploadResetTimeoutRef.current);
+      pressedUploadResetTimeoutRef.current = null;
+    }
   }, []);
 
   const userCoords = useMemo(() => {
@@ -351,7 +338,12 @@ export default function HomeScreen() {
         }
         invalidateStats();
         showToast('Upload Sucess', 2200);
-        router.replace('/');
+        router.push(buildViewPhotoChallengeRoute({
+          pinId: created.pinId,
+          message,
+          createdByHandle: created.pin?.created_by_handle || '',
+          optimisticPhotoUrls: [fileUrl],
+        }));
       })
       .catch((error) => {
         console.error('Failed to create challenge after upload', error);
@@ -380,15 +372,12 @@ export default function HomeScreen() {
         return;
       }
     }
-    router.push({
-      pathname: '/view_photochallenge',
-      params: {
-        pinId: pin._id,
-        message: pin?.message || '',
-        created_by_handle: pin?.created_by_handle || '',
-        optimistic_photo_urls: JSON.stringify(optimisticPhotosByPin?.[pin._id] || []),
-      },
-    });
+    router.push(buildViewPhotoChallengeRoute({
+      pinId: pin._id,
+      message: pin?.message || '',
+      createdByHandle: pin?.created_by_handle || '',
+      optimisticPhotoUrls: optimisticPhotosByPin?.[String(pin._id)] || [],
+    }));
   }
 
   const colors = usePalette();
@@ -406,6 +395,9 @@ export default function HomeScreen() {
     );
   }, [derivedUserCenter]);
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const calloutCardStyle = useMemo(() => ({
+    maxWidth: Math.max(248, Math.min(windowWidth - 48, 320)),
+  }), [windowWidth]);
   const controlsBottomOffset = 20 + insets.bottom + bottomTabOverflow;
   const toastBottomOffset = controlsBottomOffset + 96;
   const topRightControlsTop = 16 + insets.top;
@@ -445,6 +437,7 @@ export default function HomeScreen() {
 
   {visiblePins.map((pin) => {
     if (!pin?.location) return null;
+    const pinId = String(pin._id);
     const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
     const isFriendPin = isFriendOrOwnPin(pin);
     const isGeoLocked = pin?.isGeoLocked !== false;
@@ -461,20 +454,41 @@ export default function HomeScreen() {
       >
         <Callout
           tooltip
-          onPress={() => viewPhotoChallenge(pin)}
         >
-          <View style={styles.calloutCard}>
-            <Text style={styles.calloutLabel}>Challenge</Text>
-            <Text style={styles.calloutPrompt} numberOfLines={3}>
-              {pin.message || '???'}
-            </Text>
-            <View style={styles.calloutDivider} />
-            <Text style={styles.calloutMeta}>
-              By {handleLabel}
-            </Text>
-            <Text style={styles.calloutMeta}>
-              Photos: {Number.isFinite(pin?.photo_count) ? pin.photo_count : 0}
-            </Text>
+          <View style={[styles.calloutCard, calloutCardStyle]}>
+            <CalloutSubview onPress={() => viewPhotoChallenge(pin)} style={styles.calloutContentPressable}>
+              <View style={styles.calloutContent}>
+                <Text style={styles.calloutLabel}>Challenge</Text>
+                <Text style={styles.calloutPrompt} numberOfLines={3}>
+                  {pin.message || '???'}
+                </Text>
+                <View style={styles.calloutDivider} />
+                <Text style={styles.calloutMeta}>
+                  By {handleLabel}
+                </Text>
+                <Text style={styles.calloutMeta}>
+                  Photos: {Number.isFinite(pin?.photo_count) ? pin.photo_count : 0}
+                </Text>
+              </View>
+            </CalloutSubview>
+            <CalloutSubview
+              onPress={() => handleUploadPhotoPress(pin)}
+            >
+              <View
+                style={[
+                  styles.button,
+                  styles.buttonTakePhoto,
+                  styles.calloutActionButton,
+                  pressedUploadPinId === pinId ? styles.calloutActionButtonPressed : null,
+                ]}
+              >
+                <MaterialIcons
+                  name="add-a-photo"
+                  size={27}
+                  color={colors.primaryTextOn}
+                />
+              </View>
+            </CalloutSubview>
           </View>
         </Callout>
       </Marker>
@@ -516,25 +530,12 @@ export default function HomeScreen() {
             style={({ pressed }) => [
               styles.button,
               styles.buttonCreate,
+              styles.buttonCreateLarge,
               { opacity: pressed ? 0.5 : 1 },
             ]}
             onPress={handleCreateChallengePress}
           >
-            <MaterialIcons name="add-location-alt" size={28} color={colors.primary} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              styles.buttonTakePhoto,
-              { opacity: pressed ? 0.5 : 1 },
-            ]}
-            onPress={handleTakePhoto}
-          >
-            <MaterialIcons
-              name="add-a-photo"
-              size={27}
-              color={colors.primaryTextOn}
-            />
+            <MaterialIcons name="add-location-alt" size={32} color={colors.primary} />
           </Pressable>
         </View>
       </View>
@@ -579,6 +580,12 @@ function createStyles(colors) {
       borderWidth: 2,
       backgroundColor: colors.bg,
     },
+    buttonCreateLarge: {
+      width: 69,
+      height: 69,
+      borderRadius: 23,
+      padding: 12,
+    },
     buttonTakePhoto: {
       borderColor: colors.primary,
       backgroundColor: colors.primary,
@@ -607,9 +614,11 @@ function createStyles(colors) {
       gap: 12,
     },
     calloutCard: {
-      width: 220,
-      paddingVertical: 14,
-      paddingHorizontal: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 12,
+      padding: 10,
       backgroundColor: colors.bg,
       borderRadius: 22,
       borderWidth: 1,
@@ -619,6 +628,16 @@ function createStyles(colors) {
       shadowRadius: 20,
       shadowOffset: { width: 0, height: 12 },
       elevation: 12,
+    },
+    calloutContentPressable: {
+      flexShrink: 1,
+      minWidth: 0,
+    },
+    calloutContent: {
+      flexShrink: 1,
+      minWidth: 0,
+      paddingLeft: 6,
+      paddingVertical: 4,
     },
     calloutLabel: {
       fontSize: 10,
@@ -643,6 +662,12 @@ function createStyles(colors) {
       fontSize: 12,
       fontWeight: '700',
       color: colors.textMuted,
+    },
+    calloutActionButton: {
+      flexShrink: 0,
+    },
+    calloutActionButtonPressed: {
+      opacity: 0.5,
     },
   });
 }
