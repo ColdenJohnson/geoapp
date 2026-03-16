@@ -25,7 +25,6 @@ import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [pins, setPins] = useState([]); // for all pins
-  const [optimisticPhotosByPin, setOptimisticPhotosByPin] = useState({});
   const [pressedUploadPinId, setPressedUploadPinId] = useState(null);
   const router = useRouter();
   const mapRef = useRef(null);
@@ -79,11 +78,6 @@ export default function HomeScreen() {
               )
             : prev
         );
-        setOptimisticPhotosByPin((prev) => {
-          const current = Array.isArray(prev?.[pinId]) ? prev[pinId] : [];
-          return { ...prev, [pinId]: [uploadResult, ...current].slice(0, 3) };
-        });
-
         try {
           await addPhoto(pinId, uploadResult);
           invalidateStats();
@@ -92,7 +86,6 @@ export default function HomeScreen() {
             pinId,
             message: pin?.message || '',
             createdByHandle: pin?.created_by_handle || '',
-            optimisticPhotoUrls: [uploadResult],
           }));
         } catch (error) {
           setPins((prev) =>
@@ -108,15 +101,6 @@ export default function HomeScreen() {
                 )
               : prev
           );
-          setOptimisticPhotosByPin((prev) => {
-            const current = Array.isArray(prev?.[pinId]) ? prev[pinId] : [];
-            const next = current.filter((url) => url !== uploadResult);
-            if (next.length === 0) {
-              const { [pinId]: _removed, ...rest } = prev;
-              return rest;
-            }
-            return { ...prev, [pinId]: next };
-          });
           throw error;
         }
       })
@@ -342,7 +326,6 @@ export default function HomeScreen() {
           pinId: created.pinId,
           message,
           createdByHandle: created.pin?.created_by_handle || '',
-          optimisticPhotoUrls: [fileUrl],
         }));
       })
       .catch((error) => {
@@ -376,7 +359,6 @@ export default function HomeScreen() {
       pinId: pin._id,
       message: pin?.message || '',
       createdByHandle: pin?.created_by_handle || '',
-      optimisticPhotoUrls: optimisticPhotosByPin?.[String(pin._id)] || [],
     }));
   }
 

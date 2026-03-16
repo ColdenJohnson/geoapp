@@ -384,7 +384,6 @@ export default function ActiveChallengesScreen() {
           pinId: challenge.pinId,
           message: challenge.prompt,
           createdByHandle: challenge.creatorHandleRaw || '',
-          optimisticPhotoUrls: [uploadedPhotoUrl],
         }));
       })
       .catch((error) => {

@@ -72,29 +72,6 @@ function sortPhotos(rows, mode = SORT_MODE_ELO) {
   });
 }
 
-function mergeOptimisticPhotos(serverRows, optimisticPhotoUrls) {
-  const ordered = Array.isArray(serverRows) ? serverRows : [];
-  if (!Array.isArray(optimisticPhotoUrls) || optimisticPhotoUrls.length === 0) {
-    return ordered;
-  }
-  const optimisticCreatedAt = new Date().toISOString();
-  const optimistic = optimisticPhotoUrls.map((url, index) => ({
-    _id: `optimistic-${index}-${url}`,
-    file_url: url,
-    global_elo: 1000,
-    global_wins: 0,
-    global_losses: 0,
-    created_by_handle: 'you',
-    createdAt: optimisticCreatedAt,
-    optimistic: true,
-  }));
-  const optimisticSet = new Set(optimisticPhotoUrls);
-  return [
-    ...optimistic,
-    ...ordered.filter((photo) => !optimisticSet.has(photo?.file_url)),
-  ];
-}
-
 function prefetchPhotoUrls(rows) {
   if (!Array.isArray(rows)) return;
   for (const row of rows) {
@@ -153,7 +130,6 @@ export default function ViewPhotoChallengeScreen() {
     pinId,
     message: promptParam,
     created_by_handle: handleParam,
-    optimistic_photo_urls: optimisticPhotoUrlsParam,
   } = useLocalSearchParams();   // pinId comes from router params
   const [serverPhotos, setServerPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -195,20 +171,7 @@ export default function ViewPhotoChallengeScreen() {
     challengeMeta.created_by === user.uid
   );
   const isPrivateChallenge = challengeMeta?.isPrivate === true;
-  const optimisticPhotoUrls = useMemo(() => {
-    if (typeof optimisticPhotoUrlsParam !== 'string') return [];
-    try {
-      const parsed = JSON.parse(optimisticPhotoUrlsParam);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((url) => typeof url === 'string' && url.length > 0);
-    } catch {
-      return [];
-    }
-  }, [optimisticPhotoUrlsParam]);
-  const photos = useMemo(
-    () => mergeOptimisticPhotos(serverPhotos, optimisticPhotoUrls),
-    [serverPhotos, optimisticPhotoUrls]
-  );
+  const photos = serverPhotos;
   const sortedPhotos = useMemo(
     () => sortPhotos(photos, sortMode),
     [photos, sortMode]
@@ -217,7 +180,7 @@ export default function ViewPhotoChallengeScreen() {
     () => photos.find((photo) => String(photo?._id) === String(selectedPhotoId)) || null,
     [photos, selectedPhotoId]
   );
-  const selectedPhotoCanComment = Boolean(selectedPhoto && !selectedPhoto.optimistic);
+  const selectedPhotoCanComment = Boolean(selectedPhoto);
   const sortChipLabel = sortMode === SORT_MODE_ELO ? 'Sorted by Elo' : 'Sorted by Upload Date';
   const composerAvatarLabel = typeof profile?.handle === 'string' && profile.handle
     ? profile.handle.charAt(0).toUpperCase()
@@ -488,16 +451,12 @@ export default function ViewPhotoChallengeScreen() {
       }
 
       const fetchRevision = commentsRevisionRef.current;
-      const { comments: cachedComments, hadCache, isFresh } = await readPinCommentsCache(selectedPhotoId);
+      const { comments: cachedComments, hadCache } = await readPinCommentsCache(selectedPhotoId);
       if (hadCache && !cancelled) {
         setPhotoComments(Array.isArray(cachedComments) ? cachedComments : []);
         setCommentsHydrated(true);
       }
       if (cancelled) return;
-
-      if (hadCache && isFresh) {
-        return;
-      }
 
       try {
         const items = await fetchPhotoComments(selectedPhotoId);
