@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   SafeAreaView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +17,7 @@ import {
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   addPhoto,
   createPhotoComment,
@@ -30,6 +32,7 @@ import {
   readPinCommentsCache,
   readPinMetaCache,
   readPinPhotosCache,
+  updatePinPhotosCache,
   writePinCommentsCache,
   writePinMetaCache,
   writePinPhotosCache,
@@ -43,6 +46,7 @@ import { PreferenceToggleRow } from '@/components/ui/PreferenceToggleRow';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { AuthContext } from '@/hooks/AuthContext';
 import { usePalette } from '@/hooks/usePalette';
+import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 import { fontSizes, radii, shadows, spacing } from '@/theme/tokens';
 
 const SORT_MODE_ELO = 'elo';
@@ -70,6 +74,29 @@ function sortPhotos(rows, mode = SORT_MODE_ELO) {
     if (bElo !== aElo) return bElo - aElo;
     return bCreatedAtMs - aCreatedAtMs;
   });
+}
+
+function mergeServerPhotosWithPending(serverRows, localRows) {
+  const normalizedServerRows = Array.isArray(serverRows) ? serverRows : [];
+  const normalizedLocalRows = Array.isArray(localRows) ? localRows : [];
+  const optimisticRows = normalizedLocalRows.filter((photo) => photo?.optimistic === true);
+
+  if (optimisticRows.length === 0) {
+    return normalizedServerRows;
+  }
+
+  const serverFileUrls = new Set(
+    normalizedServerRows
+      .map((photo) => (typeof photo?.file_url === 'string' ? photo.file_url : null))
+      .filter(Boolean)
+  );
+
+  const pendingRows = optimisticRows.filter((photo) => {
+    const remoteFileUrl = typeof photo?.remote_file_url === 'string' ? photo.remote_file_url : null;
+    return !remoteFileUrl || !serverFileUrls.has(remoteFileUrl);
+  });
+
+  return [...pendingRows, ...normalizedServerRows];
 }
 
 function prefetchPhotoUrls(rows) {
@@ -142,6 +169,7 @@ export default function ViewPhotoChallengeScreen() {
   const [photoComments, setPhotoComments] = useState([]);
   const [commentsHydrated, setCommentsHydrated] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
+  const serverPhotosRef = useRef([]);
   const pendingCommentIdsRef = useRef(new Set());
   const pendingCommentLikeIdsRef = useRef(new Set());
   const commentsRevisionRef = useRef(0);
@@ -153,7 +181,7 @@ export default function ViewPhotoChallengeScreen() {
   const desiredPrivacyRef = useRef(null);
   const acknowledgedPrivacyRef = useRef(null);
   const router = useRouter();
-  const { message: toastMessage, show: showToast, hide: hideToast } = useToast(3500);
+  const { message: toastMessage, show: showToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user, profile, invalidateStats } = useContext(AuthContext);
@@ -172,6 +200,10 @@ export default function ViewPhotoChallengeScreen() {
   );
   const isPrivateChallenge = challengeMeta?.isPrivate === true;
   const photos = serverPhotos;
+  const hasPendingPhotos = useMemo(
+    () => photos.some((photo) => photo?.optimistic === true),
+    [photos]
+  );
   const sortedPhotos = useMemo(
     () => sortPhotos(photos, sortMode),
     [photos, sortMode]
@@ -180,8 +212,8 @@ export default function ViewPhotoChallengeScreen() {
     () => photos.find((photo) => String(photo?._id) === String(selectedPhotoId)) || null,
     [photos, selectedPhotoId]
   );
-  const selectedPhotoCanComment = Boolean(selectedPhoto);
-  const sortChipLabel = sortMode === SORT_MODE_ELO ? 'Sorted by Elo' : 'Sorted by Upload Date';
+  const selectedPhotoCanComment = Boolean(selectedPhoto && !selectedPhoto.optimistic);
+  const sortChipLabel = sortMode === SORT_MODE_ELO ? 'Elo Sorted' : 'Upload Date';
   const composerAvatarLabel = typeof profile?.handle === 'string' && profile.handle
     ? profile.handle.charAt(0).toUpperCase()
     : 'Y';
@@ -195,6 +227,10 @@ export default function ViewPhotoChallengeScreen() {
   useEffect(() => {
     photoCommentsRef.current = photoComments;
   }, [photoComments]);
+
+  useEffect(() => {
+    serverPhotosRef.current = serverPhotos;
+  }, [serverPhotos]);
 
   useEffect(() => {
     selectedPhotoIdRef.current = selectedPhotoId ? String(selectedPhotoId) : null;
@@ -250,15 +286,22 @@ export default function ViewPhotoChallengeScreen() {
     await writePinCommentsCache(photoId, normalizedComments, { isDirty });
   }, []);
 
-  async function load({ showSpinner = true } = {}) {
+  const load = useCallback(async ({ showSpinner = true } = {}) => {
     if (!pinId) return false;
     if (showSpinner) setLoading(true);
     try {
-      const data = await fetchPhotosByPinId(pinId);
+      const [{ photos: cachedPhotos }, data] = await Promise.all([
+        readPinPhotosCache(pinId, { ttlMs: Number.MAX_SAFE_INTEGER }),
+        fetchPhotosByPinId(pinId),
+      ]);
       const rows = Array.isArray(data) ? data : [];
-      setServerPhotos(rows);
-      prefetchPhotoUrls(rows);
-      await writePinPhotosCache(pinId, rows);
+      const localRows = Array.isArray(cachedPhotos) && cachedPhotos.length > 0
+        ? cachedPhotos
+        : serverPhotosRef.current;
+      const mergedRows = mergeServerPhotosWithPending(rows, localRows);
+      setServerPhotos(mergedRows);
+      prefetchPhotoUrls(mergedRows);
+      await writePinPhotosCache(pinId, mergedRows);
       return true;
     } catch (e) {
       console.error('Failed to fetch photos for pin', pinId, e);
@@ -266,7 +309,7 @@ export default function ViewPhotoChallengeScreen() {
     } finally {
       if (showSpinner) setLoading(false);
     }
-  }
+  }, [pinId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -300,7 +343,41 @@ export default function ViewPhotoChallengeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [pinId]);
+  }, [load, pinId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      async function syncPhotosFromCache() {
+        if (!pinId) return;
+        const { photos: cachedPhotos, hadCache, isFresh } = await readPinPhotosCache(pinId);
+        if (cancelled || !hadCache) return;
+        setServerPhotos(Array.isArray(cachedPhotos) ? cachedPhotos : []);
+        prefetchPhotoUrls(cachedPhotos);
+        if (!isFresh) {
+          await load({ showSpinner: false });
+        }
+      }
+
+      void syncPhotosFromCache();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [load, pinId])
+  );
+
+  useEffect(() => {
+    if (!pinId || !hasPendingPhotos) return;
+    const timeoutId = globalThis.setTimeout(() => {
+      void load({ showSpinner: false });
+    }, 1500);
+
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [hasPendingPhotos, load, pinId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -532,15 +609,15 @@ export default function ViewPhotoChallengeScreen() {
   function uploadPhotoChallenge() {
     if (uploading) return;
     setUploading(true);
-    showToast('Uploading photo…', 60000);
-    let didFail = false;
-    let didSucceed = false;
+    let uploadResultForRollback = null;
     const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve);
       router.push({
         pathname: '/upload',
         params: {
           prompt: promptText,
+          pinId,
+          created_by_handle: handleText || '',
         },
       });
     });
@@ -548,25 +625,26 @@ export default function ViewPhotoChallengeScreen() {
     uploadPromise
       .then(async (uploadResult) => {
         if (!uploadResult) { // If promise resolves to falsey (i.e. user exits upload screen)
-          hideToast();
-          didFail = true;
           return;
         }
+        uploadResultForRollback = uploadResult;
         await addPhoto(pinId, uploadResult);
         invalidateStats();
         await load({ showSpinner: false });
-        didSucceed = true;
-        showToast('Upload success', 2200);
       })
       .catch((error) => {
         console.error('Failed to add photo after upload', error);
-        didFail = true;
+        if (uploadResultForRollback) {
+          void updatePinPhotosCache(pinId, (current) => (
+            Array.isArray(current)
+              ? current.filter((photo) => photo?.remote_file_url !== uploadResultForRollback)
+              : current
+          ));
+        }
+        void load({ showSpinner: false });
         showToast('Upload failed', 2500);
       })
       .finally(() => {
-        if (!didFail && !didSucceed) {
-          hideToast();
-        }
         setUploading(false);
       });
   }
@@ -576,6 +654,25 @@ export default function ViewPhotoChallengeScreen() {
       currentMode === SORT_MODE_ELO ? SORT_MODE_DATE : SORT_MODE_ELO
     ));
   }, []);
+
+  const handleShareChallenge = useCallback(async () => {
+    if (!pinId) return;
+    const shareUrl = `${PUBLIC_BASE_URL}/view_photochallenge/${encodeURIComponent(pinId)}`;
+    const message = promptText
+      ? `Check out this SideQuest quest: "${promptText}"`
+      : 'Check out this SideQuest quest.';
+
+    try {
+      await Share.share({
+        title: 'View this quest on SideQuest',
+        message,
+        url: shareUrl,
+      });
+    } catch (error) {
+      console.warn('Failed to share challenge', error);
+      showToast('Unable to open share menu', 2500);
+    }
+  }, [pinId, promptText, showToast]);
 
   const openPhotoDetail = useCallback((photo) => {
     if (!photo?._id) return;
@@ -888,6 +985,17 @@ export default function ViewPhotoChallengeScreen() {
                       />
                       <Text style={styles.gallerySummaryChipText}>
                         {sortChipLabel}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleShareChallenge}
+                      style={styles.gallerySummaryChip}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share challenge"
+                    >
+                      <MaterialIcons name="share" size={16} color={colors.primary} />
+                      <Text style={styles.gallerySummaryChipText}>
+                        Share
                       </Text>
                     </Pressable>
                   </View>

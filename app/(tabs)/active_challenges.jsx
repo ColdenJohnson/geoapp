@@ -28,6 +28,7 @@ import {
 import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { setUploadResolver } from '@/lib/promiseStore';
 import { AuthContext } from '@/hooks/AuthContext';
+import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import {
   PressHoldActionMenu,
@@ -355,13 +356,17 @@ export default function ActiveChallengesScreen() {
   const beginUploadForChallenge = useCallback((challenge) => {
     if (!challenge?.pinId) return;
     const uploadRequestId = `quest-upload-${challenge.pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let uploadedPhotoUrlForRollback = null;
     setUploadingPinId(challenge.pinId);
     const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve, uploadRequestId);
       router.push({
         pathname: '/upload',
         params: {
+          next: '/view_photochallenge',
+          pinId: challenge.pinId,
           prompt: challenge.prompt,
+          created_by_handle: challenge.creatorHandleRaw || '',
           uploadRequestId,
         },
       });
@@ -376,17 +381,18 @@ export default function ActiveChallengesScreen() {
         if (!uploadedPhotoUrl) {
           return;
         }
-        showToast('Uploading photo…', 60000);
+        uploadedPhotoUrlForRollback = uploadedPhotoUrl;
         await addPhoto(challenge.pinId, uploadedPhotoUrl);
         invalidateStats();
-        showToast('Upload success', 2200);
-        router.push(buildViewPhotoChallengeRoute({
-          pinId: challenge.pinId,
-          message: challenge.prompt,
-          createdByHandle: challenge.creatorHandleRaw || '',
-        }));
       })
       .catch((error) => {
+        if (uploadedPhotoUrlForRollback) {
+          void updatePinPhotosCache(challenge.pinId, (current) => (
+            Array.isArray(current)
+              ? current.filter((photo) => photo?.remote_file_url !== uploadedPhotoUrlForRollback)
+              : current
+          ));
+        }
         console.error('Failed to upload photo to challenge', error);
         showToast('Upload failed', 2500);
       })

@@ -14,6 +14,7 @@ import { newChallenge, fetchAllLocationPins, fetchFriendPrivateLocationPins, add
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
 import { buildViewPhotoChallengeRoute } from '../../lib/navigation';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
+import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
 
 import { getDistance } from 'geolib';
 
@@ -53,7 +54,10 @@ export default function HomeScreen() {
       router.push({
         pathname: '/upload',
         params: {
+          next: '/view_photochallenge',
+          pinId,
           prompt: pin?.message || '',
+          created_by_handle: pin?.created_by_handle || '',
           uploadRequestId,
         },
       });
@@ -64,7 +68,6 @@ export default function HomeScreen() {
         if (!uploadResult) {
           return;
         }
-        showToast('Uploading photo…', 60000);
         setPins((prev) =>
           Array.isArray(prev)
             ? prev.map((p) =>
@@ -81,13 +84,12 @@ export default function HomeScreen() {
         try {
           await addPhoto(pinId, uploadResult);
           invalidateStats();
-          showToast('Upload success', 2200);
-          router.push(buildViewPhotoChallengeRoute({
-            pinId,
-            message: pin?.message || '',
-            createdByHandle: pin?.created_by_handle || '',
-          }));
         } catch (error) {
+          await updatePinPhotosCache(pinId, (current) => (
+            Array.isArray(current)
+              ? current.filter((photo) => photo?.remote_file_url !== uploadResult)
+              : current
+          ));
           setPins((prev) =>
             Array.isArray(prev)
               ? prev.map((p) =>

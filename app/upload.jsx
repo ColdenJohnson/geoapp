@@ -2,7 +2,7 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
-import { useState, useRef, useMemo, useEffect } from 'react'
+import { useState, useRef, useMemo, useEffect, useContext } from 'react'
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FontAwesome6, MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -16,7 +16,9 @@ import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
 import { fontSizes, spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { goBackOrHome } from '@/lib/navigation';
+import { goBackOrHome, buildViewPhotoChallengeRoute } from '@/lib/navigation';
+import { AuthContext } from '@/hooks/AuthContext';
+import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
 
 const PHOTO_RATIO = '3:4';
 const PHOTO_ASPECT_RATIO = 3 / 4;
@@ -30,16 +32,34 @@ export default function Upload({ initialUri = null }) {
   const ref = useRef(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { next, prompt, uploadRequestId } = useLocalSearchParams();
+  const { next, prompt, uploadRequestId, pinId: pinIdParam, created_by_handle: createdByHandleParam } = useLocalSearchParams();
   const promptText = useMemo(() => {
     if (typeof prompt === 'string') return prompt.trim();
     if (Array.isArray(prompt) && typeof prompt[0] === 'string') return prompt[0].trim();
     return '';
   }, [prompt]);
+  const nextPath = useMemo(() => {
+    if (typeof next === 'string') return next.trim();
+    if (Array.isArray(next) && typeof next[0] === 'string') return next[0].trim();
+    return '';
+  }, [next]);
+  const pinId = useMemo(() => {
+    if (typeof pinIdParam === 'string') return pinIdParam.trim();
+    if (Array.isArray(pinIdParam) && typeof pinIdParam[0] === 'string') return pinIdParam[0].trim();
+    return '';
+  }, [pinIdParam]);
+  const createdByHandle = useMemo(() => {
+    if (typeof createdByHandleParam === 'string') return createdByHandleParam.trim();
+    if (Array.isArray(createdByHandleParam) && typeof createdByHandleParam[0] === 'string') {
+      return createdByHandleParam[0].trim();
+    }
+    return '';
+  }, [createdByHandleParam]);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isMounted = useRef(true);
   const didSubmitUpload = useRef(false);
+  const { profile } = useContext(AuthContext);
 
   useEffect(() => () => {
     isMounted.current = false;
@@ -119,14 +139,51 @@ export default function Upload({ initialUri = null }) {
     console.log('Photo captured:', photo?.uri);
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!uri || uploading) return;
     didSubmitUpload.current = true;
     setUploading(true);
+    const optimisticPhotoId = `optimistic-${uploadRequestId || Date.now()}`;
+    const optimisticPhoto = {
+      _id: optimisticPhotoId,
+      file_url: uri,
+      remote_file_url: null,
+      global_elo: 1000,
+      global_wins: 0,
+      global_losses: 0,
+      created_by_handle: typeof profile?.handle === 'string' && profile.handle ? profile.handle : 'you',
+      createdAt: new Date().toISOString(),
+      optimistic: true,
+    };
+
+    if (pinId) {
+      try {
+        await updatePinPhotosCache(pinId, (current) => {
+          const existing = Array.isArray(current) ? current : [];
+          return [
+            optimisticPhoto,
+            ...existing.filter((photo) => String(photo?._id) !== optimisticPhotoId),
+          ];
+        });
+      } catch (error) {
+        console.error('Failed to seed optimistic pin photo cache', error);
+      }
+    }
 
     (async () => {
       try {
         const downloadURL = await uploadImage(uri);
+        if (pinId) {
+          await updatePinPhotosCache(pinId, (current) => (
+            Array.isArray(current)
+              ? current.map((photo) => (
+                String(photo?._id) === optimisticPhotoId
+                  ? { ...photo, remote_file_url: downloadURL }
+                  : photo
+              ))
+              : current
+          ));
+        }
         if (typeof uploadRequestId === 'string' && uploadRequestId) {
           resolveUpload(downloadURL, uploadRequestId); // fulfill the original Promise
         } else {
@@ -134,6 +191,13 @@ export default function Upload({ initialUri = null }) {
         }
       } catch (err) {
         console.error('Error uploading image:', err);
+        if (pinId) {
+          await updatePinPhotosCache(pinId, (current) => (
+            Array.isArray(current)
+              ? current.filter((photo) => String(photo?._id) !== optimisticPhotoId)
+              : current
+          ));
+        }
         if (typeof uploadRequestId === 'string' && uploadRequestId) {
           resolveUpload(null, uploadRequestId);
         } else {
@@ -146,9 +210,15 @@ export default function Upload({ initialUri = null }) {
       }
     })();
 
-    if (next) {
-      console.log('Navigating to next:', next);
-      router.push(String(next));
+    if (nextPath === '/view_photochallenge' && pinId) {
+      router.push(buildViewPhotoChallengeRoute({
+        pinId,
+        message: promptText,
+        createdByHandle,
+      }));
+    } else if (nextPath) {
+      console.log('Navigating to next:', nextPath);
+      router.push(String(nextPath));
     } else {
       console.log('No next specified, going back');
       goBackOrHome(router);

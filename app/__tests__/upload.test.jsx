@@ -11,6 +11,17 @@ jest.mock('@/lib/promiseStore', () => ({
   resolveUpload: jest.fn(),
 }));
 
+jest.mock('@/lib/pinChallengeCache', () => ({
+  updatePinPhotosCache: jest.fn(() => Promise.resolve([])),
+}));
+
+jest.mock('@/hooks/AuthContext', () => {
+  const React = require('react');
+  return {
+    AuthContext: React.createContext({ profile: { handle: 'tester' } }),
+  };
+});
+
 jest.mock('react-native-device-info', () => ({
   isEmulator: jest.fn(async () => false),
 }));
