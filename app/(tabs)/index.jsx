@@ -15,6 +15,12 @@ import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib
 import { buildViewPhotoChallengeRoute } from '../../lib/navigation';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
 import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
+import {
+  clusterMapPins,
+  DEFAULT_PIN_COLLISION_DISTANCE_PX,
+} from '@/lib/mapPinClustering';
+import QuestMapPin from '@/components/map/QuestMapPin';
+import { resolveMapPinTheme } from '@/theme/mapPins';
 
 import { getDistance } from 'geolib';
 
@@ -23,6 +29,8 @@ import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 
+const MARKER_REFRESH_WINDOW_MS = 240;
+
 export default function HomeScreen() {
   const [location, setLocation] = useState(null);
   const [pins, setPins] = useState([]); // for all pins
@@ -30,7 +38,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const mapRef = useRef(null);
   const pressedUploadResetTimeoutRef = useRef(null);
+  const markerRefreshTimeoutRef = useRef(null);
   const [didCenter, setDidCenter] = useState(false);
+  const [mapLayout, setMapLayout] = useState({ width: 0, height: 0 });
+  const [markerTracksViewChanges, setMarkerTracksViewChanges] = useState(true);
 
   const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
   const [showFriendsOnly, setShowFriendsOnly] = useState(false);
@@ -39,6 +50,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const { user, friends, invalidateStats } = useContext(AuthContext);
+  const colors = usePalette();
 
   function uploadPhotoToChallenge(pin) {
     if (!pin?._id) {
@@ -155,6 +167,10 @@ export default function HomeScreen() {
       clearTimeout(pressedUploadResetTimeoutRef.current);
       pressedUploadResetTimeoutRef.current = null;
     }
+    if (markerRefreshTimeoutRef.current) {
+      clearTimeout(markerRefreshTimeoutRef.current);
+      markerRefreshTimeoutRef.current = null;
+    }
   }, []);
 
   const userCoords = useMemo(() => {
@@ -181,6 +197,25 @@ export default function HomeScreen() {
       ? wgs84ToGcj02(userCoords.latitude, userCoords.longitude)
       : userCoords;
   }, [userCoords, userIsInMainland]);
+  const initialMapRegion = useMemo(() => ({
+    latitude: derivedUserCenter?.latitude ?? 31.416077,
+    longitude: derivedUserCenter?.longitude ?? 120.901488,
+    latitudeDelta: derivedUserCenter ? 0.01 : 0.5,
+    longitudeDelta: derivedUserCenter ? 0.01 : 0.5,
+  }), [derivedUserCenter]);
+  const [mapRegion, setMapRegion] = useState(initialMapRegion);
+  const handleCenterOnUser = useCallback(() => {
+    if (!derivedUserCenter || !mapRef.current) return;
+
+    const nextRegion = {
+      latitude: derivedUserCenter.latitude,
+      longitude: derivedUserCenter.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+    setMapRegion(nextRegion);
+    mapRef.current.animateToRegion(nextRegion, 300);
+  }, [derivedUserCenter]);
   const friendUidSet = useMemo(() => {
     if (!Array.isArray(friends)) return new Set();
     return new Set(
@@ -195,6 +230,13 @@ export default function HomeScreen() {
     if (createdBy) {
       if (createdBy === user?.uid) return true;
       return friendUidSet.has(createdBy);
+    }
+    return pin?.is_friend_pin === true;
+  }, [friendUidSet, user?.uid]);
+  const isFriendPin = useCallback((pin) => {
+    const createdBy = typeof pin?.created_by === 'string' ? pin.created_by : '';
+    if (createdBy) {
+      return createdBy !== user?.uid && friendUidSet.has(createdBy);
     }
     return pin?.is_friend_pin === true;
   }, [friendUidSet, user?.uid]);
@@ -230,6 +272,11 @@ export default function HomeScreen() {
     if (!showFriendsOnly) return pinsForDisplay;
     return pinsForDisplay.filter((pin) => isFriendOrOwnPin(pin));
   }, [isFriendOrOwnPin, pinsForDisplay, showFriendsOnly]);
+  const pinCollisionGroups = useMemo(() => clusterMapPins(visiblePins, {
+    region: mapRegion,
+    mapSize: mapLayout,
+    collisionDistancePx: DEFAULT_PIN_COLLISION_DISTANCE_PX,
+  }), [mapLayout, mapRegion, visiblePins]);
   const handleFriendsFilterPress = useCallback(() => {
     if (!showFriendsOnly && friendUidSet.size === 0) {
       showToast('Add some friends to see their pins!');
@@ -277,7 +324,7 @@ export default function HomeScreen() {
       handleCenterOnUser();
       setDidCenter(true);
     }
-  }, [location, pins, didCenter, userCoords, handleCenterOnUser]);
+  }, [didCenter, handleCenterOnUser, userCoords]);
 
   function handleCreateChallengePress() {
     if (!location) {
@@ -341,21 +388,10 @@ export default function HomeScreen() {
       showToast('Location unavailable. Unable to open this challenge.');
       return;
     }
-    const isGeoLocked = pin?.isGeoLocked !== false;
-    const viewerHasUploaded = pin?.viewer_has_uploaded === true;
-    if (isGeoLocked) {
-      if (!userCoords) {
-        showToast('Location unavailable. Unable to open this challenge.');
-        return;
-      }
-      const distanceToPin = getDistance(userCoords, {
-        latitude: pin.location.latitude,
-        longitude: pin.location.longitude,
-      });
-      if (!Number.isFinite(distanceToPin) || (distanceToPin > NEAR_THRESHOLD_METERS && !viewerHasUploaded)) {
-        showToast(`Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`);
-        return;
-      }
+    const accessBlockedMessage = getPinAccessBlockedMessage(pin);
+    if (accessBlockedMessage) {
+      showToast(accessBlockedMessage);
+      return;
     }
     router.push(buildViewPhotoChallengeRoute({
       pinId: pin._id,
@@ -364,24 +400,88 @@ export default function HomeScreen() {
     }));
   }
 
-  const colors = usePalette();
-  const handleCenterOnUser = useCallback(() => {
-    if (!derivedUserCenter || !mapRef.current) return;
+  const getDistanceToPin = useCallback((pin) => {
+    if (!userCoords || !pin?.location) {
+      return null;
+    }
 
-    mapRef.current.animateToRegion(
-      {
-        latitude: derivedUserCenter.latitude,
-        longitude: derivedUserCenter.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      },
-      300
-    );
-  }, [derivedUserCenter]);
+    const distance = getDistance(userCoords, {
+      latitude: pin.location.latitude,
+      longitude: pin.location.longitude,
+    });
+
+    return Number.isFinite(distance) ? distance : null;
+  }, [userCoords]);
+  const isPinWithinRange = useCallback((pin) => {
+    const distance = getDistanceToPin(pin);
+    return distance !== null && distance <= NEAR_THRESHOLD_METERS;
+  }, [getDistanceToPin]);
+  const canViewerAccessPin = useCallback((pin) => {
+    const createdBy = typeof pin?.created_by === 'string' ? pin.created_by : '';
+    if (createdBy && createdBy === user?.uid) {
+      return true;
+    }
+    if (pin?.viewer_has_uploaded === true) {
+      return true;
+    }
+    return isPinWithinRange(pin);
+  }, [isPinWithinRange, user?.uid]);
+  const getPinAccessBlockedMessage = useCallback((pin) => {
+    if (!pin?.location) {
+      return 'Location unavailable. Unable to open this challenge.';
+    }
+    if (pin?.isGeoLocked === false || canViewerAccessPin(pin)) {
+      return null;
+    }
+    const distanceToPin = getDistanceToPin(pin);
+    if (distanceToPin === null) {
+      return 'Location unavailable. Unable to open this challenge.';
+    }
+    return `Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`;
+  }, [canViewerAccessPin, getDistanceToPin]);
+
+  const refreshMarkerSnapshots = useCallback(() => {
+    setMarkerTracksViewChanges(true);
+    if (markerRefreshTimeoutRef.current) {
+      clearTimeout(markerRefreshTimeoutRef.current);
+    }
+    markerRefreshTimeoutRef.current = setTimeout(() => {
+      setMarkerTracksViewChanges(false);
+      markerRefreshTimeoutRef.current = null;
+    }, MARKER_REFRESH_WINDOW_MS);
+  }, []);
+  const handleMapLayout = useCallback((event) => {
+    const { width, height } = event.nativeEvent.layout || {};
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      return;
+    }
+    setMapLayout((current) => (
+      current.width === width && current.height === height
+        ? current
+        : { width, height }
+    ));
+    refreshMarkerSnapshots();
+  }, [refreshMarkerSnapshots]);
+  const handleRegionChangeComplete = useCallback((nextRegion) => {
+    setMapRegion(nextRegion);
+    refreshMarkerSnapshots();
+  }, [refreshMarkerSnapshots]);
+
+  useEffect(() => {
+    refreshMarkerSnapshots();
+  }, [pinCollisionGroups, refreshMarkerSnapshots]);
+
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const calloutWidth = useMemo(
+    () => Math.max(252, Math.min(windowWidth - 48, 320)),
+    [windowWidth]
+  );
   const calloutCardStyle = useMemo(() => ({
-    maxWidth: Math.max(248, Math.min(windowWidth - 48, 320)),
-  }), [windowWidth]);
+    width: calloutWidth,
+  }), [calloutWidth]);
+  const calloutContentPressableStyle = useMemo(() => ({
+    width: Math.max(156, calloutWidth - 92),
+  }), [calloutWidth]);
   const controlsBottomOffset = 20 + insets.bottom + bottomTabOverflow;
   const toastBottomOffset = controlsBottomOffset + 96;
   const topRightControlsTop = 16 + insets.top;
@@ -397,11 +497,13 @@ export default function HomeScreen() {
         style={styles.map}
         showsUserLocation={true}
         ref={mapRef}
+        onLayout={handleMapLayout}
+        onRegionChangeComplete={handleRegionChangeComplete}
         initialRegion={{
-          latitude: derivedUserCenter?.latitude ?? 31.416077,
-          longitude: derivedUserCenter?.longitude ?? 120.901488,
-          latitudeDelta: derivedUserCenter ? 0.01 : 0.5,
-          longitudeDelta: derivedUserCenter ? 0.01 : 0.5,
+          latitude: initialMapRegion.latitude,
+          longitude: initialMapRegion.longitude,
+          latitudeDelta: initialMapRegion.latitudeDelta,
+          longitudeDelta: initialMapRegion.longitudeDelta,
         }}
       >
 
@@ -417,30 +519,41 @@ export default function HomeScreen() {
     pinColor={colors.pinOpen}
   />
 )}
+  {pinCollisionGroups.map((group) => {
+    const pin = group?.representativePin;
+    if (!pin || !group?.representativeCoordinate) return null;
 
-
-  {visiblePins.map((pin) => {
-    if (!pin?.location) return null;
     const pinId = String(pin._id);
     const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
-    const isFriendPin = isFriendOrOwnPin(pin);
-    const isGeoLocked = pin?.isGeoLocked !== false;
+    const isFriendStyledPin = isFriendPin(pin);
+    const accessBlockedMessage = getPinAccessBlockedMessage(pin);
+    const uploadLocked = Boolean(accessBlockedMessage);
+    const pinTheme = resolveMapPinTheme(pin, colors, {
+      isFriendPin: isFriendStyledPin,
+      isUnlocked: canViewerAccessPin(pin),
+    });
+    const markerKey = `representative:${pinId}`;
+
     return (
       <Marker
-        key={pin._id}
-        coordinate={{
-          latitude: pin.displayCoords?.latitude ?? pin.location.latitude,
-          longitude: pin.displayCoords?.longitude ?? pin.location.longitude,
-        }}
-        title={"Photo Challenge"}
+        key={markerKey}
+        coordinate={group.representativeCoordinate}
+        anchor={{ x: 0.5, y: 1 }}
+        calloutOffset={{ x: 0, y: 12 }}
+        tracksViewChanges={markerTracksViewChanges}
+        title="Photo Challenge"
         description={pin.message || 'Geo Pin'}
-        pinColor={pin?.isPrivate ? colors.pinPrivate : (isGeoLocked ? (isFriendPin ? colors.pinGeoLockedFriend : colors.pinGeoLocked) : colors.pinOpen)}
       >
-        <Callout
-          tooltip
-        >
+        <QuestMapPin
+          theme={pinTheme}
+          badgeCount={group.memberCount}
+        />
+        <Callout tooltip>
           <View style={[styles.calloutCard, calloutCardStyle]}>
-            <CalloutSubview onPress={() => viewPhotoChallenge(pin)} style={styles.calloutContentPressable}>
+            <CalloutSubview
+              onPress={() => viewPhotoChallenge(pin)}
+              style={[styles.calloutContentPressable, calloutContentPressableStyle]}
+            >
               <View style={styles.calloutContent}>
                 <Text style={styles.calloutLabel}>Challenge</Text>
                 <Text style={styles.calloutPrompt} numberOfLines={3}>
@@ -453,23 +566,34 @@ export default function HomeScreen() {
                 <Text style={styles.calloutMeta}>
                   Photos: {Number.isFinite(pin?.photo_count) ? pin.photo_count : 0}
                 </Text>
+                {group.memberCount > 1 ? (
+                  <Text style={styles.calloutMeta}>
+                    Showing most popular of {group.memberCount} overlapping pins
+                  </Text>
+                ) : null}
               </View>
             </CalloutSubview>
             <CalloutSubview
-              onPress={() => handleUploadPhotoPress(pin)}
+              onPress={() => {
+                if (accessBlockedMessage) {
+                  showToast(accessBlockedMessage);
+                  return;
+                }
+                handleUploadPhotoPress(pin);
+              }}
             >
               <View
                 style={[
                   styles.button,
-                  styles.buttonTakePhoto,
+                  uploadLocked ? styles.calloutActionButtonLocked : styles.buttonTakePhoto,
                   styles.calloutActionButton,
-                  pressedUploadPinId === pinId ? styles.calloutActionButtonPressed : null,
+                  !uploadLocked && pressedUploadPinId === pinId ? styles.calloutActionButtonPressed : null,
                 ]}
               >
                 <MaterialIcons
                   name="add-a-photo"
                   size={27}
-                  color={colors.primaryTextOn}
+                  color={uploadLocked ? colors.textMuted : colors.primaryTextOn}
                 />
               </View>
             </CalloutSubview>
@@ -649,6 +773,10 @@ function createStyles(colors) {
     },
     calloutActionButton: {
       flexShrink: 0,
+    },
+    calloutActionButtonLocked: {
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
     },
     calloutActionButtonPressed: {
       opacity: 0.5,
