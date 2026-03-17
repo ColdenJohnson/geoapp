@@ -2,6 +2,7 @@ import {
   CameraView,
   useCameraPermissions,
 } from "expo-camera";
+import * as Location from 'expo-location';
 import { useState, useRef, useMemo, useEffect, useContext } from 'react'
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FontAwesome6, MaterialIcons } from "@expo/vector-icons";
@@ -23,6 +24,38 @@ import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
 const PHOTO_RATIO = '3:4';
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
+
+function normalizeCoordinate(value) {
+  const latitude = Number(value?.coords?.latitude ?? value?.latitude);
+  const longitude = Number(value?.coords?.longitude ?? value?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+  return { latitude, longitude };
+}
+
+async function getApproximatePhotoLocation() {
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission?.status !== 'granted') {
+      return null;
+    }
+
+    const lastKnownPosition = await Location.getLastKnownPositionAsync();
+    const lastKnownCoords = normalizeCoordinate(lastKnownPosition);
+    if (lastKnownCoords) {
+      return lastKnownCoords;
+    }
+
+    const currentPosition = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+    return normalizeCoordinate(currentPosition);
+  } catch (error) {
+    console.warn('Failed to read photo location', error);
+    return null;
+  }
+}
 
 export default function Upload({ initialUri = null }) {
   const [facing, setFacing] = useState ("back");
@@ -172,7 +205,10 @@ export default function Upload({ initialUri = null }) {
 
     (async () => {
       try {
-        const downloadURL = await uploadImage(uri);
+        const [downloadURL, photoLocation] = await Promise.all([
+          uploadImage(uri),
+          getApproximatePhotoLocation(),
+        ]);
         if (pinId) {
           await updatePinPhotosCache(pinId, (current) => (
             Array.isArray(current)
@@ -185,9 +221,9 @@ export default function Upload({ initialUri = null }) {
           ));
         }
         if (typeof uploadRequestId === 'string' && uploadRequestId) {
-          resolveUpload(downloadURL, uploadRequestId); // fulfill the original Promise
+          resolveUpload({ fileUrl: downloadURL, photoLocation }, uploadRequestId); // fulfill the original Promise
         } else {
-          resolveUpload(downloadURL); // fulfill the original Promise
+          resolveUpload({ fileUrl: downloadURL, photoLocation }); // fulfill the original Promise
         }
       } catch (err) {
         console.error('Error uploading image:', err);

@@ -77,9 +77,13 @@ export default function HomeScreen() {
 
     uploadPromise
       .then(async (uploadResult) => {
-        if (!uploadResult) {
+        const uploadedPhotoUrl = typeof uploadResult === 'string'
+          ? uploadResult
+          : uploadResult?.fileUrl;
+        if (!uploadedPhotoUrl) {
           return;
         }
+        const photoLocation = uploadResult?.photoLocation || null;
         setPins((prev) =>
           Array.isArray(prev)
             ? prev.map((p) =>
@@ -94,12 +98,12 @@ export default function HomeScreen() {
             : prev
         );
         try {
-          await addPhoto(pinId, uploadResult);
+          await addPhoto(pinId, uploadedPhotoUrl, { photoLocation });
           invalidateStats();
         } catch (error) {
           await updatePinPhotosCache(pinId, (current) => (
             Array.isArray(current)
-              ? current.filter((photo) => photo?.remote_file_url !== uploadResult)
+              ? current.filter((photo) => photo?.remote_file_url !== uploadedPhotoUrl)
               : current
           ));
           setPins((prev) =>
@@ -247,16 +251,22 @@ export default function HomeScreen() {
     }
 
     return pins.map((pin) => {
-      const baseCoords = pin?.location;
+      const topPhotoLocation = pin?.top_global_photo?.location;
+      const hasValidTopPhotoLocation =
+        Number.isFinite(topPhotoLocation?.latitude)
+        && Number.isFinite(topPhotoLocation?.longitude);
+      const baseCoords = pin?.isGeoLocked === false
+        ? (hasValidTopPhotoLocation ? topPhotoLocation : pin?.location)
+        : pin?.location;
       if (!baseCoords) {
         return pin;
       }
 
-      const needsConversion = shouldConvertToGcj02(userCoords, pin, {
+      const needsConversion = shouldConvertToGcj02(userCoords, baseCoords, {
         userIsInMainland,
         pinIsInMainland:
-          typeof pin?.pinIsInMainland === 'boolean'
-            ? pin.pinIsInMainland
+          typeof baseCoords?.latitude === 'number' && typeof baseCoords?.longitude === 'number'
+            ? isInMainlandChina(baseCoords.latitude, baseCoords.longitude)
             : undefined,
       });
 

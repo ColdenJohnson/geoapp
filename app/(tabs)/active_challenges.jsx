@@ -377,12 +377,16 @@ export default function ActiveChallengesScreen() {
     setUploadingPinId(null);
 
     uploadPromise
-      .then(async (uploadedPhotoUrl) => {
+      .then(async (uploadResult) => {
+        const uploadedPhotoUrl = typeof uploadResult === 'string'
+          ? uploadResult
+          : uploadResult?.fileUrl;
         if (!uploadedPhotoUrl) {
           return;
         }
+        const photoLocation = uploadResult?.photoLocation || null;
         uploadedPhotoUrlForRollback = uploadedPhotoUrl;
-        await addPhoto(challenge.pinId, uploadedPhotoUrl);
+        await addPhoto(challenge.pinId, uploadedPhotoUrl, { photoLocation });
         invalidateStats();
       })
       .catch((error) => {

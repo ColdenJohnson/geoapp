@@ -624,11 +624,15 @@ export default function ViewPhotoChallengeScreen() {
 
     uploadPromise
       .then(async (uploadResult) => {
-        if (!uploadResult) { // If promise resolves to falsey (i.e. user exits upload screen)
+        const uploadedPhotoUrl = typeof uploadResult === 'string'
+          ? uploadResult
+          : uploadResult?.fileUrl;
+        if (!uploadedPhotoUrl) { // If promise resolves to falsey (i.e. user exits upload screen)
           return;
         }
-        uploadResultForRollback = uploadResult;
-        await addPhoto(pinId, uploadResult);
+        const photoLocation = uploadResult?.photoLocation || null;
+        uploadResultForRollback = uploadedPhotoUrl;
+        await addPhoto(pinId, uploadedPhotoUrl, { photoLocation });
         invalidateStats();
         await load({ showSpinner: false });
       })

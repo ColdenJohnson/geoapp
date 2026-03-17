@@ -62,4 +62,14 @@ describe('shouldConvertToGcj02', () => {
       })
     ).toBe(false);
   });
+
+  it('supports plain coordinate objects for display coordinates', () => {
+    const location = { coords: { latitude: 30.2741, longitude: 120.1551 } };
+    const displayCoords = { latitude: 31.2304, longitude: 121.4737 };
+    expect(
+      shouldConvertToGcj02(location, displayCoords, {
+        userIsInMainland: true,
+      })
+    ).toBe(true);
+  });
 });
