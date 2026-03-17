@@ -75,6 +75,9 @@ jest.mock('expo-location', () => {
   return {
     Accuracy: { High: 'high', Highest: 'highest' },
     requestForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+    getForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+    getLastKnownPositionAsync: jest.fn(async () => null),
+    getCurrentPositionAsync: jest.fn(async () => null),
     watchPositionAsync: jest.fn(async (_options, _callback) => ({
       remove: removeWatcherMock,
     })),

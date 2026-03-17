@@ -56,7 +56,6 @@ describe('EnterMessageScreen', () => {
     expect(resolveGeoLock).toHaveBeenCalledWith(true);
     await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
   });
-
   it('requests permission when camera access is denied', () => {
     cameraModule.useCameraPermissions.mockReturnValue([{ granted: false }, jest.fn()]);
 

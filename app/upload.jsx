@@ -19,7 +19,7 @@ import { fontSizes, spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { goBackOrHome, buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { AuthContext } from '@/hooks/AuthContext';
-import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
+import { seedPinPhotosCache, updatePinPhotosCache } from '@/lib/pinChallengeCache';
 
 const PHOTO_RATIO = '3:4';
 const PHOTO_ASPECT_RATIO = 3 / 4;
@@ -191,16 +191,30 @@ export default function Upload({ initialUri = null }) {
 
     if (pinId) {
       try {
-        await updatePinPhotosCache(pinId, (current) => {
+        seedPinPhotosCache(pinId, (current) => {
           const existing = Array.isArray(current) ? current : [];
           return [
             optimisticPhoto,
             ...existing.filter((photo) => String(photo?._id) !== optimisticPhotoId),
           ];
-        });
+        }, { isDirty: true });
       } catch (error) {
         console.error('Failed to seed optimistic pin photo cache', error);
       }
+    }
+
+    if (nextPath === '/view_photochallenge' && pinId) {
+      router.push(buildViewPhotoChallengeRoute({
+        pinId,
+        message: promptText,
+        createdByHandle,
+      }));
+    } else if (nextPath) {
+      console.log('Navigating to next:', nextPath);
+      router.push(String(nextPath));
+    } else {
+      console.log('No next specified, going back');
+      goBackOrHome(router);
     }
 
     (async () => {
@@ -245,20 +259,6 @@ export default function Upload({ initialUri = null }) {
         }
       }
     })();
-
-    if (nextPath === '/view_photochallenge' && pinId) {
-      router.push(buildViewPhotoChallengeRoute({
-        pinId,
-        message: promptText,
-        createdByHandle,
-      }));
-    } else if (nextPath) {
-      console.log('Navigating to next:', nextPath);
-      router.push(String(nextPath));
-    } else {
-      console.log('No next specified, going back');
-      goBackOrHome(router);
-    }
   };
 
   const renderCamera = () => {
