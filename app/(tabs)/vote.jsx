@@ -361,22 +361,28 @@ export default function GlobalVoteScreen() {
                 disabled={loading || submitting}
                 onVote={chooseByIndex}
                 deckStyle={styles.deckArea}
-                renderMeta={(photo) => (
-                  <View style={styles.meta}>
-                    <Text style={styles.metaLabel}>{isPinRandom ? 'Local' : 'Global'} Elo</Text>
-                    <Text style={styles.metaHandle}>
-                      {Number.isFinite(isPinRandom ? photo?.local_elo : photo?.global_elo)
-                        ? isPinRandom
-                          ? photo.local_elo
-                          : photo.global_elo
-                        : 1000}
-                    </Text>
-                    <Text style={styles.metaDetail}>
-                      W {isPinRandom ? photo?.local_wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
-                      {isPinRandom ? photo?.local_losses ?? 0 : photo?.global_losses ?? 0}
-                    </Text>
-                  </View>
-                )}
+                renderMeta={(photo, photoIndex) => {
+                  const isRightPhoto = photoIndex === 1;
+
+                  return (
+                    <View style={[styles.meta, isRightPhoto && styles.metaRight]}>
+                      <Text style={[styles.metaLabel, isRightPhoto && styles.metaTextRight]}>
+                        {isPinRandom ? 'Local' : 'Global'} Elo
+                      </Text>
+                      <Text style={[styles.metaHandle, isRightPhoto && styles.metaTextRight]}>
+                        {Number.isFinite(isPinRandom ? photo?.local_elo : photo?.global_elo)
+                          ? isPinRandom
+                            ? photo.local_elo
+                            : photo.global_elo
+                          : 1000}
+                      </Text>
+                      <Text style={[styles.metaDetail, isRightPhoto && styles.metaTextRight]}>
+                        W {isPinRandom ? photo?.local_wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
+                        {isPinRandom ? photo?.local_losses ?? 0 : photo?.global_losses ?? 0}
+                      </Text>
+                    </View>
+                  );
+                }}
               />
               <View style={styles.helperRow} pointerEvents="none">
                 <Text style={styles.helperText}>Slide to reveal the winner</Text>
@@ -429,12 +435,15 @@ function createStyles(colors) {
       paddingVertical: 6,
       maxWidth: 280,
     },
+    metaRight: {
+      alignSelf: 'flex-end',
+    },
     metaLabel: {
       fontSize: 10,
       fontWeight: '800',
       letterSpacing: 1.1,
       textTransform: 'uppercase',
-      color: 'rgba(255, 255, 255, 0.56)',
+      color: colors.primary,
     },
     metaHandle: {
       fontSize: 28,
@@ -445,9 +454,12 @@ function createStyles(colors) {
     },
     metaDetail: {
       fontSize: 12,
-      color: 'rgba(245, 237, 232, 0.94)',
+      color: '#FFFFFF',
       fontWeight: '700',
       letterSpacing: 0.3,
+    },
+    metaTextRight: {
+      textAlign: 'right',
     },
     kicker: {
       fontSize: 10,
