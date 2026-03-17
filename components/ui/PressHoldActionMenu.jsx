@@ -264,7 +264,6 @@ function createStyles(colors) {
     },
     backdrop: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(12, 10, 9, 0.08)',
     },
     overlayLayer: {
       ...StyleSheet.absoluteFillObject,

@@ -199,6 +199,11 @@ export default function ActiveChallengesScreen() {
           label: 'Save',
           iconName: queueMode === 'saved' ? 'bookmark' : 'bookmark-border',
         },
+        {
+          id: 'join',
+          label: 'Join',
+          iconName: 'photo-camera',
+        },
       ],
     },
     {
@@ -486,11 +491,16 @@ export default function ActiveChallengesScreen() {
       await handleSaveChallenge(challenge);
       return;
     }
+    if (option.id === 'join') {
+      beginUploadForChallenge(challenge);
+      return;
+    }
     if (option.id === 'view_photos') {
       handleViewPhotos(challenge);
       return;
     }
   }, [
+    beginUploadForChallenge,
     challengeOptions,
     closeChallengeOptions,
     handleSaveChallenge,
@@ -744,7 +754,6 @@ export default function ActiveChallengesScreen() {
           )}
 
           <View style={styles.dimLayer} pointerEvents="none" />
-          {isContextCard ? <View style={styles.contextCardWash} pointerEvents="none" /> : null}
           <View style={styles.topMeta}>
             <View style={styles.handleChip}>
               <Text style={styles.handleChipText}>{challenge.creatorHandle}</Text>
@@ -996,10 +1005,6 @@ function createStyles(colors) {
     dimLayer: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0, 0, 0, 0.26)',
-    },
-    contextCardWash: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(255, 107, 53, 0.08)',
     },
     topMeta: {
       position: 'absolute',

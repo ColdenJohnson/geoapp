@@ -578,7 +578,7 @@ export default function HomeScreen() {
                 </Text>
                 {group.memberCount > 1 ? (
                   <Text style={styles.calloutMeta}>
-                    Showing most popular of {group.memberCount} overlapping pins
+                    Most popular of {group.memberCount} Quests
                   </Text>
                 ) : null}
               </View>
