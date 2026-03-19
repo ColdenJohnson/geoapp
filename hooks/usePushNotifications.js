@@ -29,6 +29,7 @@ const ROUTABLE_PATHS = new Set([
   '/(tabs)/vote',
   '/(tabs)/profile',
   '/view_photochallenge',
+  '/user_profile/[uid]',
   '/friends',
   '/edit_profile',
   '/upload',
@@ -50,6 +51,9 @@ function buildNavigationTarget(data) {
   const params = {};
   if (data?.pinId != null) {
     params.pinId = `${data.pinId}`;
+  }
+  if (data?.uid != null) {
+    params.uid = `${data.uid}`;
   }
 
   return { pathname: normalizedRoute, params };

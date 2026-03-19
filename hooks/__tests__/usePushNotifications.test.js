@@ -92,6 +92,37 @@ describe('usePushNotifications', () => {
     }));
   });
 
+  it('routes to a public user profile when a uid is provided', async () => {
+    const response = {
+      notification: {
+        request: { content: { data: { route: '/user_profile/[uid]', uid: 'user-42' } } },
+      },
+    };
+
+    const { __mocks__: { responseListeners } } = Notifications;
+
+    render(<TestHarness user={{ uid: 'user-3' }} />);
+
+    await waitFor(() => {
+      expect(responseListeners.length).toBeGreaterThan(0);
+    });
+
+    responseListeners.forEach((cb) => cb(response));
+
+    await waitFor(() =>
+      expect(testingRouter.push).toHaveBeenCalledWith({
+        pathname: '/user_profile/[uid]',
+        params: { uid: 'user-42' },
+      })
+    );
+
+    expect(logNotificationEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'opened',
+      route: '/user_profile/[uid]',
+      uid: 'user-3',
+    }));
+  });
+
   it('handles cold-start notification by routing once navigation is ready', async () => {
     const response = {
       notification: {

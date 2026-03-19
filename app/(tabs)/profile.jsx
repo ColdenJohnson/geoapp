@@ -14,7 +14,6 @@ import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import {
   createProfileStyles,
-  normalizeHandle,
   ProfileAchievementsCard,
   ProfileHeaderCard,
   ProfileStatsCard,
@@ -68,15 +67,14 @@ export default function UserProfileScreen() {
     }, [refreshTopPhotos])
   );
 
-  const normalizedHandle = useMemo(() => normalizeHandle(profile?.handle), [profile?.handle]);
   const shareProfileUrl = useMemo(() => {
-    if (!normalizedHandle) return null;
-    return `${PUBLIC_BASE_URL}/friends_tab?handle=${encodeURIComponent(normalizedHandle)}`;
-  }, [normalizedHandle]);
+    if (!user?.uid) return null;
+    return `${PUBLIC_BASE_URL}/user_profile/${encodeURIComponent(user.uid)}`;
+  }, [user?.uid]);
 
   const onShareProfile = useCallback(async () => {
     if (!shareProfileUrl) {
-      Alert.alert('Share Profile', 'Set a unique handle before sharing your profile.');
+      Alert.alert('Share Profile', 'Unable to build your profile link right now.');
       return;
     }
     const message = `Let's Quest together. Join me on SideQuest!`;
