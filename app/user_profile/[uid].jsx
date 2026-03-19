@@ -8,6 +8,7 @@ import {
   fetchUserStats,
   fetchUserTopPhotos,
   fetchUsersByUID,
+  removeFriend,
   requestFriend,
 } from '@/lib/api';
 import { goBackOrHome } from '@/lib/navigation';
@@ -55,6 +56,7 @@ export default function PublicUserProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [friendActionBusy, setFriendActionBusy] = useState(false);
+  const [optimisticFriendshipStatus, setOptimisticFriendshipStatus] = useState(null);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState(null);
   const router = useRouter();
@@ -70,6 +72,10 @@ export default function PublicUserProfileScreen() {
     if (!targetUid || !user?.uid || targetUid !== user.uid) return;
     router.replace('/(tabs)/profile');
   }, [router, targetUid, user?.uid]);
+
+  useEffect(() => {
+    setOptimisticFriendshipStatus(null);
+  }, [targetUid]);
 
   const loadProfileData = useCallback(async ({ silent = false } = {}) => {
     if (!targetUid) {
@@ -121,15 +127,26 @@ export default function PublicUserProfileScreen() {
     [targetUid, user?.uid, friends, friendRequests]
   );
 
+  useEffect(() => {
+    if (optimisticFriendshipStatus && friendshipStatus === optimisticFriendshipStatus) {
+      setOptimisticFriendshipStatus(null);
+    }
+  }, [friendshipStatus, optimisticFriendshipStatus]);
+
+  const effectiveFriendshipStatus = optimisticFriendshipStatus || friendshipStatus;
+
   const onPressAddFriend = useCallback(async () => {
     if (!targetUid) return;
     setFriendActionBusy(true);
+    setOptimisticFriendshipStatus('outgoing');
     try {
       const response = await requestFriend({ target_uid: targetUid });
       if (!response?.success) {
+        setOptimisticFriendshipStatus(null);
         Alert.alert('Friend Request', response?.error || 'Failed to send friend request.');
         return;
       }
+      setOptimisticFriendshipStatus(response?.status === 'accepted' ? 'accepted' : 'outgoing');
       await refreshFriends({ force: true });
     } finally {
       setFriendActionBusy(false);
@@ -139,9 +156,11 @@ export default function PublicUserProfileScreen() {
   const onPressAcceptFriend = useCallback(async () => {
     if (!targetUid) return;
     setFriendActionBusy(true);
+    setOptimisticFriendshipStatus('accepted');
     try {
       const response = await acceptFriendRequest(targetUid);
       if (!response?.success) {
+        setOptimisticFriendshipStatus(null);
         Alert.alert('Friend Request', response?.error || 'Failed to accept friend request.');
         return;
       }
@@ -151,11 +170,35 @@ export default function PublicUserProfileScreen() {
     }
   }, [refreshFriends, targetUid]);
 
+  const onPressRemoveFriend = useCallback(async () => {
+    if (!targetUid) return;
+    setFriendActionBusy(true);
+    setOptimisticFriendshipStatus('none');
+    try {
+      const response = await removeFriend(targetUid);
+      if (!response?.success) {
+        if (response?.statusCode === 404) {
+          await Promise.all([
+            loadProfileData({ silent: true }),
+            refreshFriends({ force: true }),
+          ]);
+          return;
+        }
+        setOptimisticFriendshipStatus(null);
+        Alert.alert('Remove Friend', response?.error || 'Failed to remove friend.');
+        return;
+      }
+      await refreshFriends({ force: true });
+    } finally {
+      setFriendActionBusy(false);
+    }
+  }, [loadProfileData, refreshFriends, targetUid]);
+
   const profileAction = useMemo(() => {
-    if (friendsLoading) {
+    if (friendsLoading && !optimisticFriendshipStatus) {
       return null;
     }
-    if (friendshipStatus === 'none') {
+    if (effectiveFriendshipStatus === 'none') {
       return {
         title: 'Add Friend',
         variant: 'filled',
@@ -163,7 +206,7 @@ export default function PublicUserProfileScreen() {
         onPress: onPressAddFriend,
       };
     }
-    if (friendshipStatus === 'incoming') {
+    if (effectiveFriendshipStatus === 'incoming') {
       return {
         title: 'Accept Friend',
         variant: 'filled',
@@ -171,7 +214,7 @@ export default function PublicUserProfileScreen() {
         onPress: onPressAcceptFriend,
       };
     }
-    if (friendshipStatus === 'outgoing') {
+    if (effectiveFriendshipStatus === 'outgoing') {
       return {
         title: 'Request Pending',
         variant: 'secondary',
@@ -179,8 +222,24 @@ export default function PublicUserProfileScreen() {
         onPress: undefined,
       };
     }
+    if (effectiveFriendshipStatus === 'accepted') {
+      return {
+        title: 'Remove Friend',
+        variant: 'secondary',
+        disabled: friendActionBusy,
+        onPress: onPressRemoveFriend,
+      };
+    }
     return null;
-  }, [friendActionBusy, friendshipStatus, friendsLoading, onPressAcceptFriend, onPressAddFriend]);
+  }, [
+    effectiveFriendshipStatus,
+    friendActionBusy,
+    friendsLoading,
+    onPressAcceptFriend,
+    onPressAddFriend,
+    onPressRemoveFriend,
+    optimisticFriendshipStatus,
+  ]);
 
   return (
     <SafeAreaView style={styles.container}>
