@@ -544,7 +544,7 @@ export default function ActiveChallengesScreen() {
         swipeAnimatingPinId.current = null;
         setIsAnimating(false);
         if (finished && direction === 'accept') {
-          beginUploadForChallenge(topChallenge);
+          handleViewPhotos(topChallenge);
         }
         if (finished && direction === 'save') {
           handleUpSwipeAction(topChallenge);
@@ -553,12 +553,12 @@ export default function ActiveChallengesScreen() {
     });
   }, [
     advanceChallengeQueue,
-    beginUploadForChallenge,
     cardHeight,
     cardPan,
     cardWidth,
     challenges,
     closeChallengeOptions,
+    handleViewPhotos,
     handleUpSwipeAction,
     swipeLocked,
   ]);
@@ -805,7 +805,7 @@ export default function ActiveChallengesScreen() {
             <Text style={styles.headerSubtitle}>
               {queueMode === 'saved'
                 ? 'Swipe up to remove from saved. Tap or hold for more.'
-                : 'Swipe right to accept, left to send back, up to save. Tap or hold for more.'}
+                : 'Swipe right to select, left to send back, up to save. Tap or hold for more.'}
             </Text>
           </View>
           <Pressable
@@ -879,7 +879,7 @@ export default function ActiveChallengesScreen() {
             onPress={() => commitSwipe('accept')}
             disabled={interactionLocked || stack.length === 0}
           >
-            <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
+            <MaterialIcons name="photo-library" size={28} color={colors.primaryTextOn} />
           </Pressable>
         </View>
 
