@@ -25,7 +25,7 @@ export default function AppHeader({
           disabled={!onBack}
           style={[styles.backButton, !onBack && styles.backButtonDisabled]}
         >
-          <MaterialIcons name="arrow-back" size={20} color={colors.text} />
+          <MaterialIcons name="arrow-back-ios" size={20} color={colors.text} />
           {backText ? <Text style={styles.backText}>{backText}</Text> : null}
         </Pressable>
         {right ? <View style={styles.right}>{right}</View> : null}
@@ -48,7 +48,7 @@ function createStyles(colors) {
   return StyleSheet.create({
     container: {
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
+      paddingTop: 0,
       paddingBottom: spacing.md,
       backgroundColor: colors.bg,
       borderBottomWidth: 1,

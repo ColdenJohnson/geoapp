@@ -1044,13 +1044,21 @@ export default function ViewPhotoChallengeScreen() {
             <Pressable onPress={closePhotoDetail} style={styles.detailCloseButton}>
               <MaterialIcons name="arrow-back" size={22} color={colors.text} />
             </Pressable>
-            <View style={styles.detailHeaderMeta}>
-              <Text style={styles.detailHeaderTitle} numberOfLines={1}>
-                {selectedPhoto?.created_by_handle ? `@${selectedPhoto.created_by_handle}` : 'anon'}
-              </Text>
-              <Text style={styles.detailHeaderSubtitle}>
-                Uploaded {formatShortDate(selectedPhoto?.createdAt)}
-              </Text>
+              <View style={styles.detailHeaderMeta}>
+                <Pressable
+                  onPress={() => openUserProfile(selectedPhoto?.created_by)}
+                  disabled={!selectedPhoto?.created_by}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open uploader profile"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+                >
+                  <Text style={styles.detailHeaderTitle} numberOfLines={1}>
+                    {selectedPhoto?.created_by_handle ? `@${selectedPhoto.created_by_handle}` : 'anon'}
+                  </Text>
+                <Text style={styles.detailHeaderSubtitle}>
+                  Uploaded {formatShortDate(selectedPhoto?.createdAt)}
+                </Text>
+              </Pressable>
             </View>
             <View style={styles.detailHeaderBadge}>
               <MaterialIcons name="emoji-events" size={15} color={colors.primary} />
@@ -1084,6 +1092,7 @@ export default function ViewPhotoChallengeScreen() {
                     cachePolicy="memory-disk"
                   />
                 </View>
+                {/*  THIS INFORMATION IS REDUNDANT, RE-ADD WHEN IT WILL BE USEFUL
                 <View style={styles.detailMetricRow}>
                   <View style={styles.detailMetricCard}>
                     <Text style={styles.detailMetricLabel}>Global Elo</Text>
@@ -1100,6 +1109,7 @@ export default function ViewPhotoChallengeScreen() {
                     <Text style={styles.detailMetricValue}>{photoComments.length}</Text>
                   </View>
                 </View>
+                */}
                 <View style={styles.commentsSectionHeader}>
                   <Text style={styles.commentsSectionTitle}>Comments</Text>
                   <Text style={styles.commentsSectionSubtitle}>{`${photoComments.length} total`}</Text>
@@ -1178,7 +1188,7 @@ export default function ViewPhotoChallengeScreen() {
 
 function createStyles(colors) {
   return StyleSheet.create({
-    safe: { flex: 1, backgroundColor: colors.surface },
+    safe: { flex: 1, backgroundColor: colors.bg },
     privacyFooterRow: {
       marginBottom: 10,
     },
@@ -1309,14 +1319,14 @@ function createStyles(colors) {
     },
     detailSafe: {
       flex: 1,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bg,
     },
     detailHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.md,
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.md,
+      paddingTop: 0,
       paddingBottom: spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: colors.barBorder,
@@ -1366,6 +1376,7 @@ function createStyles(colors) {
     },
     detailList: {
       flex: 1,
+      backgroundColor: colors.surface,
     },
     detailListContent: {
       paddingHorizontal: spacing.lg,
@@ -1520,7 +1531,7 @@ function createStyles(colors) {
       color: colors.text,
       fontSize: fontSizes.sm,
       lineHeight: 20,
-      fontWeight: '600',
+      fontWeight: '500',
     },
     commentLikeButton: {
       minWidth: 52,
@@ -1556,7 +1567,7 @@ function createStyles(colors) {
     },
     commentComposerInputWrap: {
       flex: 1,
-      minHeight: 56,
+      minHeight: 40,
       maxHeight: 110,
       paddingHorizontal: spacing.md,
       paddingTop: spacing.sm,
@@ -1569,10 +1580,10 @@ function createStyles(colors) {
     },
     commentComposerInput: {
       color: colors.text,
-      fontSize: fontSizes.sm,
-      fontWeight: '600',
+      fontSize: fontSizes.md,
+      fontWeight: '400',
       minHeight: 22,
-      maxHeight: 72,
+      maxHeight: 57,
       padding: 0,
     },
     commentComposerSendButton: {
