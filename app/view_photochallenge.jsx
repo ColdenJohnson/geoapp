@@ -870,6 +870,27 @@ export default function ViewPhotoChallengeScreen() {
       });
   }, [applyCommentsUpdate, selectedPhotoId, showToast, writeCommentsCacheOnly]);
 
+  const onPressReplyComment = useCallback((comment) => {
+    const rawHandle = typeof comment?.created_by_handle === 'string'
+      ? comment.created_by_handle.trim()
+      : '';
+    const normalizedHandle = rawHandle.replace(/^@+/, '');
+    if (!normalizedHandle) return;
+    const mentionPrefix = `@${normalizedHandle}`;
+
+    setCommentDraft((currentDraft) => {
+      const draftText = typeof currentDraft === 'string' ? currentDraft : '';
+      const trimmedStart = draftText.trimStart();
+      if (trimmedStart === mentionPrefix || trimmedStart.startsWith(`${mentionPrefix} `)) {
+        return draftText;
+      }
+      if (!draftText.trim()) {
+        return `${mentionPrefix} `;
+      }
+      return `${mentionPrefix} ${draftText}`;
+    });
+  }, []);
+
   const renderPhotoTile = useCallback(({ item }) => (
     <Pressable onPress={() => openPhotoDetail(item)} style={styles.galleryTileShell}>
       <View style={styles.galleryTile}>
@@ -897,60 +918,91 @@ export default function ViewPhotoChallengeScreen() {
     </Pressable>
   ), [colors.primary, openPhotoDetail, styles]);
 
-  const renderCommentItem = useCallback(({ item }) => (
-    <View style={styles.commentRow}>
-      <Pressable
-        onPress={() => openUserProfile(item?.created_by)}
-        disabled={!item?.created_by}
-        style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
-      >
-        <UserAvatar
-          uri={item?.created_by_photo_url || null}
-          label={getAvatarInitial(item)}
-          size={38}
-          styles={styles}
-        />
-      </Pressable>
-      <View style={styles.commentBody}>
-        <View style={styles.commentMetaRow}>
-          <Pressable
-            onPress={() => openUserProfile(item?.created_by)}
-            disabled={!item?.created_by}
-            style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.72 : 1 })}
-          >
-            <Text style={styles.commentHandle}>
-              {item?.created_by_handle ? `@${item.created_by_handle}` : 'anon'}
-            </Text>
-          </Pressable>
-          <Text style={styles.commentTimestamp}>{formatShortDate(item?.createdAt)}</Text>
-        </View>
-        <Text style={styles.commentText}>{item?.text || ''}</Text>
-      </View>
-      <Pressable
-        onPress={() => onPressLikeComment(item)}
-        style={[
-          styles.commentLikeButton,
-          item?.viewer_has_liked && styles.commentLikeButtonActive,
-        ]}
-      >
-        <>
-          <MaterialIcons
-            name={item?.viewer_has_liked ? 'favorite' : 'favorite-border'}
-            size={16}
-            color={item?.viewer_has_liked ? colors.primary : colors.textMuted}
+  const renderCommentItem = useCallback(({ item }) => {
+    const commentHandle = typeof item?.created_by_handle === 'string'
+      ? item.created_by_handle.trim()
+      : '';
+    const normalizedCommentHandle = commentHandle.replace(/^@+/, '');
+    const isOwnComment = (
+      (user?.uid && item?.created_by && String(item.created_by) === String(user.uid)) ||
+      (currentUserHandle && normalizedCommentHandle &&
+        normalizedCommentHandle.toLowerCase() === currentUserHandle.toLowerCase())
+    );
+    const canReply = !isOwnComment && Boolean(normalizedCommentHandle);
+
+    return (
+      <View style={styles.commentRow}>
+        <Pressable
+          onPress={() => openUserProfile(item?.created_by)}
+          disabled={!item?.created_by}
+          style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+        >
+          <UserAvatar
+            uri={item?.created_by_photo_url || null}
+            label={getAvatarInitial(item)}
+            size={38}
+            styles={styles}
           />
-          <Text
-            style={[
-              styles.commentLikeCount,
-              item?.viewer_has_liked && styles.commentLikeCountActive,
-            ]}
-          >
-            {Number.isFinite(item?.like_count) ? item.like_count : 0}
-          </Text>
-        </>
-      </Pressable>
-    </View>
-  ), [colors.primary, colors.textMuted, onPressLikeComment, openUserProfile, styles]);
+        </Pressable>
+        <View style={styles.commentBody}>
+          <View style={styles.commentMetaRow}>
+            <Pressable
+              onPress={() => openUserProfile(item?.created_by)}
+              disabled={!item?.created_by}
+              style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.72 : 1 })}
+            >
+              <Text style={styles.commentHandle}>
+                {normalizedCommentHandle ? `@${normalizedCommentHandle}` : 'anon'}
+              </Text>
+            </Pressable>
+            <Text style={styles.commentTimestamp}>{formatShortDate(item?.createdAt)}</Text>
+          </View>
+          <Text style={styles.commentText}>{item?.text || ''}</Text>
+          {canReply ? (
+            <Pressable
+              onPress={() => onPressReplyComment(item)}
+              hitSlop={6}
+              style={({ pressed }) => ({ alignSelf: 'flex-start', opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text style={styles.commentReplyText}>Reply</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <Pressable
+          onPress={() => onPressLikeComment(item)}
+          style={[
+            styles.commentLikeButton,
+            item?.viewer_has_liked && styles.commentLikeButtonActive,
+          ]}
+        >
+          <>
+            <MaterialIcons
+              name={item?.viewer_has_liked ? 'favorite' : 'favorite-border'}
+              size={16}
+              color={item?.viewer_has_liked ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.commentLikeCount,
+                item?.viewer_has_liked && styles.commentLikeCountActive,
+              ]}
+            >
+              {Number.isFinite(item?.like_count) ? item.like_count : 0}
+            </Text>
+          </>
+        </Pressable>
+      </View>
+    );
+  }, [
+    colors.primary,
+    colors.textMuted,
+    currentUserHandle,
+    onPressLikeComment,
+    onPressReplyComment,
+    openUserProfile,
+    styles,
+    user?.uid,
+  ]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -1382,7 +1434,7 @@ function createStyles(colors) {
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
       paddingBottom: spacing.xl,
-      gap: spacing.md,
+      gap: 0,
     },
     detailHeroSection: {
       gap: spacing.lg,
@@ -1486,10 +1538,6 @@ function createStyles(colors) {
       gap: spacing.sm,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.md,
-      borderRadius: radii.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.bg,
     },
     avatarImage: {
       backgroundColor: colors.border,
@@ -1532,6 +1580,11 @@ function createStyles(colors) {
       fontSize: fontSizes.sm,
       lineHeight: 20,
       fontWeight: '500',
+    },
+    commentReplyText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
     },
     commentLikeButton: {
       minWidth: 52,
