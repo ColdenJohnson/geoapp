@@ -14,6 +14,12 @@ import { newChallenge, fetchAllLocationPins, fetchFriendPrivateLocationPins, add
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
 import { buildViewPhotoChallengeRoute } from '../../lib/navigation';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
+import {
+  canViewChallenge,
+  getChallengeUploadBlockedMessage,
+  getChallengeViewBlockedMessage,
+  normalizeChallengeCoordinate,
+} from '@/lib/challengeGeoAccess';
 import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
 import {
   clusterMapPins,
@@ -21,8 +27,6 @@ import {
 } from '@/lib/mapPinClustering';
 import QuestMapPin from '@/components/map/QuestMapPin';
 import { resolveMapPinTheme } from '@/theme/mapPins';
-
-import { getDistance } from 'geolib';
 
 import { Toast, useToast } from '../../components/ui/Toast';
 import { usePalette } from '@/hooks/usePalette';
@@ -43,7 +47,6 @@ export default function HomeScreen() {
   const [mapLayout, setMapLayout] = useState({ width: 0, height: 0 });
   const [markerTracksViewChanges, setMarkerTracksViewChanges] = useState(true);
 
-  const NEAR_THRESHOLD_METERS = 80; // threshold for pin photo distance
   const [showFriendsOnly, setShowFriendsOnly] = useState(false);
   const { message: toastMessage, show: showToast } = useToast(3500);
   const { width: windowWidth } = useWindowDimensions();
@@ -55,6 +58,14 @@ export default function HomeScreen() {
   function uploadPhotoToChallenge(pin) {
     if (!pin?._id) {
       showToast('No valid challenge selected.');
+      return;
+    }
+    const uploadBlockedMessage = getChallengeUploadBlockedMessage({
+      challenge: pin,
+      userLocation: userCoords,
+    });
+    if (uploadBlockedMessage) {
+      showToast(uploadBlockedMessage, 2500);
       return;
     }
     const pinId = String(pin._id);
@@ -124,7 +135,7 @@ export default function HomeScreen() {
       })
       .catch((error) => {
         console.error('Failed to upload photo to challenge', error);
-        showToast('Upload failed', 2500);
+        showToast(error?.response?.data?.error || 'Upload failed', 2500);
       });
   }
 
@@ -178,16 +189,7 @@ export default function HomeScreen() {
   }, []);
 
   const userCoords = useMemo(() => {
-    if (
-      typeof location?.coords?.latitude === 'number' &&
-      typeof location?.coords?.longitude === 'number'
-    ) {
-      return {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-    }
-    return null;
+    return normalizeChallengeCoordinate(location);
   }, [location]);
 
   const userIsInMainland = useMemo(() => {
@@ -398,9 +400,9 @@ export default function HomeScreen() {
       showToast('Location unavailable. Unable to open this challenge.');
       return;
     }
-    const accessBlockedMessage = getPinAccessBlockedMessage(pin);
-    if (accessBlockedMessage) {
-      showToast(accessBlockedMessage);
+    const viewBlockedMessage = getPinViewBlockedMessage(pin);
+    if (viewBlockedMessage) {
+      showToast(viewBlockedMessage);
       return;
     }
     router.push(buildViewPhotoChallengeRoute({
@@ -410,45 +412,26 @@ export default function HomeScreen() {
     }));
   }
 
-  const getDistanceToPin = useCallback((pin) => {
-    if (!userCoords || !pin?.location) {
-      return null;
-    }
-
-    const distance = getDistance(userCoords, {
-      latitude: pin.location.latitude,
-      longitude: pin.location.longitude,
-    });
-
-    return Number.isFinite(distance) ? distance : null;
-  }, [userCoords]);
-  const isPinWithinRange = useCallback((pin) => {
-    const distance = getDistanceToPin(pin);
-    return distance !== null && distance <= NEAR_THRESHOLD_METERS;
-  }, [getDistanceToPin]);
   const canViewerAccessPin = useCallback((pin) => {
-    const createdBy = typeof pin?.created_by === 'string' ? pin.created_by : '';
-    if (createdBy && createdBy === user?.uid) {
-      return true;
-    }
-    if (pin?.viewer_has_uploaded === true) {
-      return true;
-    }
-    return isPinWithinRange(pin);
-  }, [isPinWithinRange, user?.uid]);
-  const getPinAccessBlockedMessage = useCallback((pin) => {
-    if (!pin?.location) {
-      return 'Location unavailable. Unable to open this challenge.';
-    }
-    if (pin?.isGeoLocked === false || canViewerAccessPin(pin)) {
-      return null;
-    }
-    const distanceToPin = getDistanceToPin(pin);
-    if (distanceToPin === null) {
-      return 'Location unavailable. Unable to open this challenge.';
-    }
-    return `Not within ${NEAR_THRESHOLD_METERS}m of this challenge! Currently ${Math.round(distanceToPin)}m away.`;
-  }, [canViewerAccessPin, getDistanceToPin]);
+    return canViewChallenge({
+      challenge: pin,
+      userLocation: userCoords,
+      viewerUid: user?.uid,
+    });
+  }, [user?.uid, userCoords]);
+  const getPinViewBlockedMessage = useCallback((pin) => {
+    return getChallengeViewBlockedMessage({
+      challenge: pin,
+      userLocation: userCoords,
+      viewerUid: user?.uid,
+    });
+  }, [user?.uid, userCoords]);
+  const getPinUploadBlockedMessage = useCallback((pin) => {
+    return getChallengeUploadBlockedMessage({
+      challenge: pin,
+      userLocation: userCoords,
+    });
+  }, [userCoords]);
 
   const refreshMarkerSnapshots = useCallback(() => {
     setMarkerTracksViewChanges(true);
@@ -536,8 +519,8 @@ export default function HomeScreen() {
     const pinId = String(pin._id);
     const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
     const isFriendStyledPin = isFriendPin(pin);
-    const accessBlockedMessage = getPinAccessBlockedMessage(pin);
-    const uploadLocked = Boolean(accessBlockedMessage);
+    const uploadBlockedMessage = getPinUploadBlockedMessage(pin);
+    const uploadLocked = Boolean(uploadBlockedMessage);
     const pinTheme = resolveMapPinTheme(pin, colors, {
       isFriendPin: isFriendStyledPin,
       isUnlocked: canViewerAccessPin(pin),
@@ -585,8 +568,8 @@ export default function HomeScreen() {
             </CalloutSubview>
             <CalloutSubview
               onPress={() => {
-                if (accessBlockedMessage) {
-                  showToast(accessBlockedMessage);
+                if (uploadBlockedMessage) {
+                  showToast(uploadBlockedMessage);
                   return;
                 }
                 handleUploadPhotoPress(pin);

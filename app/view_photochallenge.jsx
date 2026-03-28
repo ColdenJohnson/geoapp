@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
+import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -48,6 +49,10 @@ import {
 } from '@/lib/pinChallengeCache';
 import { setUploadResolver } from '../lib/promiseStore';
 import { goBackOrHome } from '@/lib/navigation';
+import {
+  getChallengeUploadBlockedMessage,
+  normalizeChallengeCoordinate,
+} from '@/lib/challengeGeoAccess';
 import BottomBar from '@/components/ui/BottomBar';
 import AppHeader from '@/components/ui/AppHeader';
 import { CTAButton } from '@/components/ui/Buttons';
@@ -375,6 +380,7 @@ export default function ViewPhotoChallengeScreen() {
   const [uploading, setUploading] = useState(false);
   const [commentsRefreshing, setCommentsRefreshing] = useState(false);
   const [challengeMeta, setChallengeMeta] = useState(null);
+  const [viewerLocation, setViewerLocation] = useState(null);
   const [sortMode, setSortMode] = useState(SORT_MODE_ELO);
   const [selectedPhotoId, setSelectedPhotoId] = useState(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
@@ -412,6 +418,19 @@ export default function ViewPhotoChallengeScreen() {
     challengeMeta.created_by === user.uid
   );
   const isPrivateChallenge = challengeMeta?.isPrivate === true;
+  const uploadBlockedMessage = useMemo(() => {
+    if (!pinId) {
+      return 'No valid challenge selected.';
+    }
+    if (!challengeMeta) {
+      return 'Checking challenge access...';
+    }
+    return getChallengeUploadBlockedMessage({
+      challenge: challengeMeta,
+      userLocation: viewerLocation,
+    });
+  }, [challengeMeta, pinId, viewerLocation]);
+  const uploadVisuallyLocked = Boolean(uploadBlockedMessage);
   const photos = serverPhotos;
   const hasPendingPhotos = useMemo(
     () => photos.some((photo) => photo?.optimistic === true),
@@ -462,6 +481,34 @@ export default function ViewPhotoChallengeScreen() {
 
   useEffect(() => () => {
     isMountedRef.current = false;
+  }, []);
+
+  const refreshViewerLocation = useCallback(async () => {
+    try {
+      const permission = await Location.getForegroundPermissionsAsync();
+      if (permission?.status !== 'granted') {
+        setViewerLocation(null);
+        return null;
+      }
+
+      const lastKnownPosition = await Location.getLastKnownPositionAsync();
+      const lastKnownCoords = normalizeChallengeCoordinate(lastKnownPosition);
+      if (lastKnownCoords) {
+        setViewerLocation(lastKnownCoords);
+        return lastKnownCoords;
+      }
+
+      const currentPosition = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const currentCoords = normalizeChallengeCoordinate(currentPosition);
+      setViewerLocation(currentCoords);
+      return currentCoords;
+    } catch (error) {
+      console.warn('Failed to refresh viewer location for challenge upload', error);
+      setViewerLocation(null);
+      return null;
+    }
   }, []);
 
   const mergeServerCommentsWithPending = useCallback((serverComments, localComments) => {
@@ -590,6 +637,12 @@ export default function ViewPhotoChallengeScreen() {
         cancelled = true;
       };
     }, [load, pinId])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshViewerLocation();
+    }, [refreshViewerLocation])
   );
 
   useEffect(() => {
@@ -831,8 +884,21 @@ export default function ViewPhotoChallengeScreen() {
     }
   }, [mergeServerCommentsWithPending, selectedPhotoCanComment, selectedPhotoId]);
 
-  function uploadPhotoChallenge() {
+  const uploadPhotoChallenge = useCallback(async () => {
     if (uploading) return;
+    const latestViewerLocation = await refreshViewerLocation();
+    const nextUploadBlockedMessage = !pinId
+      ? 'No valid challenge selected.'
+      : !challengeMeta
+        ? 'Checking challenge access...'
+        : getChallengeUploadBlockedMessage({
+            challenge: challengeMeta,
+            userLocation: latestViewerLocation || viewerLocation,
+          });
+    if (nextUploadBlockedMessage) {
+      showToast(nextUploadBlockedMessage, 2500);
+      return;
+    }
     setUploading(true);
     let uploadResultForRollback = null;
     const uploadPromise = new Promise((resolve) => {
@@ -871,12 +937,24 @@ export default function ViewPhotoChallengeScreen() {
           ));
         }
         void load({ showSpinner: false });
-        showToast('Upload failed', 2500);
+        showToast(error?.response?.data?.error || 'Upload failed', 2500);
       })
       .finally(() => {
         setUploading(false);
       });
-  }
+  }, [
+    challengeMeta,
+    handleText,
+    invalidateStats,
+    load,
+    pinId,
+    promptText,
+    refreshViewerLocation,
+    router,
+    showToast,
+    uploading,
+    viewerLocation,
+  ]);
 
   const onToggleSortMode = useCallback(() => {
     setSortMode((currentMode) => (
@@ -1386,7 +1464,13 @@ export default function ViewPhotoChallengeScreen() {
             style={styles.privacyFooterRow}
           />
         ) : null}
-        <CTAButton title="Upload Photo" onPress={uploadPhotoChallenge} disabled={uploading || !pinId} />
+        <CTAButton
+          title="Upload Photo"
+          onPress={uploadPhotoChallenge}
+          disabled={uploading || !pinId}
+          style={uploadVisuallyLocked ? styles.uploadButtonLocked : null}
+          textStyle={uploadVisuallyLocked ? styles.uploadButtonLockedText : null}
+        />
       </BottomBar>
 
       <Modal
@@ -1567,6 +1651,15 @@ function createStyles(colors) {
     safe: { flex: 1, backgroundColor: colors.bg },
     privacyFooterRow: {
       marginBottom: 10,
+    },
+    uploadButtonLocked: {
+      backgroundColor: colors.border,
+      borderColor: colors.border,
+      shadowOpacity: 0,
+      elevation: 0,
+    },
+    uploadButtonLockedText: {
+      color: colors.textMuted,
     },
     container: { flex: 1, backgroundColor: colors.surface },
     listContent: {
