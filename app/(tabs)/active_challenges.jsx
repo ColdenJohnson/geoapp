@@ -25,7 +25,7 @@ import {
   unsaveQuest
 } from '@/lib/api';
 import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
-import { setUploadResolver } from '@/lib/promiseStore';
+import { setUploadResolver, setUploadSubmitResolver } from '@/lib/promiseStore';
 import { AuthContext } from '@/hooks/AuthContext';
 import { readPinCommentsCache, updatePinPhotosCache } from '@/lib/pinChallengeCache';
 import { getTopRankedPhotoComment } from '@/lib/photoCommentRanking';
@@ -444,11 +444,18 @@ export default function ActiveChallengesScreen() {
     });
   }, [queueMode]);
 
-  const beginUploadForChallenge = useCallback((challenge) => {
+  const beginUploadForChallenge = useCallback((challenge, { advanceOnSubmit = true } = {}) => {
     if (!challenge?.pinId) return;
     const uploadRequestId = `quest-upload-${challenge.pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     let uploadedPhotoUrlForRollback = null;
     setUploadingPinId(challenge.pinId);
+    if (advanceOnSubmit) {
+      setUploadSubmitResolver((submitResult) => {
+        if (submitResult?.submitted) {
+          advanceChallengeQueue('upload');
+        }
+      }, uploadRequestId);
+    }
     const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve, uploadRequestId);
       router.push({
@@ -458,6 +465,7 @@ export default function ActiveChallengesScreen() {
           pinId: challenge.pinId,
           prompt: challenge.prompt,
           created_by_handle: challenge.creatorHandleRaw || '',
+          submit_action: 'back',
           uploadRequestId,
         },
       });
@@ -494,7 +502,7 @@ export default function ActiveChallengesScreen() {
       .finally(() => {
         setUploadingPinId(null);
       });
-  }, [invalidateStats, router, showToast]);
+  }, [advanceChallengeQueue, invalidateStats, router, showToast]);
 
   const handleUpSwipeAction = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
@@ -613,7 +621,8 @@ export default function ActiveChallengesScreen() {
     const topChallenge = challenges[0];
     swipeAnimatingPinId.current = topChallenge.pinId;
     const isSave = direction === 'save';
-    const exitX = direction === 'accept' ? cardWidth + 180 : -cardWidth - 180;
+    const isUpload = direction === 'upload';
+    const exitX = isUpload ? cardWidth + 180 : -cardWidth - 180;
     const exitY = -Math.max(cardHeight, 240) - 180;
     const toValue = isSave
       ? { x: 0, y: exitY }
@@ -624,13 +633,15 @@ export default function ActiveChallengesScreen() {
       duration: 200,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      advanceChallengeQueue(direction);
+      if (direction !== 'upload') {
+        advanceChallengeQueue(direction);
+      }
       requestAnimationFrame(() => {
         cardPan.setValue({ x: 0, y: 0 });
         swipeAnimatingPinId.current = null;
         setIsAnimating(false);
-        if (finished && direction === 'accept') {
-          handleViewPhotos(topChallenge);
+        if (finished && direction === 'upload') {
+          beginUploadForChallenge(topChallenge);
         }
         if (finished && direction === 'save') {
           handleUpSwipeAction(topChallenge);
@@ -639,12 +650,12 @@ export default function ActiveChallengesScreen() {
     });
   }, [
     advanceChallengeQueue,
+    beginUploadForChallenge,
     cardHeight,
     cardPan,
     cardWidth,
     challenges,
     closeChallengeOptions,
-    handleViewPhotos,
     handleUpSwipeAction,
     swipeLocked,
   ]);
@@ -708,7 +719,7 @@ export default function ActiveChallengesScreen() {
         return;
       }
       if (gestureState.dx > SWIPE_THRESHOLD) {
-        commitSwipe('accept');
+        commitSwipe('upload');
         return;
       }
       if (gestureState.dx < -SWIPE_THRESHOLD) {
@@ -752,7 +763,8 @@ export default function ActiveChallengesScreen() {
   ]);
 
   const stack = challenges.slice(0, STACK_DEPTH);
-  const panTargetPinId = swipeAnimatingPinId.current ?? stack[0]?.pinId ?? null;
+  const activeChallenge = stack[0] ?? null;
+  const panTargetPinId = swipeAnimatingPinId.current ?? activeChallenge?.pinId ?? null;
   const handleStageLayout = useCallback((event) => {
     const { width, height } = event.nativeEvent.layout;
     setStageSize((prev) => {
@@ -817,7 +829,7 @@ export default function ActiveChallengesScreen() {
         {isTop && tracksPan ? (
           <>
             <Animated.View style={[styles.selectBadge, { opacity: selectOpacity }]}>
-              <Text style={styles.selectBadgeText}>SELECT</Text>
+              <Text style={styles.selectBadgeText}>UPLOAD</Text>
             </Animated.View>
             <Animated.View style={[styles.skipBadge, { opacity: skipOpacity }]}>
               <Text style={styles.skipBadgeText}>SKIP</Text>
@@ -911,7 +923,7 @@ export default function ActiveChallengesScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerTextBlock}>
             <Text style={styles.headerTitle}>Quests</Text>
-            <Text style={styles.headerSubtitle}>Swipe right to select, left to send back, tap for more.</Text>
+            <Text style={styles.headerSubtitle}>Swipe right to upload, left to send back, tap for more.</Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -967,23 +979,37 @@ export default function ActiveChallengesScreen() {
             style={({ pressed }) => [
               styles.footerButton,
               styles.skipFooterButton,
-              { opacity: pressed || interactionLocked || stack.length === 0 ? 0.6 : 1 },
+              { opacity: pressed || interactionLocked || !activeChallenge ? 0.6 : 1 },
             ]}
             onPress={() => commitSwipe('skip')}
-            disabled={interactionLocked || stack.length === 0}
+            accessibilityLabel="Skip quest"
+            disabled={interactionLocked || !activeChallenge}
           >
             <MaterialIcons name="close" size={28} color={colors.textMuted} />
           </Pressable>
           <Pressable
             style={({ pressed }) => [
               styles.footerButton,
-              styles.acceptFooterButton,
-              { opacity: pressed || interactionLocked || stack.length === 0 ? 0.75 : 1 },
+              styles.viewFooterButton,
+              { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
             ]}
-            onPress={() => commitSwipe('accept')}
-            disabled={interactionLocked || stack.length === 0}
+            onPress={() => handleViewPhotos(activeChallenge)}
+            accessibilityLabel="View quest photos"
+            disabled={interactionLocked || !activeChallenge}
           >
-            <MaterialIcons name="photo-library" size={28} color={colors.primaryTextOn} />
+            <MaterialIcons name="photo-library" size={28} color={colors.textMuted} />
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.footerButton,
+              styles.cameraFooterButton,
+              { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
+            ]}
+            onPress={() => beginUploadForChallenge(activeChallenge, { advanceOnSubmit: true })}
+            accessibilityLabel="Upload directly to this quest"
+            disabled={interactionLocked || !activeChallenge}
+          >
+            <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
           </Pressable>
         </View>
 
@@ -1308,7 +1334,11 @@ function createStyles(colors) {
       borderColor: colors.border,
       backgroundColor: colors.bg,
     },
-    acceptFooterButton: {
+    viewFooterButton: {
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+    },
+    cameraFooterButton: {
       borderColor: colors.primary,
       backgroundColor: colors.primary,
     },

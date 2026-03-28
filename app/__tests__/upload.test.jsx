@@ -9,6 +9,7 @@ jest.mock('@/lib/uploadHelpers', () => ({
 
 jest.mock('@/lib/promiseStore', () => ({
   resolveUpload: jest.fn(),
+  resolveUploadSubmit: jest.fn(),
 }));
 
 jest.mock('@/lib/pinChallengeCache', () => ({
@@ -28,7 +29,7 @@ jest.mock('react-native-device-info', () => ({
 }));
 
 const { uploadImage } = require('@/lib/uploadHelpers');
-const { resolveUpload } = require('@/lib/promiseStore');
+const { resolveUpload, resolveUploadSubmit } = require('@/lib/promiseStore');
 const { seedPinPhotosCache } = require('@/lib/pinChallengeCache');
 const { router } = require('expo-router');
 const cameraModule = require('react-native-vision-camera');
@@ -78,6 +79,7 @@ describe('Upload screen', () => {
     fireEvent.press(getByText('UPLOAD>'));
 
     expect(router.back).toHaveBeenCalled();
+    expect(resolveUploadSubmit).toHaveBeenCalledWith({ submitted: true });
 
     await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
     expect(resolveUpload).toHaveBeenCalledWith({ fileUrl: 'https://download', photoLocation: null });
@@ -106,6 +108,7 @@ describe('Upload screen', () => {
       expect.any(Function),
       { isDirty: true }
     );
+    expect(resolveUploadSubmit).toHaveBeenCalledWith({ submitted: true }, 'req-123');
     expect(router.push).toHaveBeenCalledWith({
       pathname: '/view_photochallenge',
       params: {
@@ -121,6 +124,43 @@ describe('Upload screen', () => {
     await waitFor(() => expect(resolveUpload).toHaveBeenCalledWith(
       { fileUrl: 'https://download', photoLocation: null },
       'req-123'
+    ));
+  });
+
+  it('returns to the previous screen after submit when requested while upload continues in the background', async () => {
+    let resolveUploadImage;
+    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
+    uploadImage.mockImplementation(() => new Promise((resolve) => {
+      resolveUploadImage = resolve;
+    }));
+    expoRouter.useLocalSearchParams.mockReturnValue({
+      next: '/view_photochallenge',
+      pinId: 'pin-123',
+      prompt: 'Quest prompt',
+      created_by_handle: 'maker',
+      submit_action: 'back',
+      uploadRequestId: 'req-456',
+    });
+
+    const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
+
+    fireEvent.press(getByText('UPLOAD>'));
+
+    expect(seedPinPhotosCache).toHaveBeenCalledWith(
+      'pin-123',
+      expect.any(Function),
+      { isDirty: true }
+    );
+    expect(resolveUploadSubmit).toHaveBeenCalledWith({ submitted: true }, 'req-456');
+    expect(router.back).toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+    expect(resolveUpload).not.toHaveBeenCalled();
+
+    resolveUploadImage('https://download');
+
+    await waitFor(() => expect(resolveUpload).toHaveBeenCalledWith(
+      { fileUrl: 'https://download', photoLocation: null },
+      'req-456'
     ));
   });
 });

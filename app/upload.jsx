@@ -7,7 +7,7 @@ import { Image } from "expo-image";
 // import storage from '@react-native-firebase/storage';
 // import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
 // import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
-import { resolveUpload } from '../lib/promiseStore';
+import { resolveUpload, resolveUploadSubmit } from '../lib/promiseStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { uploadImage } from '@/lib/uploadHelpers';
 import { usePalette } from '@/hooks/usePalette';
@@ -60,7 +60,14 @@ export default function Upload({ initialUri = null }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
-  const { next, prompt, uploadRequestId, pinId: pinIdParam, created_by_handle: createdByHandleParam } = useLocalSearchParams();
+  const {
+    next,
+    prompt,
+    uploadRequestId,
+    pinId: pinIdParam,
+    created_by_handle: createdByHandleParam,
+    submit_action: submitActionParam,
+  } = useLocalSearchParams();
   const promptText = useMemo(() => {
     if (typeof prompt === 'string') return prompt.trim();
     if (Array.isArray(prompt) && typeof prompt[0] === 'string') return prompt[0].trim();
@@ -83,6 +90,13 @@ export default function Upload({ initialUri = null }) {
     }
     return '';
   }, [createdByHandleParam]);
+  const submitAction = useMemo(() => {
+    if (typeof submitActionParam === 'string') return submitActionParam.trim();
+    if (Array.isArray(submitActionParam) && typeof submitActionParam[0] === 'string') {
+      return submitActionParam[0].trim();
+    }
+    return '';
+  }, [submitActionParam]);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isMounted = useRef(true);
@@ -94,8 +108,10 @@ export default function Upload({ initialUri = null }) {
     if (!didSubmitUpload.current) {
       if (typeof uploadRequestId === 'string' && uploadRequestId) {
         resolveUpload(null, uploadRequestId);
+        resolveUploadSubmit(null, uploadRequestId);
       } else {
         resolveUpload(null);
+        resolveUploadSubmit(null);
       }
     }
   }, [uploadRequestId]);
@@ -155,6 +171,11 @@ export default function Upload({ initialUri = null }) {
   const handleUpload = async () => {
     if (!uri || uploading) return;
     didSubmitUpload.current = true;
+    if (typeof uploadRequestId === 'string' && uploadRequestId) {
+      resolveUploadSubmit({ submitted: true }, uploadRequestId);
+    } else {
+      resolveUploadSubmit({ submitted: true });
+    }
     setUploading(true);
     const optimisticPhotoId = `optimistic-${uploadRequestId || Date.now()}`;
     const optimisticPhoto = {
@@ -183,7 +204,9 @@ export default function Upload({ initialUri = null }) {
       }
     }
 
-    if (nextPath === '/view_photochallenge' && pinId) {
+    if (submitAction === 'back') {
+      goBackOrHome(router, '/(tabs)/active_challenges');
+    } else if (nextPath === '/view_photochallenge' && pinId) {
       router.push(buildViewPhotoChallengeRoute({
         pinId,
         message: promptText,

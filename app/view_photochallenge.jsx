@@ -19,6 +19,13 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import {
   addPhoto,
   createPhotoComment,
@@ -55,6 +62,17 @@ const SORT_MODE_ELO = 'elo';
 const SORT_MODE_DATE = 'date';
 const COMMENT_MAX_LENGTH = 200;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DETAIL_IMAGE_MAX_SCALE = 4;
+const DETAIL_IMAGE_ZOOM_THRESHOLD = 1.01;
+const DETAIL_IMAGE_RESET_SPRING = {
+  damping: 20,
+  stiffness: 240,
+};
+
+function clamp(value, min, max) {
+  'worklet';
+  return Math.max(min, Math.min(max, value));
+}
 
 function parseDateMs(value) {
   const ms = Date.parse(value);
@@ -154,6 +172,197 @@ function UserAvatar({ uri, label, size, styles }) {
   );
 }
 
+function ZoomableDetailImage({ uri, styles, onInteractionChange }) {
+  const frameWidth = useSharedValue(0);
+  const frameHeight = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const baseScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const panStartX = useSharedValue(0);
+  const panStartY = useSharedValue(0);
+  const panTouchStartX = useSharedValue(0);
+  const panTouchStartY = useSharedValue(0);
+  const originX = useSharedValue(0);
+  const originY = useSharedValue(0);
+  const activeTouchCount = useSharedValue(0);
+  const zoomLockActive = useSharedValue(false);
+
+  const emitInteractionChange = useCallback((nextValue) => {
+    if (typeof onInteractionChange === 'function') {
+      onInteractionChange(nextValue);
+    }
+  }, [onInteractionChange]);
+
+  const resetZoom = () => {
+    'worklet';
+    scale.value = withSpring(1, DETAIL_IMAGE_RESET_SPRING);
+    baseScale.value = 1;
+    translateX.value = withSpring(0, DETAIL_IMAGE_RESET_SPRING);
+    translateY.value = withSpring(0, DETAIL_IMAGE_RESET_SPRING);
+    panStartX.value = 0;
+    panStartY.value = 0;
+    panTouchStartX.value = 0;
+    panTouchStartY.value = 0;
+  };
+
+  const syncInteractionState = (nextTouchCount) => {
+    'worklet';
+    const normalizedTouchCount = Math.max(0, nextTouchCount);
+    activeTouchCount.value = normalizedTouchCount;
+
+    const nextLockActive = normalizedTouchCount > 1 || (
+      normalizedTouchCount > 0 && scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD
+    );
+    if (zoomLockActive.value !== nextLockActive) {
+      zoomLockActive.value = nextLockActive;
+      runOnJS(emitInteractionChange)(nextLockActive);
+    }
+
+    if (normalizedTouchCount === 0) {
+      resetZoom();
+    }
+  };
+
+  useEffect(() => {
+    scale.value = 1;
+    baseScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    panStartX.value = 0;
+    panStartY.value = 0;
+    panTouchStartX.value = 0;
+    panTouchStartY.value = 0;
+    activeTouchCount.value = 0;
+    zoomLockActive.value = false;
+    emitInteractionChange(false);
+  }, [
+    activeTouchCount,
+    baseScale,
+    emitInteractionChange,
+    panStartX,
+    panStartY,
+    panTouchStartX,
+    panTouchStartY,
+    scale,
+    translateX,
+    translateY,
+    uri,
+    zoomLockActive,
+  ]);
+
+  useEffect(() => () => {
+    emitInteractionChange(false);
+  }, [emitInteractionChange]);
+
+  const handleLayout = useCallback((event) => {
+    const nextWidth = event?.nativeEvent?.layout?.width;
+    const nextHeight = event?.nativeEvent?.layout?.height;
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight)) return;
+    frameWidth.value = nextWidth;
+    frameHeight.value = nextHeight;
+    originX.value = nextWidth / 2;
+    originY.value = nextHeight / 2;
+  }, [frameHeight, frameWidth, originX, originY]);
+
+  const pinchGesture = Gesture.Pinch()
+    .shouldCancelWhenOutside(false)
+    .onTouchesDown((event) => {
+      syncInteractionState(event.numberOfTouches);
+    })
+    .onTouchesUp((event) => {
+      syncInteractionState(event.numberOfTouches);
+    })
+    .onTouchesCancelled(() => {
+      syncInteractionState(0);
+    })
+    .onStart((event) => {
+      baseScale.value = scale.value;
+      originX.value = clamp(event.focalX, 0, frameWidth.value || event.focalX);
+      originY.value = clamp(event.focalY, 0, frameHeight.value || event.focalY);
+    })
+    .onUpdate((event) => {
+      originX.value = clamp(event.focalX, 0, frameWidth.value || event.focalX);
+      originY.value = clamp(event.focalY, 0, frameHeight.value || event.focalY);
+      scale.value = clamp(baseScale.value * event.scale, 1, DETAIL_IMAGE_MAX_SCALE);
+    })
+    .onEnd(() => {
+      baseScale.value = scale.value;
+    });
+
+  const panGesture = Gesture.Pan()
+    .manualActivation(true)
+    .averageTouches(true)
+    .shouldCancelWhenOutside(false)
+    .onTouchesDown((event, manager) => {
+      syncInteractionState(event.numberOfTouches);
+      if (event.numberOfTouches === 1 && scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD) {
+        manager.activate();
+      }
+    })
+    .onTouchesMove((event, manager) => {
+      if (event.numberOfTouches === 1 && scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD) {
+        manager.activate();
+      }
+    })
+    .onTouchesUp((event) => {
+      syncInteractionState(event.numberOfTouches);
+    })
+    .onTouchesCancelled(() => {
+      syncInteractionState(0);
+    })
+    .onStart((event) => {
+      panStartX.value = translateX.value;
+      panStartY.value = translateY.value;
+      panTouchStartX.value = event.absoluteX;
+      panTouchStartY.value = event.absoluteY;
+    })
+    .onUpdate((event) => {
+      if (scale.value <= DETAIL_IMAGE_ZOOM_THRESHOLD) return;
+      translateX.value = panStartX.value + (event.absoluteX - panTouchStartX.value);
+      translateY.value = panStartY.value + (event.absoluteY - panTouchStartY.value);
+    })
+    .onEnd(() => {
+      panStartX.value = translateX.value;
+      panStartY.value = translateY.value;
+    });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
+
+  const animatedZoomStyle = useAnimatedStyle(() => {
+    const raised = activeTouchCount.value > 1 || scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD;
+    return {
+      transformOrigin: [originX.value, originY.value, 0],
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+        { scale: scale.value },
+      ],
+      zIndex: raised ? 40 : 1,
+      elevation: raised ? 10 : 0,
+    };
+  });
+
+  return (
+    <View style={styles.detailImageStage}>
+      <GestureDetector gesture={composedGesture}>
+        <Animated.View
+          collapsable={false}
+          onLayout={handleLayout}
+          style={[styles.detailImageZoomSurface, animatedZoomStyle]}
+        >
+          <Image
+            source={uri ? { uri } : undefined}
+            style={styles.detailImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        </Animated.View>
+      </GestureDetector>
+    </View>
+  );
+}
+
 export default function ViewPhotoChallengeScreen() {
   const {
     pinId,
@@ -169,6 +378,7 @@ export default function ViewPhotoChallengeScreen() {
   const [sortMode, setSortMode] = useState(SORT_MODE_ELO);
   const [selectedPhotoId, setSelectedPhotoId] = useState(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
+  const [detailImageZoomLocked, setDetailImageZoomLocked] = useState(false);
   const [photoComments, setPhotoComments] = useState([]);
   const [commentsHydrated, setCommentsHydrated] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
@@ -510,6 +720,7 @@ export default function ViewPhotoChallengeScreen() {
   }, [flushPrivacyUpdates, isOwner, pinId]);
 
   const closePhotoDetail = useCallback(() => {
+    setDetailImageZoomLocked(false);
     setSelectedPhotoId(null);
     setPhotoComments([]);
     setCommentDraft('');
@@ -1218,6 +1429,7 @@ export default function ViewPhotoChallengeScreen() {
             style={styles.detailList}
             contentContainerStyle={styles.detailListContent}
             keyboardShouldPersistTaps="handled"
+            scrollEnabled={!detailImageZoomLocked}
             refreshControl={
               selectedPhotoCanComment ? (
                 <RefreshControl
@@ -1229,11 +1441,11 @@ export default function ViewPhotoChallengeScreen() {
             ListHeaderComponent={(
               <View style={styles.detailHeroSection}>
                 <View style={styles.detailImageFrame}>
-                  <Image
-                    source={selectedPhoto?.file_url ? { uri: selectedPhoto.file_url } : undefined}
-                    style={styles.detailImage}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
+                  <ZoomableDetailImage
+                    key={selectedPhoto?._id ? String(selectedPhoto._id) : selectedPhoto?.file_url || 'detail-image'}
+                    uri={selectedPhoto?.file_url || null}
+                    styles={styles}
+                    onInteractionChange={setDetailImageZoomLocked}
                   />
                   {selectedPhotoCanDelete ? (
                     <Pressable
@@ -1537,7 +1749,7 @@ function createStyles(colors) {
       fontSize: 12,
       fontWeight: '900',
     },
-    detailDeleteButton: {
+  detailDeleteButton: {
       position: 'absolute',
       top: spacing.sm,
       right: spacing.sm,
@@ -1557,28 +1769,45 @@ function createStyles(colors) {
     detailList: {
       flex: 1,
       backgroundColor: colors.surface,
+      overflow: 'visible',
     },
     detailListContent: {
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
       paddingBottom: spacing.xl,
       gap: 0,
+      overflow: 'visible',
     },
     detailHeroSection: {
       gap: spacing.lg,
       marginBottom: spacing.md,
+      overflow: 'visible',
     },
     detailImageFrame: {
+      position: 'relative',
       borderRadius: 32,
-      overflow: 'hidden',
+      overflow: 'visible',
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.bg,
       ...shadows.chip,
     },
-    detailImage: {
+    detailImageStage: {
       width: '100%',
       aspectRatio: 4 / 5,
+      borderRadius: 32,
+      overflow: 'visible',
+    },
+    detailImageZoomSurface: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 32,
+      overflow: 'visible',
+    },
+    detailImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 32,
       backgroundColor: colors.border,
     },
     detailMetricRow: {
