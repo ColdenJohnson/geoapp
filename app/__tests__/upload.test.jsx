@@ -127,40 +127,4 @@ describe('Upload screen', () => {
     ));
   });
 
-  it('returns to the previous screen after submit when requested while upload continues in the background', async () => {
-    let resolveUploadImage;
-    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
-    uploadImage.mockImplementation(() => new Promise((resolve) => {
-      resolveUploadImage = resolve;
-    }));
-    expoRouter.useLocalSearchParams.mockReturnValue({
-      next: '/view_photochallenge',
-      pinId: 'pin-123',
-      prompt: 'Quest prompt',
-      created_by_handle: 'maker',
-      submit_action: 'back',
-      uploadRequestId: 'req-456',
-    });
-
-    const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
-
-    fireEvent.press(getByText('UPLOAD>'));
-
-    expect(seedPinPhotosCache).toHaveBeenCalledWith(
-      'pin-123',
-      expect.any(Function),
-      { isDirty: true }
-    );
-    expect(resolveUploadSubmit).toHaveBeenCalledWith({ submitted: true }, 'req-456');
-    expect(router.back).toHaveBeenCalled();
-    expect(router.push).not.toHaveBeenCalled();
-    expect(resolveUpload).not.toHaveBeenCalled();
-
-    resolveUploadImage('https://download');
-
-    await waitFor(() => expect(resolveUpload).toHaveBeenCalledWith(
-      { fileUrl: 'https://download', photoLocation: null },
-      'req-456'
-    ));
-  });
 });

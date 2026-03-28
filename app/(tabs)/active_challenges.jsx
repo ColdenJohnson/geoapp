@@ -444,18 +444,16 @@ export default function ActiveChallengesScreen() {
     });
   }, [queueMode]);
 
-  const beginUploadForChallenge = useCallback((challenge, { advanceOnSubmit = true } = {}) => {
+  const beginUploadForChallenge = useCallback((challenge) => {
     if (!challenge?.pinId) return;
     const uploadRequestId = `quest-upload-${challenge.pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     let uploadedPhotoUrlForRollback = null;
     setUploadingPinId(challenge.pinId);
-    if (advanceOnSubmit) {
-      setUploadSubmitResolver((submitResult) => {
-        if (submitResult?.submitted) {
-          advanceChallengeQueue('upload');
-        }
-      }, uploadRequestId);
-    }
+    setUploadSubmitResolver((submitResult) => {
+      if (submitResult?.submitted) {
+        advanceChallengeQueue('upload');
+      }
+    }, uploadRequestId);
     const uploadPromise = new Promise((resolve) => {
       setUploadResolver(resolve, uploadRequestId);
       router.push({
@@ -465,7 +463,6 @@ export default function ActiveChallengesScreen() {
           pinId: challenge.pinId,
           prompt: challenge.prompt,
           created_by_handle: challenge.creatorHandleRaw || '',
-          submit_action: 'back',
           uploadRequestId,
         },
       });
@@ -1005,7 +1002,7 @@ export default function ActiveChallengesScreen() {
               styles.cameraFooterButton,
               { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
             ]}
-            onPress={() => beginUploadForChallenge(activeChallenge, { advanceOnSubmit: true })}
+            onPress={() => beginUploadForChallenge(activeChallenge)}
             accessibilityLabel="Upload directly to this quest"
             disabled={interactionLocked || !activeChallenge}
           >

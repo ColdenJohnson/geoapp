@@ -66,7 +66,6 @@ export default function Upload({ initialUri = null }) {
     uploadRequestId,
     pinId: pinIdParam,
     created_by_handle: createdByHandleParam,
-    submit_action: submitActionParam,
   } = useLocalSearchParams();
   const promptText = useMemo(() => {
     if (typeof prompt === 'string') return prompt.trim();
@@ -90,13 +89,6 @@ export default function Upload({ initialUri = null }) {
     }
     return '';
   }, [createdByHandleParam]);
-  const submitAction = useMemo(() => {
-    if (typeof submitActionParam === 'string') return submitActionParam.trim();
-    if (Array.isArray(submitActionParam) && typeof submitActionParam[0] === 'string') {
-      return submitActionParam[0].trim();
-    }
-    return '';
-  }, [submitActionParam]);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isMounted = useRef(true);
@@ -204,9 +196,7 @@ export default function Upload({ initialUri = null }) {
       }
     }
 
-    if (submitAction === 'back') {
-      goBackOrHome(router, '/(tabs)/active_challenges');
-    } else if (nextPath === '/view_photochallenge' && pinId) {
+    if (nextPath === '/view_photochallenge' && pinId) {
       router.push(buildViewPhotoChallengeRoute({
         pinId,
         message: promptText,
