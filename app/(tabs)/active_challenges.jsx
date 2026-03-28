@@ -150,9 +150,6 @@ function normalizeChallengePin(pin, index) {
   const teaserTopComment = teaserPhotoId
     ? normalizeTeaserComment(pin?.top_global_photo?.top_comment)
     : null;
-  const rankingScore = Number.isFinite(pin?.ranking_debug?.final_score)
-    ? pin.ranking_debug.final_score
-    : null;
 
   return {
     pinId,
@@ -165,8 +162,6 @@ function normalizeChallengePin(pin, index) {
     teaserPhotoId,
     teaserTopComment,
     friendParticipantCount,
-    rankingScore,
-    rankingScoreLabel: Number.isFinite(rankingScore) ? rankingScore.toFixed(3) : null,
   };
 }
 
@@ -852,11 +847,6 @@ export default function ActiveChallengesScreen() {
             <View style={styles.handleChip}>
               <Text style={styles.handleChipText}>{challenge.creatorHandle}</Text>
             </View>
-            {challenge.rankingScoreLabel ? (
-              <View style={styles.scoreChip}>
-                <Text style={styles.scoreChipText}>{challenge.rankingScoreLabel}</Text>
-              </View>
-            ) : null}
           </View>
 
           <View style={styles.promptBlock}>
@@ -1162,22 +1152,6 @@ function createStyles(colors) {
       fontSize: 10,
       textTransform: 'uppercase',
       letterSpacing: 1.1,
-      fontWeight: '900',
-    },
-    scoreChip: {
-      borderRadius: radii.pill,
-      backgroundColor: 'rgba(0,0,0,0.36)',
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.2)',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      minWidth: 64,
-      alignItems: 'center',
-    },
-    scoreChipText: {
-      color: '#FFFFFF',
-      fontSize: 11,
-      letterSpacing: 0.3,
       fontWeight: '900',
     },
     photoCountChip: {
