@@ -1,19 +1,105 @@
-import { SafeAreaView, StyleSheet, TextInput, View, Text, Alert, ActivityIndicator, ScrollView, RefreshControl, TouchableOpacity, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { Image } from 'expo-image';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AuthContext } from '@/hooks/AuthContext';
 import {
-  searchUserByHandle,
-  requestFriend,
   acceptFriendRequest,
-  rejectFriendRequest,
   cancelFriendRequest,
+  fetchFriendActivity,
+  rejectFriendRequest,
+  requestFriend,
+  searchUserByHandle,
 } from '@/lib/api';
+import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
-import { spacing, fontSizes } from '@/theme/tokens';
+import { fontSizes, radii, spacing } from '@/theme/tokens';
+
+function normalizeHandleQuery(value) {
+  let trimmed = typeof value === 'string' ? value.trim() : '';
+  if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
+  return trimmed;
+}
+
+function parseDateMs(value) {
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function formatRelativeTime(value) {
+  const deltaSeconds = Math.max(0, Math.floor((Date.now() - parseDateMs(value)) / 1000));
+  if (deltaSeconds < 45) return 'Just now';
+  if (deltaSeconds < 3600) return `${Math.max(1, Math.floor(deltaSeconds / 60))}m ago`;
+  if (deltaSeconds < 86400) return `${Math.max(1, Math.floor(deltaSeconds / 3600))}h ago`;
+  if (deltaSeconds < 604800) return `${Math.max(1, Math.floor(deltaSeconds / 86400))}d ago`;
+  return `${Math.max(1, Math.floor(deltaSeconds / 604800))}w ago`;
+}
+
+function getDisplayLabel(item) {
+  return item?.display_name || item?.actor_display_name || item?.handle || item?.actor_handle || 'Unnamed user';
+}
+
+function getHandleLabel(item) {
+  const handle = item?.handle || item?.actor_handle || null;
+  return handle ? `@${String(handle).replace(/^@/, '')}` : null;
+}
+
+function getAvatarInitial(item) {
+  const label = getDisplayLabel(item);
+  return typeof label === 'string' && label ? label.charAt(0).toUpperCase() : 'A';
+}
+
+function getActivityLabel(item) {
+  if (item?.type === 'challenge_created') return ' created a Quest';
+  if (item?.type === 'challenge_participated') return ' joined a Quest';
+  if (item?.type === 'your_photo_comment') return ' commented on your photo';
+  return ' commented';
+}
+
+function UserAvatar({ uri, label, size, styles }) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[
+          styles.avatarImage,
+          { width: size, height: size, borderRadius: size / 2 },
+        ]}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+      />
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.avatarFallback,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+    >
+      <Text style={styles.avatarFallbackText}>{label}</Text>
+    </View>
+  );
+}
 
 export default function FriendsTabScreen() {
   const {
@@ -21,30 +107,84 @@ export default function FriendsTabScreen() {
     friendRequests,
     friendsLoading,
     refreshFriends,
-    invalidateFriends,
   } = useContext(AuthContext);
   const { handle: sharedHandleParam } = useLocalSearchParams();
+  const [activeTab, setActiveTab] = useState('activity');
   const [friendSearchInput, setFriendSearchInput] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchMessage, setSearchMessage] = useState(null);
   const [searching, setSearching] = useState(false);
   const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [activityItems, setActivityItems] = useState([]);
+  const [activitySuggestions, setActivitySuggestions] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const prefilledHandleRef = useRef('');
+  const hasLoadedRef = useRef(false);
+  const refreshFriendsRef = useRef(refreshFriends);
   const sharedHandle = useMemo(
     () => (Array.isArray(sharedHandleParam) ? sharedHandleParam[0] : sharedHandleParam),
     [sharedHandleParam]
   );
 
+  useEffect(() => {
+    refreshFriendsRef.current = refreshFriends;
+  }, [refreshFriends]);
+
+  const pendingIncoming = useMemo(() => (
+    [...(friendRequests.incoming || [])].sort((a, b) => parseDateMs(b?.requested_at) - parseDateMs(a?.requested_at))
+  ), [friendRequests.incoming]);
+
+  const pendingOutgoing = useMemo(() => (
+    [...(friendRequests.outgoing || [])].sort((a, b) => parseDateMs(b?.requested_at) - parseDateMs(a?.requested_at))
+  ), [friendRequests.outgoing]);
+
+  const recentFriends = useMemo(() => (
+    [...friends]
+      .sort((a, b) => parseDateMs(b?.accepted_at) - parseDateMs(a?.accepted_at))
+      .slice(0, 2)
+  ), [friends]);
+
+  const currentFriends = useMemo(() => (
+    [...friends].sort((a, b) => getDisplayLabel(a).localeCompare(getDisplayLabel(b)))
+  ), [friends]);
+
+  const loadActivity = useCallback(async ({ showLoading = false } = {}) => {
+    if (showLoading) setActivityLoading(true);
+    try {
+      const payload = await fetchFriendActivity();
+      setActivityItems(Array.isArray(payload?.items) ? payload.items : []);
+      setActivitySuggestions(Array.isArray(payload?.suggestions) ? payload.suggestions : []);
+      return payload;
+    } finally {
+      if (showLoading) setActivityLoading(false);
+    }
+  }, []);
+
+  const refreshAll = useCallback(async ({ showActivityLoading = false } = {}) => {
+    await Promise.all([
+      refreshFriendsRef.current?.({ force: true }),
+      loadActivity({ showLoading: showActivityLoading }),
+    ]);
+  }, [loadActivity]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshFriends({ force: true });
+    await refreshAll({ showActivityLoading: false });
     setRefreshing(false);
-  }, [refreshFriends]);
+  }, [refreshAll]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const showActivityLoading = !hasLoadedRef.current;
+      hasLoadedRef.current = true;
+      refreshAll({ showActivityLoading });
+    }, [refreshAll])
+  );
 
   const openUserProfile = useCallback((uid) => {
     if (!uid) return;
@@ -54,150 +194,412 @@ export default function FriendsTabScreen() {
     });
   }, [router]);
 
-  const recentFriends = useMemo(() => {
-    return [...friends]
-      .sort((a, b) => new Date(b?.accepted_at || 0) - new Date(a?.accepted_at || 0))
-      .slice(0, 2);
-  }, [friends]);
+  const openChallenge = useCallback((item) => {
+    if (!item?.can_open || !item?.pin_id) return;
+    router.push(buildViewPhotoChallengeRoute({
+      pinId: item.pin_id,
+      message: item.challenge_prompt || '',
+      createdByHandle: item.challenge_created_by_handle || '',
+    }));
+  }, [router]);
 
-  const recentIncoming = useMemo(() => {
-    return [...(friendRequests.incoming || [])]
-      .sort((a, b) => new Date(b?.requested_at || 0) - new Date(a?.requested_at || 0))
-      .slice(0, 2);
-  }, [friendRequests.incoming]);
-
-  const recentOutgoing = useMemo(() => {
-    return [...(friendRequests.outgoing || [])]
-      .sort((a, b) => new Date(b?.requested_at || 0) - new Date(a?.requested_at || 0))
-      .slice(0, 2);
-  }, [friendRequests.outgoing]);
-
-  const renderMiniList = (items, emptyLabel, rightAction) => {
-    if (friendsLoading) {
-      return (
-        <View style={styles.centerRow}>
-          <ActivityIndicator size="small" color={colors.text} />
-        </View>
-      );
-    }
-    if (!items.length) {
-      return <Text style={styles.emptyText}>{emptyLabel}</Text>;
-    }
-    return items.map((item) => (
-      <View key={`${item.uid}-${item.handle || 'row'}`} style={styles.friendRow}>
-        <Pressable
-          onPress={() => openUserProfile(item.uid)}
-          style={({ pressed }) => [styles.friendInfoPressable, pressed && styles.friendInfoPressed]}
-        >
-          <View style={styles.friendInfo}>
-            <Text style={styles.friendName}>{item.display_name || item.handle || 'Unnamed user'}</Text>
-            {item.handle ? <Text style={styles.friendMeta}>@{item.handle}</Text> : null}
-          </View>
-        </Pressable>
-        {rightAction ? rightAction(item) : null}
-      </View>
-    ));
-  };
-
-  const runFriendSearch = async (query, { showLoading = false, allowShort = false } = {}) => {
-    let trimmed = typeof query === 'string' ? query.trim() : friendSearchInput.trim();
-    if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
+  const runFriendSearch = useCallback(async (query, { showLoading = false, allowShort = false } = {}) => {
+    const trimmed = normalizeHandleQuery(query ?? friendSearchInput);
     if (!allowShort && trimmed.length < 3) {
+      setSearchResults([]);
+      setSearchMessage(null);
       return;
     }
+    if (!trimmed) {
+      setSearchResults([]);
+      setSearchMessage(null);
+      return;
+    }
+
     if (showLoading) setSearching(true);
     setSearchMessage(null);
     const results = await searchUserByHandle(trimmed);
     if (results.length) {
       setSearchResults(results.slice(0, 3));
     } else {
+      setSearchResults([]);
       setSearchMessage('No users found.');
     }
     if (showLoading) setSearching(false);
-  };
-
-  useEffect(() => {
-    const trimmed = friendSearchInput.trim();
-    if (trimmed.length < 3) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      runFriendSearch(trimmed, { showLoading: false, allowShort: false });
-    }, 250);
-    return () => clearTimeout(timer);
   }, [friendSearchInput]);
 
   useEffect(() => {
-    let normalized = typeof sharedHandle === 'string' ? sharedHandle.trim() : '';
-    if (normalized.startsWith('@')) normalized = normalized.slice(1);
+    const trimmed = normalizeHandleQuery(friendSearchInput);
+    if (trimmed.length < 3) {
+      setSearchResults([]);
+      setSearchMessage(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      runFriendSearch(trimmed, { showLoading: false });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [friendSearchInput, runFriendSearch]);
+
+  useEffect(() => {
+    const normalized = normalizeHandleQuery(sharedHandle);
     if (!normalized || normalized === prefilledHandleRef.current) return;
     prefilledHandleRef.current = normalized;
     setFriendSearchInput(normalized);
     runFriendSearch(normalized, { showLoading: true, allowShort: true });
-  }, [sharedHandle]);
+  }, [runFriendSearch, sharedHandle]);
 
-  const runFriendSearchImmediate = () => {
-    let trimmed = friendSearchInput.trim();
-    if (trimmed.startsWith('@')) trimmed = trimmed.slice(1);
-    runFriendSearch(trimmed, { showLoading: true, allowShort: true });
-  };
+  const runFriendSearchImmediate = useCallback(() => {
+    runFriendSearch(friendSearchInput, { showLoading: true, allowShort: true });
+  }, [friendSearchInput, runFriendSearch]);
 
-  const sendFriendRequest = async (handle) => {
-    if (!handle) return;
+  const sendFriendRequest = useCallback(async ({ handle, targetUid, clearSearch = false } = {}) => {
+    if (!handle && !targetUid) return;
     setFriendActionBusy(true);
-    const resp = await requestFriend({ handle });
+    const resp = await requestFriend({ handle, target_uid: targetUid });
     if (resp?.success) {
       const status = resp?.status;
-      const message = status === 'accepted'
-        ? 'You are already friends.'
-        : status === 'pending'
-          ? 'Friend request sent.'
-          : 'Request updated.';
-      setSearchMessage(message);
-      setSearchResults([]);
-      setFriendSearchInput('');
-      invalidateFriends();
+      setSearchMessage(
+        status === 'accepted'
+          ? 'You are already friends.'
+          : status === 'pending'
+            ? 'Friend request sent.'
+            : 'Request updated.'
+      );
+      if (clearSearch) {
+        setSearchResults([]);
+        setFriendSearchInput('');
+      }
+      await refreshAll({ showActivityLoading: false });
     } else {
       Alert.alert('Friend Request', resp?.error || 'Failed to send friend request.');
     }
     setFriendActionBusy(false);
-  };
+  }, [refreshAll]);
 
-  const acceptRequest = async (uid) => {
+  const acceptRequest = useCallback(async (uid) => {
     if (!uid) return;
     setFriendActionBusy(true);
     const resp = await acceptFriendRequest(uid);
     if (resp?.success) {
-      invalidateFriends();
+      await refreshAll({ showActivityLoading: false });
     } else {
       Alert.alert('Friend Request', resp?.error || 'Failed to accept friend request.');
     }
     setFriendActionBusy(false);
-  };
+  }, [refreshAll]);
 
-  const rejectRequest = async (uid) => {
+  const rejectRequest = useCallback(async (uid) => {
     if (!uid) return;
     setFriendActionBusy(true);
     const resp = await rejectFriendRequest(uid);
     if (resp?.success) {
-      invalidateFriends();
+      await refreshAll({ showActivityLoading: false });
     } else {
       Alert.alert('Friend Request', resp?.error || 'Failed to delete friend request.');
     }
     setFriendActionBusy(false);
-  };
+  }, [refreshAll]);
 
-  const cancelRequest = async (uid) => {
+  const cancelRequest = useCallback(async (uid) => {
     if (!uid) return;
     setFriendActionBusy(true);
     const resp = await cancelFriendRequest(uid);
     if (resp?.success) {
-      invalidateFriends();
+      await refreshAll({ showActivityLoading: false });
     } else {
       Alert.alert('Friend Request', resp?.error || 'Failed to cancel friend request.');
     }
     setFriendActionBusy(false);
-  };
+  }, [refreshAll]);
+
+  const renderUserRow = useCallback((item, {
+    keyPrefix,
+    rightAction = null,
+    metaText = null,
+    rowMuted = false,
+  } = {}) => {
+    if (!item?.uid) return null;
+    const handleLabel = getHandleLabel(item);
+    const secondaryMeta = metaText || null;
+
+    return (
+      <View key={`${keyPrefix}-${item.uid}-${item.handle || 'row'}`} style={[styles.personRow, rowMuted && styles.personRowMuted]}>
+        <Pressable
+          onPress={() => openUserProfile(item.uid)}
+          style={({ pressed }) => [styles.personPressable, pressed && styles.pressed]}
+        >
+          <View style={styles.personContent}>
+            <UserAvatar
+              uri={item.photo_url || null}
+              label={getAvatarInitial(item)}
+              size={46}
+              styles={styles}
+            />
+            <View style={styles.personTextWrap}>
+              <Text style={styles.personName}>{getDisplayLabel(item)}</Text>
+              {handleLabel ? <Text style={styles.personMeta}>{handleLabel}</Text> : null}
+              {secondaryMeta ? <Text style={styles.personMetaSecondary}>{secondaryMeta}</Text> : null}
+            </View>
+          </View>
+        </Pressable>
+        {rightAction ? <View style={styles.personAction}>{rightAction(item)}</View> : null}
+      </View>
+    );
+  }, [openUserProfile, styles]);
+
+  const renderRequestSection = useCallback((title, items, type) => (
+    <View style={[formStyles.card, styles.sectionCard]}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.sectionCount}>{items.length}</Text>
+      </View>
+      {friendsLoading && !items.length ? (
+        <View style={styles.centerRow}>
+          <ActivityIndicator size="small" color={colors.text} />
+        </View>
+      ) : !items.length ? (
+        <Text style={styles.emptyText}>
+          {type === 'incoming' ? 'No incoming requests.' : 'No outgoing requests.'}
+        </Text>
+      ) : (
+        items.map((item) => renderUserRow(item, {
+          keyPrefix: title,
+          rowMuted: type === 'outgoing',
+          metaText: type === 'incoming' ? formatRelativeTime(item?.requested_at) : `Pending ${formatRelativeTime(item?.requested_at)}`,
+          rightAction: type === 'incoming'
+            ? (request) => (
+                <View style={styles.inlineActionRow}>
+                  <CTAButton
+                    title="Accept"
+                    onPress={() => acceptRequest(request.uid)}
+                    variant="filled"
+                    style={styles.smallButton}
+                    textStyle={styles.smallButtonText}
+                    disabled={friendActionBusy}
+                  />
+                  <SecondaryButton
+                    title="Delete"
+                    onPress={() => rejectRequest(request.uid)}
+                    style={styles.smallButton}
+                    textStyle={styles.smallButtonText}
+                    disabled={friendActionBusy}
+                  />
+                </View>
+              )
+            : (request) => (
+                <SecondaryButton
+                  title="Cancel"
+                  onPress={() => cancelRequest(request.uid)}
+                  style={styles.smallButton}
+                  textStyle={styles.smallButtonText}
+                  disabled={friendActionBusy}
+                />
+              ),
+        }))
+      )}
+    </View>
+  ), [
+    acceptRequest,
+    cancelRequest,
+    colors.text,
+    formStyles.card,
+    friendActionBusy,
+    friendsLoading,
+    rejectRequest,
+    renderUserRow,
+    styles,
+  ]);
+
+  const renderActivityContent = () => (
+    <>
+      <View style={[formStyles.card, styles.sectionCard]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Search</Text>
+        </View>
+        <TextInput
+          style={[formStyles.input, styles.searchInput]}
+          placeholder="Search by handle"
+          value={friendSearchInput}
+          onChangeText={setFriendSearchInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          onSubmitEditing={runFriendSearchImmediate}
+          placeholderTextColor={colors.textMuted}
+          selectionColor={colors.primary}
+          cursorColor={colors.text}
+        />
+        {searching ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : searchResults.length ? (
+          <View style={styles.stackSection}>
+            {searchResults.map((result) => renderUserRow(result, {
+              keyPrefix: 'search',
+              rightAction: (user) => (
+                <CTAButton
+                  title="Add"
+                  onPress={() => sendFriendRequest({ handle: user.handle, clearSearch: true })}
+                  variant="filled"
+                  style={styles.smallButton}
+                  textStyle={styles.smallButtonText}
+                  disabled={friendActionBusy}
+                />
+              ),
+            }))}
+          </View>
+        ) : searchMessage ? (
+          <Text style={styles.emptyText}>{searchMessage}</Text>
+        ) : null}
+      </View>
+
+      {renderRequestSection('Pending Requests', pendingIncoming, 'incoming')}
+
+      <View style={styles.feedSection}>
+        <View style={styles.sectionHeaderStandalone}>
+          <Text style={styles.sectionTitle}>Friend Activity</Text>
+          <Text style={styles.sectionCount}>{activityItems.length}</Text>
+        </View>
+        {activityLoading && !activityItems.length ? (
+          <View style={styles.centerRowTall}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : !activityItems.length ? (
+          <View style={[formStyles.card, styles.sectionCard]}>
+            <Text style={styles.emptyText}>No recent activity yet.</Text>
+          </View>
+        ) : (
+          activityItems.map((item) => {
+            const handleLabel = getHandleLabel({ handle: item.actor_handle });
+            const showQuestPhoto = !item.comment_text && !!item.challenge_photo_url;
+            return (
+              <View key={item.id} style={styles.activityCard}>
+                <View style={styles.activityHeader}>
+                  <Pressable
+                    onPress={() => openUserProfile(item.actor_uid)}
+                    style={({ pressed }) => [styles.activityUserPressable, pressed && styles.pressed]}
+                  >
+                    <UserAvatar
+                      uri={item.actor_photo_url || null}
+                      label={getAvatarInitial({ display_name: item.actor_display_name, handle: item.actor_handle })}
+                      size={42}
+                      styles={styles}
+                    />
+                    <View style={styles.activityHeaderText}>
+                      <Text style={styles.activityHeadline}>
+                        <Text style={styles.activityHeadlineName}>{item.actor_display_name || handleLabel || 'Someone'}</Text>
+                        {getActivityLabel(item)}
+                      </Text>
+                      <Text style={styles.activityTimestamp}>{formatRelativeTime(item.created_at)}</Text>
+                    </View>
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  disabled={!item.can_open}
+                  onPress={() => openChallenge(item)}
+                  style={({ pressed }) => [
+                    styles.activityBody,
+                    !item.can_open && styles.activityBodyStatic,
+                    item.can_open && pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.activityPromptRow}>
+                    <MaterialIcons name="auto-awesome" size={16} color={colors.primary} />
+                    <Text style={styles.activityPromptOverline}>Quest</Text>
+                  </View>
+                  <Text style={styles.activityPrompt}>{item.challenge_prompt}</Text>
+                  {item.comment_text ? <Text style={styles.activityComment}>"{item.comment_text}"</Text> : null}
+                  {showQuestPhoto ? (
+                    <Image
+                      source={{ uri: item.challenge_photo_url }}
+                      style={styles.activityImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  ) : null}
+                  {item.can_open ? <Text style={styles.activityLink}>View Quest</Text> : null}
+                </Pressable>
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      <View style={[formStyles.card, styles.sectionCard]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Suggested For You</Text>
+          <Text style={styles.sectionCount}>{activitySuggestions.length}</Text>
+        </View>
+        {activityLoading && !activitySuggestions.length ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : !activitySuggestions.length ? (
+          <Text style={styles.emptyText}>No suggestions right now.</Text>
+        ) : (
+          activitySuggestions.map((item) => renderUserRow(item, {
+            keyPrefix: 'suggestion',
+            metaText: item?.mutual_count ? `${item.mutual_count} mutual ${item.mutual_count === 1 ? 'friend' : 'friends'}` : null,
+            rightAction: (suggestion) => (
+              <CTAButton
+                title="Add"
+                onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
+                variant="filled"
+                style={styles.smallButton}
+                textStyle={styles.smallButtonText}
+                disabled={friendActionBusy}
+              />
+            ),
+          }))
+        )}
+      </View>
+    </>
+  );
+
+  const renderRequestsContent = () => (
+    <>
+      {renderRequestSection('Incoming Requests', pendingIncoming, 'incoming')}
+      {renderRequestSection('Outgoing Requests', pendingOutgoing, 'outgoing')}
+
+      <View style={[formStyles.card, styles.sectionCard]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recently Added</Text>
+          <Text style={styles.sectionCount}>{recentFriends.length}</Text>
+        </View>
+        {friendsLoading && !recentFriends.length ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : !recentFriends.length ? (
+          <Text style={styles.emptyText}>No friends yet.</Text>
+        ) : (
+          recentFriends.map((item) => renderUserRow(item, {
+            keyPrefix: 'recent',
+            metaText: formatRelativeTime(item?.accepted_at),
+          }))
+        )}
+      </View>
+
+      <View style={[formStyles.card, styles.sectionCard]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Current Friends</Text>
+          <Text style={styles.sectionCount}>{currentFriends.length}</Text>
+        </View>
+        {friendsLoading && !currentFriends.length ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : !currentFriends.length ? (
+          <Text style={styles.emptyText}>No friends yet.</Text>
+        ) : (
+          currentFriends.map((item) => renderUserRow(item, { keyPrefix: 'friend' }))
+        )}
+      </View>
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -214,110 +616,31 @@ export default function FriendsTabScreen() {
         >
           <Text style={styles.pageTitle}>Friends</Text>
 
-          <View style={[formStyles.card, styles.friendsCard]}>
-            <View style={styles.summaryRow}>
-              <TouchableOpacity onPress={() => router.push('/friends')}>
-                <Text style={styles.sectionTitle}>Friends</Text>
-              </TouchableOpacity>
-              <View style={styles.summaryRight}>
-                <Text style={styles.summaryCount}>{friends.length}</Text>
-              </View>
-            </View>
-            <TextInput
-              style={[formStyles.input, styles.searchInput]}
-              placeholder="Search by handle"
-              value={friendSearchInput}
-              onChangeText={setFriendSearchInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              onSubmitEditing={runFriendSearchImmediate}
-              placeholderTextColor={colors.textMuted}
-              selectionColor={colors.primary}
-              cursorColor={colors.text}
-            />
-            {searching ? (
-              <View style={styles.centerRow}>
-                <ActivityIndicator size="small" color={colors.text} />
-              </View>
-            ) : searchResults.length ? (
-              searchResults.map((result) => (
-                <View key={`search-${result.uid}`} style={styles.friendRow}>
-                  <Pressable
-                    onPress={() => openUserProfile(result.uid)}
-                    style={({ pressed }) => [styles.friendInfoPressable, pressed && styles.friendInfoPressed]}
-                  >
-                    <View style={styles.friendInfo}>
-                      <Text style={styles.friendName}>{result.display_name || result.handle || 'Unnamed user'}</Text>
-                      {result.handle ? <Text style={styles.friendMeta}>@{result.handle}</Text> : null}
-                    </View>
-                  </Pressable>
-                  <CTAButton
-                    title="Add"
-                    onPress={() => sendFriendRequest(result.handle)}
-                    style={styles.smallButton}
-                    textStyle={styles.smallButtonText}
-                    disabled={friendActionBusy}
-                  />
-                </View>
-              ))
-            ) : searchMessage ? (
-              <Text style={styles.emptyText}>{searchMessage}</Text>
-            ) : null}
-
-            <Text style={styles.subSectionTitle}>Recently Added</Text>
-            {renderMiniList(recentFriends, 'No friends yet.')}
+          <View style={styles.segmentedControl}>
+            <Pressable
+              onPress={() => setActiveTab('activity')}
+              style={({ pressed }) => [
+                styles.segmentButton,
+                activeTab === 'activity' && styles.segmentButtonActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.segmentText, activeTab === 'activity' && styles.segmentTextActive]}>Activity</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setActiveTab('requests')}
+              style={({ pressed }) => [
+                styles.segmentButton,
+                activeTab === 'requests' && styles.segmentButtonActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.segmentText, activeTab === 'requests' && styles.segmentTextActive]}>Requests</Text>
+              {pendingIncoming.length > 0 ? <View style={styles.segmentBadge} /> : null}
+            </Pressable>
           </View>
 
-          <View style={[formStyles.card, styles.requestsCard]}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.sectionTitle}>Friend Requests</Text>
-              <View style={styles.summaryRight}>
-                <Text style={styles.summaryCount}>{friendRequests.incoming.length + friendRequests.outgoing.length}</Text>
-              </View>
-            </View>
-            <Text style={styles.subSectionTitle}>Incoming</Text>
-            {renderMiniList(recentIncoming, 'No incoming requests.', (request) => (
-              <View style={styles.miniActionRow}>
-                <CTAButton
-                  title="Accept"
-                  onPress={() => acceptRequest(request.uid)}
-                  style={styles.smallButton}
-                  textStyle={styles.smallButtonText}
-                  disabled={friendActionBusy}
-                />
-                <SecondaryButton
-                  title="Delete"
-                  onPress={() => rejectRequest(request.uid)}
-                  style={styles.smallButton}
-                  textStyle={styles.smallButtonText}
-                  disabled={friendActionBusy}
-                />
-              </View>
-            ))}
-
-            <Text style={styles.subSectionTitle}>Outgoing</Text>
-            {renderMiniList(recentOutgoing, 'No outgoing requests.', (request) => (
-              <View style={styles.miniActionRow}>
-                <Text style={styles.pendingText}>Pending</Text>
-                <SecondaryButton
-                  title="Cancel"
-                  onPress={() => cancelRequest(request.uid)}
-                  style={styles.smallButton}
-                  textStyle={styles.smallButtonText}
-                  disabled={friendActionBusy}
-                />
-              </View>
-            ))}
-          </View>
-
-          <View style={styles.listFriendsButtonWrap}>
-            <CTAButton
-              title="List Friends"
-              onPress={() => router.push('/friends')}
-              variant="primary"
-            />
-          </View>
+          {activeTab === 'activity' ? renderActivityContent() : renderRequestsContent()}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -349,103 +672,260 @@ function createStyles(colors) {
       letterSpacing: 0.3,
       marginBottom: spacing.lg,
     },
-    friendsCard: {
+    segmentedControl: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 4,
+      borderRadius: radii.lg,
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
       marginBottom: spacing.lg,
     },
-    listFriendsButtonWrap: {
+    segmentButton: {
+      flex: 1,
+      minHeight: 44,
+      borderRadius: radii.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    segmentButtonActive: {
+      backgroundColor: colors.surface,
+    },
+    segmentText: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '900',
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    segmentTextActive: {
+      color: colors.primary,
+    },
+    segmentBadge: {
+      position: 'absolute',
+      top: 8,
+      right: 22,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+    sectionCard: {
       marginBottom: spacing.lg,
     },
-    requestsCard: {
-      marginBottom: spacing.lg,
-    },
-    searchInput: {
-      marginTop: spacing.sm,
-    },
-    friendRow: {
+    sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: spacing.md - 2,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      marginBottom: spacing.sm,
     },
-    friendInfo: {
-      flex: 1,
-      paddingRight: spacing.sm,
-    },
-    friendInfoPressable: {
-      flex: 1,
-    },
-    friendInfoPressed: {
-      opacity: 0.72,
-    },
-    friendName: {
-      color: colors.text,
-      fontWeight: '700',
-    },
-    friendMeta: {
-      color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      marginTop: 3,
-      fontWeight: '700',
-    },
-    smallButton: {
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-    },
-    smallButtonText: {
-      fontSize: fontSizes.sm,
-    },
-    miniActionRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    summaryRow: {
+    sectionHeaderStandalone: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      marginBottom: spacing.sm,
+      paddingHorizontal: 2,
     },
-    summaryRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-    },
-    summaryCount: {
-      color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
-      letterSpacing: 1,
-    },
-    subSectionTitle: {
-      marginTop: spacing.md,
-      marginBottom: spacing.xs,
+    sectionTitle: {
       fontSize: fontSizes.sm,
       fontWeight: '800',
       letterSpacing: 1.1,
       textTransform: 'uppercase',
       color: colors.text,
     },
-    sectionTitle: {
-      fontSize: fontSizes.lg,
-      fontWeight: '900',
-      letterSpacing: 0.4,
+    sectionCount: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+    },
+    searchInput: {
+      marginTop: 2,
+    },
+    stackSection: {
+      marginTop: spacing.sm,
+    },
+    personRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.md - 2,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      gap: spacing.md,
+    },
+    personRowMuted: {
+      opacity: 0.7,
+    },
+    personPressable: {
+      flex: 1,
+    },
+    personContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    personTextWrap: {
+      flex: 1,
+      minWidth: 0,
+    },
+    personName: {
+      color: colors.text,
+      fontWeight: '800',
+      fontSize: fontSizes.md,
+    },
+    personMeta: {
       color: colors.primary,
-      marginBottom: spacing.sm,
+      fontSize: fontSizes.sm,
+      marginTop: 3,
+      fontWeight: '700',
+    },
+    personMetaSecondary: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      marginTop: 3,
+      fontWeight: '700',
+    },
+    personAction: {
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+    },
+    inlineActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    smallButton: {
+      minHeight: 40,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    smallButtonText: {
+      fontSize: fontSizes.sm,
+    },
+    feedSection: {
+      marginBottom: spacing.lg,
+    },
+    activityCard: {
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.lg,
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+    },
+    activityHeader: {
+      marginBottom: spacing.md,
+    },
+    activityUserPressable: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    activityHeaderText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    activityHeadline: {
+      color: colors.text,
+      fontSize: fontSizes.md,
+      fontWeight: '700',
+      lineHeight: 21,
+    },
+    activityHeadlineName: {
+      color: colors.primary,
+      fontWeight: '900',
+    },
+    activityTimestamp: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '700',
+      marginTop: 4,
+    },
+    activityBody: {
+      borderRadius: radii.md,
+      backgroundColor: colors.surface,
+      padding: spacing.md,
+    },
+    activityBodyStatic: {
+      opacity: 0.92,
+    },
+    activityPromptRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginBottom: spacing.xs,
+    },
+    activityPromptOverline: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+    },
+    activityPrompt: {
+      color: colors.text,
+      fontSize: fontSizes.md,
+      fontWeight: '800',
+      lineHeight: 22,
+    },
+    activityComment: {
+      color: colors.text,
+      fontSize: fontSizes.md,
+      fontStyle: 'italic',
+      lineHeight: 22,
+      marginTop: spacing.sm,
+    },
+    activityImage: {
+      width: '100%',
+      aspectRatio: 3 / 4,
+      borderRadius: radii.md,
+      marginTop: spacing.md,
+      backgroundColor: colors.border,
+    },
+    activityLink: {
+      marginTop: spacing.sm,
+      color: colors.primary,
+      fontSize: fontSizes.sm,
+      fontWeight: '800',
+      letterSpacing: 0.5,
+    },
+    avatarImage: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    avatarFallback: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    avatarFallbackText: {
+      color: colors.primaryTextOn,
+      fontWeight: '900',
+      fontSize: fontSizes.md,
     },
     centerRow: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: spacing.sm,
     },
+    centerRowTall: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: spacing['2xl'],
+    },
     emptyText: {
       color: colors.textMuted,
-      marginTop: spacing.sm,
+      marginTop: spacing.xs,
+      lineHeight: 20,
     },
-    pendingText: {
-      color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
+    pressed: {
+      opacity: 0.78,
     },
   });
 }
