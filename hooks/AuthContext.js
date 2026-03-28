@@ -2,10 +2,25 @@ import { createContext, useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';  // TODO: for production prefer expo-secure-store for tokens, or similar -- asyncstorage is plain key-value
 import auth from '@react-native-firebase/auth';
-import { fetchUsersByUID, fetchFriends, fetchFriendRequests, fetchUserStats, fetchUserTopPhotos } from '@/lib/api';
+import { fetchUsersByUID, fetchFriends, fetchFriendRequests, fetchFriendActivity, fetchUserStats, fetchUserTopPhotos } from '@/lib/api';
 
 export const AuthContext = createContext();
 const TOP_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const FRIEND_ACTIVITY_TTL_MS = 10 * 60 * 1000;
+const FRIEND_ACTIVITY_PAGE_SIZE = 12;
+
+function mergeActivityItems(existingItems, incomingItems) {
+  const seen = new Set();
+  return [...(Array.isArray(existingItems) ? existingItems : []), ...(Array.isArray(incomingItems) ? incomingItems : [])]
+    .filter((item) => {
+      const key = item?.id ? String(item.id) : null;
+      if (!key || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);           // Firebase user
@@ -22,8 +37,19 @@ export function AuthProvider({ children }) {
   const [topPhotosLoading, setTopPhotosLoading] = useState(false);
   const [topPhotosDirty, setTopPhotosDirty] = useState(false);
   const [topPhotosFetchedAt, setTopPhotosFetchedAt] = useState(null);
-  const preloadRef = useRef({ friends: false, stats: false, topPhotos: false });
+  const [friendActivityItems, setFriendActivityItems] = useState([]);
+  const [friendActivitySuggestions, setFriendActivitySuggestions] = useState([]);
+  const [friendActivityLoading, setFriendActivityLoading] = useState(false);
+  const [friendActivityLoadingMore, setFriendActivityLoadingMore] = useState(false);
+  const [friendActivityNextCursor, setFriendActivityNextCursor] = useState(null);
+  const [friendActivityFetchedAt, setFriendActivityFetchedAt] = useState(null);
+  const preloadRef = useRef({ friends: false, stats: false, topPhotos: false, friendActivity: false });
   const pendingStatsRefreshRef = useRef(false);
+  const latestFriendsRef = useRef([]);
+  const latestFriendRequestsRef = useRef({ incoming: [], outgoing: [] });
+  const friendRequestsInFlightRef = useRef(false);
+  const friendActivityInFlightRef = useRef(false);
+  const friendActivityHasLoadedRef = useRef(false);
 
   const friendsCacheKey = (uid) => `friends_cache_${uid}`;
   const statsCacheKey = (uid) => `stats_cache_${uid}`;
@@ -111,10 +137,29 @@ export function AuthProvider({ children }) {
   }, [user?.uid]);
 
   useEffect(() => {
-    preloadRef.current = { friends: false, stats: false, topPhotos: false };
+    preloadRef.current = { friends: false, stats: false, topPhotos: false, friendActivity: false };
     setTopPhotosDirty(false);
     pendingStatsRefreshRef.current = false;
+    latestFriendsRef.current = [];
+    latestFriendRequestsRef.current = { incoming: [], outgoing: [] };
+    friendRequestsInFlightRef.current = false;
+    friendActivityInFlightRef.current = false;
+    friendActivityHasLoadedRef.current = false;
+    setFriendActivityItems([]);
+    setFriendActivitySuggestions([]);
+    setFriendActivityLoading(false);
+    setFriendActivityLoadingMore(false);
+    setFriendActivityNextCursor(null);
+    setFriendActivityFetchedAt(null);
   }, [user?.uid]);
+
+  useEffect(() => {
+    latestFriendsRef.current = friends;
+  }, [friends]);
+
+  useEffect(() => {
+    latestFriendRequestsRef.current = friendRequests;
+  }, [friendRequests]);
 
   useEffect(() => {
     async function loadFriendsCache() {
@@ -200,6 +245,88 @@ export function AuthProvider({ children }) {
       return nextFriends;
     } finally {
       setFriendsLoading(false);
+    }
+  }
+
+  async function refreshFriendRequests({ force = false } = {}) {
+    if (!user?.uid) return null;
+    if (friendRequestsInFlightRef.current) return null;
+    if (!force && latestFriendRequestsRef.current?.incoming && latestFriendRequestsRef.current?.outgoing) return latestFriendRequestsRef.current;
+    friendRequestsInFlightRef.current = true;
+    try {
+      const requestsData = await fetchFriendRequests();
+      const nextRequests = requestsData || { incoming: [], outgoing: [] };
+      setFriendRequests(nextRequests);
+      await AsyncStorage.setItem(
+        friendsCacheKey(user.uid),
+        JSON.stringify({ friends: latestFriendsRef.current, friendRequests: nextRequests })
+      );
+      return nextRequests;
+    } finally {
+      friendRequestsInFlightRef.current = false;
+    }
+  }
+
+  async function refreshFriendActivity({ force = false, showLoading = false } = {}) {
+    if (!user?.uid) return null;
+    if (friendActivityInFlightRef.current) return null;
+    const isStale =
+      !Number.isFinite(friendActivityFetchedAt) ||
+      Date.now() - friendActivityFetchedAt > FRIEND_ACTIVITY_TTL_MS;
+    if (!force && friendActivityHasLoadedRef.current && !isStale) {
+      return {
+        items: friendActivityItems,
+        suggestions: friendActivitySuggestions,
+        nextCursor: friendActivityNextCursor,
+      };
+    }
+
+    friendActivityInFlightRef.current = true;
+    if (showLoading) {
+      setFriendActivityLoading(true);
+    }
+
+    try {
+      const payload = await fetchFriendActivity({ limit: FRIEND_ACTIVITY_PAGE_SIZE });
+      const nextItems = Array.isArray(payload?.items) ? payload.items : [];
+      const nextSuggestions = Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+      const nextCursor = payload?.nextCursor || null;
+      const fetchedAt = Date.now();
+
+      setFriendActivityItems(nextItems);
+      setFriendActivitySuggestions(nextSuggestions);
+      setFriendActivityNextCursor(nextCursor);
+      setFriendActivityFetchedAt(fetchedAt);
+      friendActivityHasLoadedRef.current = true;
+
+      return { items: nextItems, suggestions: nextSuggestions, nextCursor };
+    } finally {
+      friendActivityInFlightRef.current = false;
+      if (showLoading) setFriendActivityLoading(false);
+    }
+  }
+
+  async function loadMoreFriendActivity() {
+    if (!user?.uid) return null;
+    if (friendActivityInFlightRef.current) return null;
+    if (!friendActivityNextCursor) return null;
+
+    friendActivityInFlightRef.current = true;
+    setFriendActivityLoadingMore(true);
+    try {
+      const payload = await fetchFriendActivity({
+        limit: FRIEND_ACTIVITY_PAGE_SIZE,
+        cursor: friendActivityNextCursor,
+      });
+      const nextItems = Array.isArray(payload?.items) ? payload.items : [];
+      const nextCursor = payload?.nextCursor || null;
+
+      setFriendActivityItems((prev) => mergeActivityItems(prev, nextItems));
+      setFriendActivityNextCursor(nextCursor);
+      return { items: nextItems, nextCursor };
+    } finally {
+      friendActivityInFlightRef.current = false;
+      setFriendActivityLoadingMore(false);
     }
   }
 
@@ -292,6 +419,10 @@ export function AuthProvider({ children }) {
       preloadRef.current.topPhotos = true;
       refreshTopPhotos({ force: false });
     }
+    if (!preloadRef.current.friendActivity) {
+      preloadRef.current.friendActivity = true;
+      refreshFriendActivity({ force: true, showLoading: false });
+    }
   }, [user?.uid]);
 
   useEffect(() => {
@@ -316,7 +447,15 @@ export function AuthProvider({ children }) {
       statsLoading,
       topPhotos,
       topPhotosLoading,
+      friendActivityItems,
+      friendActivitySuggestions,
+      friendActivityLoading,
+      friendActivityLoadingMore,
+      friendActivityFetchedAt,
       refreshFriends,
+      refreshFriendRequests,
+      refreshFriendActivity,
+      loadMoreFriendActivity,
       refreshStats,
       refreshTopPhotos,
       invalidateFriends,

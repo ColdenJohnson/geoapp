@@ -14,6 +14,7 @@ import {
 import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,7 +29,8 @@ import {
 import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { setUploadResolver } from '@/lib/promiseStore';
 import { AuthContext } from '@/hooks/AuthContext';
-import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
+import { readPinCommentsCache, updatePinPhotosCache } from '@/lib/pinChallengeCache';
+import { getTopRankedPhotoComment } from '@/lib/photoCommentRanking';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import {
   PressHoldActionMenu,
@@ -49,6 +51,78 @@ const LONG_PRESS_DELAY_MS = 380;
 const LONG_PRESS_CANCEL_DISTANCE = 8;
 const TAP_OPEN_MAX_DISTANCE = 8;
 
+function normalizeTeaserComment(comment) {
+  const text = typeof comment?.text === 'string' ? comment.text.trim() : '';
+  if (!text) return null;
+
+  const handle = typeof comment?.created_by_handle === 'string' ? comment.created_by_handle.trim() : '';
+  const creatorHandle = handle
+    ? (handle.startsWith('@') ? handle : `@${handle}`)
+    : null;
+
+  return {
+    _id: comment?._id ? String(comment._id) : null,
+    text,
+    creatorHandle,
+    likeCount: Number.isFinite(comment?.like_count) ? comment.like_count : 0,
+    createdAt: typeof comment?.createdAt === 'string' ? comment.createdAt : null,
+  };
+}
+
+function formatFriendParticipationLabel(count) {
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return count === 1 ? '1 friend' : `${count} friends`;
+}
+
+async function overlayCachedTeaserComments(challengeItems) {
+  if (!Array.isArray(challengeItems) || challengeItems.length === 0) {
+    return [];
+  }
+
+  const teaserPhotoIds = Array.from(new Set(
+    challengeItems
+      .map((challenge) => challenge?.teaserPhotoId)
+      .filter(Boolean)
+  ));
+  if (teaserPhotoIds.length === 0) {
+    return challengeItems;
+  }
+
+  const cacheEntries = await Promise.all(
+    teaserPhotoIds.map(async (photoId) => ([
+      photoId,
+      await readPinCommentsCache(photoId, { ttlMs: Number.MAX_SAFE_INTEGER }),
+    ]))
+  );
+
+  const topCommentByPhotoId = new Map();
+  for (const [photoId, cacheEntry] of cacheEntries) {
+    const cachedComments = Array.isArray(cacheEntry?.comments) ? cacheEntry.comments : [];
+    const cachedTopComment = normalizeTeaserComment(getTopRankedPhotoComment(cachedComments));
+    if (cachedTopComment) {
+      topCommentByPhotoId.set(photoId, cachedTopComment);
+      continue;
+    }
+    if (cacheEntry?.hadCache === true && cacheEntry?.isFresh === true) {
+      topCommentByPhotoId.set(photoId, null);
+    }
+  }
+
+  if (topCommentByPhotoId.size === 0) {
+    return challengeItems;
+  }
+
+  return challengeItems.map((challenge) => {
+    if (!challenge?.teaserPhotoId || !topCommentByPhotoId.has(challenge.teaserPhotoId)) {
+      return challenge;
+    }
+    return {
+      ...challenge,
+      teaserTopComment: topCommentByPhotoId.get(challenge.teaserPhotoId),
+    };
+  });
+}
+
 function normalizeChallengePin(pin, index) {
   const pinId = pin?._id ? String(pin._id) : `challenge-${index}`;
   const prompt = typeof pin?.message === 'string' && pin.message.trim()
@@ -66,7 +140,14 @@ function normalizeChallengePin(pin, index) {
     : typeof pin?.most_recent_photo_url === 'string' && pin.most_recent_photo_url
       ? pin.most_recent_photo_url
     : null;
+  const teaserPhotoId = pin?.top_global_photo?.photo_id ? String(pin.top_global_photo.photo_id) : null;
   const creatorHandleRaw = handle.startsWith('@') ? handle.slice(1) : handle;
+  const friendParticipantCount = Number.isFinite(pin?.friend_participant_count)
+    ? Math.max(0, pin.friend_participant_count)
+    : 0;
+  const teaserTopComment = teaserPhotoId
+    ? normalizeTeaserComment(pin?.top_global_photo?.top_comment)
+    : null;
 
   return {
     pinId,
@@ -76,6 +157,9 @@ function normalizeChallengePin(pin, index) {
     creatorName,
     uploadsCount,
     teaserPhoto,
+    teaserPhotoId,
+    teaserTopComment,
+    friendParticipantCount,
   };
 }
 
@@ -104,6 +188,7 @@ export default function ActiveChallengesScreen() {
   const longPressTriggeredRef = useRef(false);
   const challengeOptionLayoutsRef = useRef({});
   const lastMenuTouchPointRef = useRef(null);
+  const hasCompletedInitialFocusLoadRef = useRef(false);
 
   const stageWidth = stageSize.width || Math.max(windowWidth - spacing.sm * 2, 0);
   const stageHeight = stageSize.height || Math.max(windowHeight - 200, 0);
@@ -326,7 +411,9 @@ export default function ActiveChallengesScreen() {
         : Array.isArray(rows)
           ? rows
           : [];
-      setChallenges(sorted.map((pin, index) => normalizeChallengePin(pin, index)));
+      const normalizedChallenges = sorted.map((pin, index) => normalizeChallengePin(pin, index));
+      const hydratedChallenges = await overlayCachedTeaserComments(normalizedChallenges);
+      setChallenges(hydratedChallenges);
       return true;
     } catch (error) {
       console.error('Failed to fetch active challenges', error);
@@ -341,6 +428,16 @@ export default function ActiveChallengesScreen() {
   useEffect(() => {
     loadChallenges({ showSpinner: true, mode: queueMode });
   }, [loadChallenges, queueMode]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasCompletedInitialFocusLoadRef.current) {
+        hasCompletedInitialFocusLoadRef.current = true;
+        return undefined;
+      }
+      loadChallenges({ showSpinner: false, mode: queueMode });
+    }, [loadChallenges, queueMode])
+  );
 
   useEffect(() => {
     closeChallengeOptions();
@@ -708,6 +805,9 @@ export default function ActiveChallengesScreen() {
       : isSecond
         ? [{ scale: nextCardScale }, { translateY: nextCardTranslateY }, { rotate: nextCardRotate }]
         : baseTransforms;
+    const friendParticipationLabel = formatFriendParticipationLabel(challenge.friendParticipantCount);
+    const teaserComment = challenge.teaserTopComment;
+    const showsBottomTeaser = !!friendParticipationLabel || !!teaserComment?.text;
 
     return (
       <Animated.View
@@ -766,12 +866,32 @@ export default function ActiveChallengesScreen() {
             </Text>
           </View>
 
-          <View style={styles.bottomMeta}>
-            <View style={styles.metaRow}>
+          {showsBottomTeaser ? (
+            <View style={styles.bottomTeaser}>
+              {friendParticipationLabel ? (
+                <View style={styles.bottomTeaserRow}>
+                  <Text style={styles.bottomTeaserLabel} numberOfLines={1}>
+                    {friendParticipationLabel}
+                  </Text>
+                </View>
+              ) : null}
+              {teaserComment?.text ? (
+                <View style={styles.bottomTeaserRow}>
+                  <Text style={styles.bottomTeaserComment} numberOfLines={2}>
+                    {teaserComment.creatorHandle ? (
+                      <Text style={styles.bottomTeaserHandle}>{teaserComment.creatorHandle} </Text>
+                    ) : null}
+                    {teaserComment.text}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={styles.bottomPhotoCount}>
+            <View style={styles.photoCountChip}>
               <MaterialIcons name="photo-library" size={13} color="#FFFFFF" />
-              <Text style={styles.uploadCountText}>
-                {challenge.uploadsCount}
-              </Text>
+              <Text style={styles.photoCountText}>{challenge.uploadsCount}</Text>
             </View>
           </View>
         </View>
@@ -1045,6 +1165,23 @@ function createStyles(colors) {
       letterSpacing: 1.1,
       fontWeight: '900',
     },
+    photoCountChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: radii.pill,
+      backgroundColor: 'rgba(0,0,0,0.25)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.2)',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      maxWidth: 96,
+    },
+    photoCountText: {
+      color: '#FFFFFF',
+      fontWeight: '900',
+      fontSize: 12,
+    },
     promptBlock: {
       position: 'absolute',
       left: 16,
@@ -1057,32 +1194,41 @@ function createStyles(colors) {
       lineHeight: 28,
       fontWeight: '900',
     },
-    bottomMeta: {
+    bottomTeaser: {
       position: 'absolute',
-      left: 16,
+      left: 22,
       right: 16,
       bottom: 20,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      gap: spacing.sm,
+      gap: 4,
     },
-    metaRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      backgroundColor: 'rgba(0,0,0,0.25)',
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.22)',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: radii.pill,
-      maxWidth: 175,
+    bottomPhotoCount: {
+      position: 'absolute',
+      right: 16,
+      bottom: 20,
+      alignItems: 'flex-end',
     },
-    uploadCountText: {
+    bottomTeaserRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      width: '100%',
+    },
+    bottomTeaserLabel: {
+      flex: 1,
       color: '#FFFFFF',
       fontWeight: '900',
-      fontSize: 12,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    bottomTeaserComment: {
+      flex: 1,
+      color: '#FFFFFF',
+      fontSize: 13,
+      lineHeight: 17,
+      fontWeight: '700',
+    },
+    bottomTeaserHandle: {
+      color: colors.primary,
+      fontWeight: '900',
     },
     selectBadge: {
       position: 'absolute',

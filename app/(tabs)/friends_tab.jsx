@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,14 +16,12 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AuthContext } from '@/hooks/AuthContext';
 import {
   acceptFriendRequest,
   cancelFriendRequest,
-  fetchFriendActivity,
   rejectFriendRequest,
   requestFriend,
   searchUserByHandle,
@@ -32,6 +31,8 @@ import { usePalette } from '@/hooks/usePalette';
 import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { fontSizes, radii, spacing } from '@/theme/tokens';
+
+const FRIEND_ACTIVITY_PAGE_SIZE = 12;
 
 function normalizeHandleQuery(value) {
   let trimmed = typeof value === 'string' ? value.trim() : '';
@@ -107,6 +108,14 @@ export default function FriendsTabScreen() {
     friendRequests,
     friendsLoading,
     refreshFriends,
+    refreshFriendRequests,
+    friendActivityItems: activityItems,
+    friendActivitySuggestions: activitySuggestions,
+    friendActivityLoading: activityLoading,
+    friendActivityLoadingMore: activityLoadingMore,
+    friendActivityFetchedAt,
+    refreshFriendActivity,
+    loadMoreFriendActivity,
   } = useContext(AuthContext);
   const { handle: sharedHandleParam } = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState('activity');
@@ -116,24 +125,16 @@ export default function FriendsTabScreen() {
   const [searching, setSearching] = useState(false);
   const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [activityItems, setActivityItems] = useState([]);
-  const [activitySuggestions, setActivitySuggestions] = useState([]);
-  const [activityLoading, setActivityLoading] = useState(false);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const prefilledHandleRef = useRef('');
-  const hasLoadedRef = useRef(false);
-  const refreshFriendsRef = useRef(refreshFriends);
+  const activityHasScrolledRef = useRef(false);
   const sharedHandle = useMemo(
     () => (Array.isArray(sharedHandleParam) ? sharedHandleParam[0] : sharedHandleParam),
     [sharedHandleParam]
   );
-
-  useEffect(() => {
-    refreshFriendsRef.current = refreshFriends;
-  }, [refreshFriends]);
 
   const pendingIncoming = useMemo(() => (
     [...(friendRequests.incoming || [])].sort((a, b) => parseDateMs(b?.requested_at) - parseDateMs(a?.requested_at))
@@ -153,37 +154,50 @@ export default function FriendsTabScreen() {
     [...friends].sort((a, b) => getDisplayLabel(a).localeCompare(getDisplayLabel(b)))
   ), [friends]);
 
-  const loadActivity = useCallback(async ({ showLoading = false } = {}) => {
-    if (showLoading) setActivityLoading(true);
-    try {
-      const payload = await fetchFriendActivity();
-      setActivityItems(Array.isArray(payload?.items) ? payload.items : []);
-      setActivitySuggestions(Array.isArray(payload?.suggestions) ? payload.suggestions : []);
-      return payload;
-    } finally {
-      if (showLoading) setActivityLoading(false);
-    }
-  }, []);
+  const activityFeedData = useMemo(() => {
+    const baseRows = activityItems.map((item) => ({
+      key: item.id,
+      rowType: 'activity',
+      item,
+    }));
+    const shouldInsertSuggestions = !activityLoading && (baseRows.length > 0 || activitySuggestions.length > 0);
 
-  const refreshAll = useCallback(async ({ showActivityLoading = false } = {}) => {
-    await Promise.all([
-      refreshFriendsRef.current?.({ force: true }),
-      loadActivity({ showLoading: showActivityLoading }),
-    ]);
-  }, [loadActivity]);
+    if (!shouldInsertSuggestions) {
+      return baseRows;
+    }
+
+    const insertionIndex = Math.min(FRIEND_ACTIVITY_PAGE_SIZE, baseRows.length);
+    const suggestionRow = { key: 'activity-suggestions', rowType: 'suggestions' };
+
+    if (baseRows.length === 0) {
+      return [suggestionRow];
+    }
+
+    return [
+      ...baseRows.slice(0, insertionIndex),
+      suggestionRow,
+      ...baseRows.slice(insertionIndex),
+    ];
+  }, [activityItems, activityLoading, activitySuggestions]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshAll({ showActivityLoading: false });
+    activityHasScrolledRef.current = false;
+    await Promise.all([
+      refreshFriends({ force: true }),
+      refreshFriendActivity({ force: true, showLoading: false }),
+    ]);
     setRefreshing(false);
-  }, [refreshAll]);
+  }, [refreshFriendActivity, refreshFriends]);
 
   useFocusEffect(
     useCallback(() => {
-      const showActivityLoading = !hasLoadedRef.current;
-      hasLoadedRef.current = true;
-      refreshAll({ showActivityLoading });
-    }, [refreshAll])
+      refreshFriendRequests({ force: true });
+      refreshFriendActivity({
+        force: false,
+        showLoading: !friendActivityFetchedAt && !activityItems.length && !activitySuggestions.length,
+      });
+    }, [activityItems.length, activitySuggestions.length, friendActivityFetchedAt, refreshFriendActivity, refreshFriendRequests])
   );
 
   const openUserProfile = useCallback((uid) => {
@@ -270,48 +284,47 @@ export default function FriendsTabScreen() {
         setSearchResults([]);
         setFriendSearchInput('');
       }
-      await refreshAll({ showActivityLoading: false });
     } else {
       Alert.alert('Friend Request', resp?.error || 'Failed to send friend request.');
     }
     setFriendActionBusy(false);
-  }, [refreshAll]);
+  }, []);
 
   const acceptRequest = useCallback(async (uid) => {
     if (!uid) return;
     setFriendActionBusy(true);
     const resp = await acceptFriendRequest(uid);
     if (resp?.success) {
-      await refreshAll({ showActivityLoading: false });
+      activityHasScrolledRef.current = false;
+      await Promise.all([
+        refreshFriends({ force: true }),
+        refreshFriendActivity({ force: true, showLoading: false }),
+      ]);
     } else {
       Alert.alert('Friend Request', resp?.error || 'Failed to accept friend request.');
     }
     setFriendActionBusy(false);
-  }, [refreshAll]);
+  }, [refreshFriendActivity, refreshFriends]);
 
   const rejectRequest = useCallback(async (uid) => {
     if (!uid) return;
     setFriendActionBusy(true);
     const resp = await rejectFriendRequest(uid);
-    if (resp?.success) {
-      await refreshAll({ showActivityLoading: false });
-    } else {
+    if (!resp?.success) {
       Alert.alert('Friend Request', resp?.error || 'Failed to delete friend request.');
     }
     setFriendActionBusy(false);
-  }, [refreshAll]);
+  }, []);
 
   const cancelRequest = useCallback(async (uid) => {
     if (!uid) return;
     setFriendActionBusy(true);
     const resp = await cancelFriendRequest(uid);
-    if (resp?.success) {
-      await refreshAll({ showActivityLoading: false });
-    } else {
+    if (!resp?.success) {
       Alert.alert('Friend Request', resp?.error || 'Failed to cancel friend request.');
     }
     setFriendActionBusy(false);
-  }, [refreshAll]);
+  }, []);
 
   const renderUserRow = useCallback((item, {
     keyPrefix,
@@ -411,156 +424,241 @@ export default function FriendsTabScreen() {
     styles,
   ]);
 
-  const renderActivityContent = () => (
+  const renderTopChrome = useCallback(() => (
     <>
-      <View style={[formStyles.card, styles.sectionCard]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Search</Text>
-        </View>
-        <TextInput
-          style={[formStyles.input, styles.searchInput]}
-          placeholder="Search by handle"
-          value={friendSearchInput}
-          onChangeText={setFriendSearchInput}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          onSubmitEditing={runFriendSearchImmediate}
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.primary}
-          cursorColor={colors.text}
-        />
-        {searching ? (
-          <View style={styles.centerRow}>
-            <ActivityIndicator size="small" color={colors.text} />
-          </View>
-        ) : searchResults.length ? (
-          <View style={styles.stackSection}>
-            {searchResults.map((result) => renderUserRow(result, {
-              keyPrefix: 'search',
-              rightAction: (user) => (
-                <CTAButton
-                  title="Add"
-                  onPress={() => sendFriendRequest({ handle: user.handle, clearSearch: true })}
-                  variant="filled"
-                  style={styles.smallButton}
-                  textStyle={styles.smallButtonText}
-                  disabled={friendActionBusy}
-                />
-              ),
-            }))}
-          </View>
-        ) : searchMessage ? (
-          <Text style={styles.emptyText}>{searchMessage}</Text>
-        ) : null}
+      <Text style={styles.pageTitle}>Friends</Text>
+
+      <View style={styles.segmentedControl}>
+        <Pressable
+          onPress={() => setActiveTab('activity')}
+          style={({ pressed }) => [
+            styles.segmentButton,
+            activeTab === 'activity' && styles.segmentButtonActive,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.segmentText, activeTab === 'activity' && styles.segmentTextActive]}>Activity</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setActiveTab('requests')}
+          style={({ pressed }) => [
+            styles.segmentButton,
+            activeTab === 'requests' && styles.segmentButtonActive,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.segmentText, activeTab === 'requests' && styles.segmentTextActive]}>Friends</Text>
+          {pendingIncoming.length > 0 ? <View style={styles.segmentBadge} /> : null}
+        </Pressable>
       </View>
+    </>
+  ), [activeTab, pendingIncoming.length, styles]);
 
-      {renderRequestSection('Pending Requests', pendingIncoming, 'incoming')}
-
-      <View style={styles.feedSection}>
-        <View style={styles.sectionHeaderStandalone}>
-          <Text style={styles.sectionTitle}>Friend Activity</Text>
-          <Text style={styles.sectionCount}>{activityItems.length}</Text>
-        </View>
-        {activityLoading && !activityItems.length ? (
-          <View style={styles.centerRowTall}>
-            <ActivityIndicator size="small" color={colors.text} />
-          </View>
-        ) : !activityItems.length ? (
-          <View style={[formStyles.card, styles.sectionCard]}>
-            <Text style={styles.emptyText}>No recent activity yet.</Text>
-          </View>
-        ) : (
-          activityItems.map((item) => {
-            const handleLabel = getHandleLabel({ handle: item.actor_handle });
-            const showQuestPhoto = !item.comment_text && !!item.challenge_photo_url;
-            return (
-              <View key={item.id} style={styles.activityCard}>
-                <View style={styles.activityHeader}>
-                  <Pressable
-                    onPress={() => openUserProfile(item.actor_uid)}
-                    style={({ pressed }) => [styles.activityUserPressable, pressed && styles.pressed]}
-                  >
-                    <UserAvatar
-                      uri={item.actor_photo_url || null}
-                      label={getAvatarInitial({ display_name: item.actor_display_name, handle: item.actor_handle })}
-                      size={42}
-                      styles={styles}
-                    />
-                    <View style={styles.activityHeaderText}>
-                      <Text style={styles.activityHeadline}>
-                        <Text style={styles.activityHeadlineName}>{item.actor_display_name || handleLabel || 'Someone'}</Text>
-                        {getActivityLabel(item)}
-                      </Text>
-                      <Text style={styles.activityTimestamp}>{formatRelativeTime(item.created_at)}</Text>
-                    </View>
-                  </Pressable>
-                </View>
-
-                <Pressable
-                  disabled={!item.can_open}
-                  onPress={() => openChallenge(item)}
-                  style={({ pressed }) => [
-                    styles.activityBody,
-                    !item.can_open && styles.activityBodyStatic,
-                    item.can_open && pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.activityPromptRow}>
-                    <MaterialIcons name="auto-awesome" size={16} color={colors.primary} />
-                    <Text style={styles.activityPromptOverline}>Quest</Text>
-                  </View>
-                  <Text style={styles.activityPrompt}>{item.challenge_prompt}</Text>
-                  {item.comment_text ? <Text style={styles.activityComment}>"{item.comment_text}"</Text> : null}
-                  {showQuestPhoto ? (
-                    <Image
-                      source={{ uri: item.challenge_photo_url }}
-                      style={styles.activityImage}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                  ) : null}
-                  {item.can_open ? <Text style={styles.activityLink}>View Quest</Text> : null}
-                </Pressable>
-              </View>
-            );
-          })
-        )}
+  const renderSearchSection = useCallback(() => (
+    <View style={[formStyles.card, styles.sectionCard]}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Search</Text>
       </View>
-
-      <View style={[formStyles.card, styles.sectionCard]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Suggested For You</Text>
-          <Text style={styles.sectionCount}>{activitySuggestions.length}</Text>
+      <TextInput
+        style={[formStyles.input, styles.searchInput]}
+        placeholder="Search by handle"
+        value={friendSearchInput}
+        onChangeText={setFriendSearchInput}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="search"
+        onSubmitEditing={runFriendSearchImmediate}
+        placeholderTextColor={colors.textMuted}
+        selectionColor={colors.primary}
+        cursorColor={colors.text}
+      />
+      {searching ? (
+        <View style={styles.centerRow}>
+          <ActivityIndicator size="small" color={colors.text} />
         </View>
-        {activityLoading && !activitySuggestions.length ? (
-          <View style={styles.centerRow}>
-            <ActivityIndicator size="small" color={colors.text} />
-          </View>
-        ) : !activitySuggestions.length ? (
-          <Text style={styles.emptyText}>No suggestions right now.</Text>
-        ) : (
-          activitySuggestions.map((item) => renderUserRow(item, {
-            keyPrefix: 'suggestion',
-            metaText: item?.mutual_count ? `${item.mutual_count} mutual ${item.mutual_count === 1 ? 'friend' : 'friends'}` : null,
-            rightAction: (suggestion) => (
+      ) : searchResults.length ? (
+        <View style={styles.stackSection}>
+          {searchResults.map((result) => renderUserRow(result, {
+            keyPrefix: 'search',
+            rightAction: (user) => (
               <CTAButton
                 title="Add"
-                onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
+                onPress={() => sendFriendRequest({ handle: user.handle, clearSearch: true })}
                 variant="filled"
                 style={styles.smallButton}
                 textStyle={styles.smallButtonText}
                 disabled={friendActionBusy}
               />
             ),
-          }))
-        )}
+          }))}
+        </View>
+      ) : searchMessage ? (
+        <Text style={styles.emptyText}>{searchMessage}</Text>
+      ) : null}
+    </View>
+  ), [
+    colors.primary,
+    colors.text,
+    colors.textMuted,
+    formStyles.card,
+    formStyles.input,
+    friendActionBusy,
+    friendSearchInput,
+    renderUserRow,
+    runFriendSearchImmediate,
+    searchMessage,
+    searchResults,
+    searching,
+    sendFriendRequest,
+    styles,
+  ]);
+
+  const renderActivityListHeader = useCallback(() => (
+    <View>
+      {renderTopChrome()}
+      {renderSearchSection()}
+
+      {renderRequestSection('Pending Requests', pendingIncoming, 'incoming')}
+
+      <View style={styles.sectionHeaderStandalone}>
+        <Text style={styles.sectionTitle}>Friend Activity</Text>
+        <Text style={styles.sectionCount}>{activityItems.length}</Text>
       </View>
-    </>
-  );
+    </View>
+  ), [
+    activityItems.length,
+    pendingIncoming,
+    renderRequestSection,
+    renderSearchSection,
+    renderTopChrome,
+    styles,
+  ]);
+
+  const renderActivityRow = useCallback(({ item: row }) => {
+    if (row?.rowType === 'suggestions') {
+      return (
+        <View style={[formStyles.card, styles.sectionCard]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Suggested For You</Text>
+            <Text style={styles.sectionCount}>{activitySuggestions.length}</Text>
+          </View>
+          {!activitySuggestions.length ? (
+            <Text style={styles.emptyText}>No suggestions right now.</Text>
+          ) : (
+            activitySuggestions.map((item) => renderUserRow(item, {
+              keyPrefix: 'suggestion',
+              metaText: item?.mutual_count ? `${item.mutual_count} mutual ${item.mutual_count === 1 ? 'friend' : 'friends'}` : null,
+              rightAction: (suggestion) => (
+                <CTAButton
+                  title="Add"
+                  onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
+                  variant="filled"
+                  style={styles.smallButton}
+                  textStyle={styles.smallButtonText}
+                  disabled={friendActionBusy}
+                />
+              ),
+            }))
+          )}
+        </View>
+      );
+    }
+
+    const item = row?.item;
+    const handleLabel = getHandleLabel({ handle: item?.actor_handle });
+    const showQuestPhoto = !item?.comment_text && !!item?.challenge_photo_url;
+
+    return (
+      <View style={styles.activityCard}>
+        <View style={styles.activityHeader}>
+          <Pressable
+            onPress={() => openUserProfile(item?.actor_uid)}
+            style={({ pressed }) => [styles.activityUserPressable, pressed && styles.pressed]}
+          >
+            <UserAvatar
+              uri={item?.actor_photo_url || null}
+              label={getAvatarInitial({ display_name: item?.actor_display_name, handle: item?.actor_handle })}
+              size={42}
+              styles={styles}
+            />
+            <View style={styles.activityHeaderText}>
+              <Text style={styles.activityHeadline}>
+                <Text style={styles.activityHeadlineName}>{item?.actor_display_name || handleLabel || 'Someone'}</Text>
+                {getActivityLabel(item)}
+              </Text>
+              <Text style={styles.activityTimestamp}>{formatRelativeTime(item?.created_at)}</Text>
+            </View>
+          </Pressable>
+        </View>
+
+        <Pressable
+          disabled={!item?.can_open}
+          onPress={() => openChallenge(item)}
+          style={({ pressed }) => [
+            styles.activityBody,
+            !item?.can_open && styles.activityBodyStatic,
+            item?.can_open && pressed && styles.pressed,
+          ]}
+        >
+          <Text style={styles.activityPrompt}>{item?.challenge_prompt}</Text>
+          {item?.comment_text ? <Text style={styles.activityComment}>"{item.comment_text}"</Text> : null}
+          {showQuestPhoto ? (
+            <Image
+              source={{ uri: item.challenge_photo_url }}
+              style={styles.activityImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+          ) : null}
+          {item?.can_open && !item?.comment_text ? <Text style={styles.activityLink}>View Quest</Text> : null}
+        </Pressable>
+      </View>
+    );
+  }, [
+    activitySuggestions,
+    formStyles.card,
+    friendActionBusy,
+    openChallenge,
+    openUserProfile,
+    renderUserRow,
+    sendFriendRequest,
+    styles,
+  ]);
+
+  const renderActivityEmpty = useCallback(() => {
+    if (activityLoading) {
+      return (
+        <View style={styles.centerRowTall}>
+          <ActivityIndicator size="small" color={colors.text} />
+        </View>
+      );
+    }
+
+    return (
+      <View style={[formStyles.card, styles.sectionCard]}>
+        <Text style={styles.emptyText}>No recent activity yet.</Text>
+      </View>
+    );
+  }, [activityLoading, colors.text, formStyles.card, styles]);
+
+  const renderActivityListFooter = useCallback(() => (
+    <View style={styles.activityFooter}>
+      {activityLoadingMore ? (
+        <View style={styles.centerRow}>
+          <ActivityIndicator size="small" color={colors.text} />
+        </View>
+      ) : null}
+    </View>
+  ), [activityLoadingMore, colors.text, styles]);
+
+  const onActivityEndReached = useCallback(() => {
+    if (!activityHasScrolledRef.current) return;
+    loadMoreFriendActivity();
+  }, [loadMoreFriendActivity]);
 
   const renderRequestsContent = () => (
     <>
+      {renderSearchSection()}
       {renderRequestSection('Incoming Requests', pendingIncoming, 'incoming')}
       {renderRequestSection('Outgoing Requests', pendingOutgoing, 'outgoing')}
 
@@ -607,41 +705,41 @@ export default function FriendsTabScreen() {
         style={styles.keyboardWrap}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          refreshControl={<RefreshControl refreshing={refreshing || friendsLoading} onRefresh={onRefresh} />}
-        >
-          <Text style={styles.pageTitle}>Friends</Text>
-
-          <View style={styles.segmentedControl}>
-            <Pressable
-              onPress={() => setActiveTab('activity')}
-              style={({ pressed }) => [
-                styles.segmentButton,
-                activeTab === 'activity' && styles.segmentButtonActive,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={[styles.segmentText, activeTab === 'activity' && styles.segmentTextActive]}>Activity</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setActiveTab('requests')}
-              style={({ pressed }) => [
-                styles.segmentButton,
-                activeTab === 'requests' && styles.segmentButtonActive,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={[styles.segmentText, activeTab === 'requests' && styles.segmentTextActive]}>Requests</Text>
-              {pendingIncoming.length > 0 ? <View style={styles.segmentBadge} /> : null}
-            </Pressable>
-          </View>
-
-          {activeTab === 'activity' ? renderActivityContent() : renderRequestsContent()}
-        </ScrollView>
+        {activeTab === 'activity' ? (
+          <FlatList
+            data={activityFeedData}
+            keyExtractor={(item) => item.key}
+            renderItem={renderActivityRow}
+            ListHeaderComponent={renderActivityListHeader}
+            ListEmptyComponent={renderActivityEmpty}
+            ListFooterComponent={renderActivityListFooter}
+            contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            refreshControl={<RefreshControl refreshing={refreshing || friendsLoading} onRefresh={onRefresh} />}
+            onEndReached={onActivityEndReached}
+            onEndReachedThreshold={0.45}
+            onScrollBeginDrag={() => {
+              activityHasScrolledRef.current = true;
+            }}
+            initialNumToRender={6}
+            maxToRenderPerBatch={6}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS === 'android'}
+          />
+        ) : (
+          <ScrollView
+            contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            refreshControl={<RefreshControl refreshing={refreshing || friendsLoading} onRefresh={onRefresh} />}
+          >
+            {renderTopChrome()}
+            {renderRequestsContent()}
+          </ScrollView>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -805,9 +903,6 @@ function createStyles(colors) {
     smallButtonText: {
       fontSize: fontSizes.sm,
     },
-    feedSection: {
-      marginBottom: spacing.lg,
-    },
     activityCard: {
       backgroundColor: colors.bg,
       borderWidth: 1,
@@ -852,19 +947,6 @@ function createStyles(colors) {
     activityBodyStatic: {
       opacity: 0.92,
     },
-    activityPromptRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.xs,
-      marginBottom: spacing.xs,
-    },
-    activityPromptOverline: {
-      color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 1,
-      textTransform: 'uppercase',
-    },
     activityPrompt: {
       color: colors.text,
       fontSize: fontSizes.md,
@@ -891,6 +973,9 @@ function createStyles(colors) {
       fontSize: fontSizes.sm,
       fontWeight: '800',
       letterSpacing: 0.5,
+    },
+    activityFooter: {
+      marginTop: spacing.xs,
     },
     avatarImage: {
       borderWidth: 1,
