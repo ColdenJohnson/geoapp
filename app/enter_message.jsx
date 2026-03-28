@@ -1,6 +1,7 @@
 // app/enter_message.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   View,
   Text,
   TextInput,
@@ -15,6 +16,7 @@ import { Image } from 'expo-image';
 import { useCameraPermission } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CTAButton } from '@/components/ui/Buttons';
@@ -25,7 +27,7 @@ import { fontSizes, spacing, radii } from '@/theme/tokens';
 import { goBackOrHome } from '@/lib/navigation';
 
 import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseStore';
-import { uploadImage } from '@/lib/uploadHelpers';
+import { enqueueNewChallengeUpload } from '@/lib/uploadQueue';
 
 const MAX_LEN = 50;
 const PHOTO_ASPECT_RATIO = 3 / 4;
@@ -39,6 +41,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
+  const { latitude: latitudeParam, longitude: longitudeParam } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
   const colors = usePalette();
@@ -51,6 +54,26 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const keyboardOffset = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
   const contentBottomPadding = (keyboardVisible ? spacing.lg : spacing.sm) + insets.bottom + EXTRA_BOTTOM_BUFFER;
+  const challengeLocation = useMemo(() => {
+    const latitude = Number(
+      typeof latitudeParam === 'string'
+        ? latitudeParam
+        : Array.isArray(latitudeParam)
+          ? latitudeParam[0]
+          : NaN
+    );
+    const longitude = Number(
+      typeof longitudeParam === 'string'
+        ? longitudeParam
+        : Array.isArray(longitudeParam)
+          ? longitudeParam[0]
+          : NaN
+    );
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return null;
+    }
+    return { coords: { latitude, longitude } };
+  }, [latitudeParam, longitudeParam]);
   const handlePhotoPress = useCallback(() => {
     if (keyboardVisible) {
       Keyboard.dismiss();
@@ -121,8 +144,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
     </Pressable>
   );
 
-  // TODO: Surface upload failures and validation errors to the user instead of only logging.
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!uri || uploading) return;
     const trimmed = message.trim();
     if (!trimmed) {
@@ -131,27 +153,29 @@ export default function EnterMessageScreen({ initialUri = null }) {
       inputRef.current?.focus();
       return;
     }
-    didSubmitUpload.current = true;
-
-    resolveMessage(trimmed);
-    resolveGeoLock(isGeoLocked);
     setUploading(true);
-
-    (async () => {
-      try {
-        const downloadURL = await uploadImage(uri);
-        resolveUpload(downloadURL);
-      } catch (error) {
-        console.error('Error uploading challenge photo', error);
-        resolveUpload(null);
-      } finally {
-        if (isMounted.current) {
-          setUploading(false);
-        }
+    try {
+      const queuedItem = await enqueueNewChallengeUpload({
+        sourceUri: uri,
+        message: trimmed,
+        location: challengeLocation,
+        isGeoLocked,
+        photoLocation: challengeLocation,
+      });
+      didSubmitUpload.current = true;
+      resolveMessage(trimmed);
+      resolveGeoLock(isGeoLocked);
+      resolveUpload({ queued: true, queueId: queuedItem.id });
+      goBackOrHome(router);
+    } catch (error) {
+      console.error('Error queueing challenge photo', error);
+      resolveUpload(null);
+      Alert.alert('Upload failed', 'Unable to queue this challenge right now. Please try again.');
+    } finally {
+      if (isMounted.current) {
+        setUploading(false);
       }
-    })();
-
-    goBackOrHome(router);
+    }
   };
 
   const renderCamera = () => (

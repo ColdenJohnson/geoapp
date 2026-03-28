@@ -2,19 +2,13 @@ import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import Upload from '@/app/upload';
 
-jest.mock('@/lib/uploadHelpers', () => ({
-  uploadImage: jest.fn(),
-  compressImage: jest.fn(),
-}));
-
 jest.mock('@/lib/promiseStore', () => ({
   resolveUpload: jest.fn(),
   resolveUploadSubmit: jest.fn(),
 }));
 
-jest.mock('@/lib/pinChallengeCache', () => ({
-  seedPinPhotosCache: jest.fn(() => []),
-  updatePinPhotosCache: jest.fn(() => Promise.resolve([])),
+jest.mock('@/lib/uploadQueue', () => ({
+  enqueueAddPhotoUpload: jest.fn(),
 }));
 
 jest.mock('@/hooks/AuthContext', () => {
@@ -24,13 +18,14 @@ jest.mock('@/hooks/AuthContext', () => {
   };
 });
 
-jest.mock('react-native-device-info', () => ({
-  isEmulator: jest.fn(async () => false),
+jest.mock('expo-location', () => ({
+  getForegroundPermissionsAsync: jest.fn(async () => ({ status: 'denied' })),
+  getLastKnownPositionAsync: jest.fn(async () => null),
+  getCurrentPositionAsync: jest.fn(async () => null),
 }));
 
-const { uploadImage } = require('@/lib/uploadHelpers');
+const { enqueueAddPhotoUpload } = require('@/lib/uploadQueue');
 const { resolveUpload, resolveUploadSubmit } = require('@/lib/promiseStore');
-const { seedPinPhotosCache } = require('@/lib/pinChallengeCache');
 const { router } = require('expo-router');
 const cameraModule = require('react-native-vision-camera');
 const expoRouter = require('expo-router');
@@ -72,25 +67,27 @@ describe('Upload screen', () => {
 
   it('uploads existing photo when Upload is pressed', async () => {
     cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
-    uploadImage.mockResolvedValue('https://download');
+    enqueueAddPhotoUpload.mockResolvedValue({ id: 'queue-1' });
 
     const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
 
     fireEvent.press(getByText('UPLOAD>'));
 
+    await waitFor(() => expect(enqueueAddPhotoUpload).toHaveBeenCalledWith({
+      sourceUri: 'file://mock.jpg',
+      pinId: '',
+      createdByHandle: 'tester',
+      queueId: null,
+      photoLocation: null,
+    }));
     expect(router.back).toHaveBeenCalled();
     expect(resolveUploadSubmit).toHaveBeenCalledWith({ submitted: true });
-
-    await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
-    expect(resolveUpload).toHaveBeenCalledWith({ fileUrl: 'https://download', photoLocation: null });
+    expect(resolveUpload).toHaveBeenCalledWith({ queued: true, photoLocation: null });
   });
 
-  it('routes to the quest immediately after submit while upload continues in the background', async () => {
-    let resolveUploadImage;
+  it('routes to the quest immediately after submit while the queued upload continues in the background', async () => {
     cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
-    uploadImage.mockImplementation(() => new Promise((resolve) => {
-      resolveUploadImage = resolve;
-    }));
+    enqueueAddPhotoUpload.mockResolvedValue({ id: 'req-123' });
     expoRouter.useLocalSearchParams.mockReturnValue({
       next: '/view_photochallenge',
       pinId: 'pin-123',
@@ -103,12 +100,18 @@ describe('Upload screen', () => {
 
     fireEvent.press(getByText('UPLOAD>'));
 
-    expect(seedPinPhotosCache).toHaveBeenCalledWith(
-      'pin-123',
-      expect.any(Function),
-      { isDirty: true }
-    );
+    await waitFor(() => expect(enqueueAddPhotoUpload).toHaveBeenCalledWith({
+      sourceUri: 'file://mock.jpg',
+      pinId: 'pin-123',
+      createdByHandle: 'tester',
+      queueId: 'req-123',
+      photoLocation: null,
+    }));
     expect(resolveUploadSubmit).toHaveBeenCalledWith({ submitted: true }, 'req-123');
+    expect(resolveUpload).toHaveBeenCalledWith(
+      { queued: true, queueId: 'req-123', photoLocation: null },
+      'req-123'
+    );
     expect(router.push).toHaveBeenCalledWith({
       pathname: '/view_photochallenge',
       params: {
@@ -117,14 +120,6 @@ describe('Upload screen', () => {
         created_by_handle: 'maker',
       },
     });
-    expect(resolveUpload).not.toHaveBeenCalled();
-
-    resolveUploadImage('https://download');
-
-    await waitFor(() => expect(resolveUpload).toHaveBeenCalledWith(
-      { fileUrl: 'https://download', photoLocation: null },
-      'req-123'
-    ));
   });
 
 });

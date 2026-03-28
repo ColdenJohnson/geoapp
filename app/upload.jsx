@@ -1,15 +1,11 @@
 import * as Location from 'expo-location';
 import { useState, useRef, useMemo, useEffect, useContext } from 'react'
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useCameraPermission } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-// import storage from '@react-native-firebase/storage';
-// import mockImage from '../../assets/images/michael_cornell_sexy.jpeg'; // For Dev
-// import { Asset } from 'expo-asset'; // I believe for dev, not sure -- turning mockImage into a uri
 import { resolveUpload, resolveUploadSubmit } from '../lib/promiseStore';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { uploadImage } from '@/lib/uploadHelpers';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
 import ChallengeCameraStage from '@/components/camera/ChallengeCameraStage';
@@ -17,7 +13,7 @@ import { fontSizes, spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { goBackOrHome, buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { AuthContext } from '@/hooks/AuthContext';
-import { seedPinPhotosCache, updatePinPhotosCache } from '@/lib/pinChallengeCache';
+import { enqueueAddPhotoUpload } from '@/lib/uploadQueue';
 
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
@@ -162,96 +158,53 @@ export default function Upload({ initialUri = null }) {
 
   const handleUpload = async () => {
     if (!uri || uploading) return;
-    didSubmitUpload.current = true;
-    if (typeof uploadRequestId === 'string' && uploadRequestId) {
-      resolveUploadSubmit({ submitted: true }, uploadRequestId);
-    } else {
-      resolveUploadSubmit({ submitted: true });
-    }
     setUploading(true);
-    const optimisticPhotoId = `optimistic-${uploadRequestId || Date.now()}`;
-    const optimisticPhoto = {
-      _id: optimisticPhotoId,
-      file_url: uri,
-      remote_file_url: null,
-      global_elo: 1000,
-      global_wins: 0,
-      global_losses: 0,
-      created_by_handle: typeof profile?.handle === 'string' && profile.handle ? profile.handle : 'you',
-      createdAt: new Date().toISOString(),
-      optimistic: true,
-    };
-
-    if (pinId) {
-      try {
-        seedPinPhotosCache(pinId, (current) => {
-          const existing = Array.isArray(current) ? current : [];
-          return [
-            optimisticPhoto,
-            ...existing.filter((photo) => String(photo?._id) !== optimisticPhotoId),
-          ];
-        }, { isDirty: true });
-      } catch (error) {
-        console.error('Failed to seed optimistic pin photo cache', error);
-      }
-    }
-
-    if (nextPath === '/view_photochallenge' && pinId) {
-      router.push(buildViewPhotoChallengeRoute({
+    try {
+      const photoLocation = await getApproximatePhotoLocation();
+      await enqueueAddPhotoUpload({
+        sourceUri: uri,
         pinId,
-        message: promptText,
-        createdByHandle,
-      }));
-    } else if (nextPath) {
-      console.log('Navigating to next:', nextPath);
-      router.push(String(nextPath));
-    } else {
-      console.log('No next specified, going back');
-      goBackOrHome(router);
-    }
+        createdByHandle:
+          typeof profile?.handle === 'string' && profile.handle
+            ? profile.handle
+            : 'you',
+        queueId: typeof uploadRequestId === 'string' && uploadRequestId ? uploadRequestId : null,
+        photoLocation,
+      });
 
-    (async () => {
-      try {
-        const [downloadURL, photoLocation] = await Promise.all([
-          uploadImage(uri),
-          getApproximatePhotoLocation(),
-        ]);
-        if (pinId) {
-          await updatePinPhotosCache(pinId, (current) => (
-            Array.isArray(current)
-              ? current.map((photo) => (
-                String(photo?._id) === optimisticPhotoId
-                  ? { ...photo, remote_file_url: downloadURL }
-                  : photo
-              ))
-              : current
-          ));
-        }
-        if (typeof uploadRequestId === 'string' && uploadRequestId) {
-          resolveUpload({ fileUrl: downloadURL, photoLocation }, uploadRequestId); // fulfill the original Promise
-        } else {
-          resolveUpload({ fileUrl: downloadURL, photoLocation }); // fulfill the original Promise
-        }
-      } catch (err) {
-        console.error('Error uploading image:', err);
-        if (pinId) {
-          await updatePinPhotosCache(pinId, (current) => (
-            Array.isArray(current)
-              ? current.filter((photo) => String(photo?._id) !== optimisticPhotoId)
-              : current
-          ));
-        }
-        if (typeof uploadRequestId === 'string' && uploadRequestId) {
-          resolveUpload(null, uploadRequestId);
-        } else {
-          resolveUpload(null);
-        }
-      } finally {
-        if (isMounted.current) {
-          setUploading(false);
-        }
+      didSubmitUpload.current = true;
+      if (typeof uploadRequestId === 'string' && uploadRequestId) {
+        resolveUploadSubmit({ submitted: true }, uploadRequestId);
+        resolveUpload({ queued: true, queueId: uploadRequestId, photoLocation }, uploadRequestId);
+      } else {
+        resolveUploadSubmit({ submitted: true });
+        resolveUpload({ queued: true, photoLocation });
       }
-    })();
+
+      if (nextPath === '/view_photochallenge' && pinId) {
+        router.push(buildViewPhotoChallengeRoute({
+          pinId,
+          message: promptText,
+          createdByHandle,
+        }));
+      } else if (nextPath) {
+        router.push(String(nextPath));
+      } else {
+        goBackOrHome(router);
+      }
+    } catch (error) {
+      console.error('Failed to queue image upload', error);
+      if (typeof uploadRequestId === 'string' && uploadRequestId) {
+        resolveUpload(null, uploadRequestId);
+      } else {
+        resolveUpload(null);
+      }
+      Alert.alert('Upload failed', 'Unable to queue this photo right now. Please try again.');
+    } finally {
+      if (isMounted.current) {
+        setUploading(false);
+      }
+    }
   };
 
   const renderCamera = () => {

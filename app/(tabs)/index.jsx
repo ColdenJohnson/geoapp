@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
 import { useRouter} from 'expo-router';
 
-import { newChallenge, fetchAllLocationPins, fetchFriendPrivateLocationPins, addPhoto } from '../../lib/api';
+import { fetchAllLocationPins, fetchFriendPrivateLocationPins } from '../../lib/api';
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
 import { buildViewPhotoChallengeRoute } from '../../lib/navigation';
 import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
@@ -20,7 +20,7 @@ import {
   getChallengeViewBlockedMessage,
   normalizeChallengeCoordinate,
 } from '@/lib/challengeGeoAccess';
-import { updatePinPhotosCache } from '@/lib/pinChallengeCache';
+import { waitForUploadQueueItem } from '@/lib/uploadQueue';
 import {
   clusterMapPins,
   DEFAULT_PIN_COLLISION_DISTANCE_PX,
@@ -69,74 +69,17 @@ export default function HomeScreen() {
       return;
     }
     const pinId = String(pin._id);
-    const hadUploadedBefore = pin?.viewer_has_uploaded === true;
     const uploadRequestId = `map-upload-${pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-    const uploadPromise = new Promise((resolve) => {
-      setUploadResolver(resolve, uploadRequestId);
-      router.push({
-        pathname: '/upload',
-        params: {
-          next: '/view_photochallenge',
-          pinId,
-          prompt: pin?.message || '',
-          created_by_handle: pin?.created_by_handle || '',
-          uploadRequestId,
-        },
-      });
+    router.push({
+      pathname: '/upload',
+      params: {
+        next: '/view_photochallenge',
+        pinId,
+        prompt: pin?.message || '',
+        created_by_handle: pin?.created_by_handle || '',
+        uploadRequestId,
+      },
     });
-
-    uploadPromise
-      .then(async (uploadResult) => {
-        const uploadedPhotoUrl = typeof uploadResult === 'string'
-          ? uploadResult
-          : uploadResult?.fileUrl;
-        if (!uploadedPhotoUrl) {
-          return;
-        }
-        const photoLocation = uploadResult?.photoLocation || null;
-        setPins((prev) =>
-          Array.isArray(prev)
-            ? prev.map((p) =>
-                String(p?._id) === pinId
-                  ? {
-                    ...p,
-                    photo_count: Math.max(0, Number(p?.photo_count || 0) + 1),
-                    viewer_has_uploaded: true,
-                  }
-                  : p
-              )
-            : prev
-        );
-        try {
-          await addPhoto(pinId, uploadedPhotoUrl, { photoLocation });
-          invalidateStats();
-        } catch (error) {
-          await updatePinPhotosCache(pinId, (current) => (
-            Array.isArray(current)
-              ? current.filter((photo) => photo?.remote_file_url !== uploadedPhotoUrl)
-              : current
-          ));
-          setPins((prev) =>
-            Array.isArray(prev)
-              ? prev.map((p) =>
-                  String(p?._id) === pinId
-                    ? {
-                      ...p,
-                      photo_count: Math.max(0, Number(p?.photo_count || 0) - 1),
-                      viewer_has_uploaded: hadUploadedBefore,
-                    }
-                    : p
-                )
-              : prev
-          );
-          throw error;
-        }
-      })
-      .catch((error) => {
-        console.error('Failed to upload photo to challenge', error);
-        showToast(error?.response?.data?.error || 'Upload failed', 2500);
-      });
   }
 
   function handleUploadPhotoPress(pin) {
@@ -356,19 +299,24 @@ export default function HomeScreen() {
       setGeoLockResolver(resolve);
     });
 
-    router.push('/enter_message');
+    router.push({
+      pathname: '/enter_message',
+      params: {
+        latitude: location?.coords?.latitude,
+        longitude: location?.coords?.longitude,
+      },
+    });
 
     Promise.all([uploadPromise, messagePromise, geoLockPromise])
-      .then(async ([fileUrl, message, isGeoLocked]) => {
-        if (!fileUrl) {
+      .then(async ([uploadResult, message, isGeoLocked]) => {
+        const queueId = typeof uploadResult?.queueId === 'string' ? uploadResult.queueId : '';
+        if (!queueId) {
           return;
         }
         showToast('Uploading...', 60000);
-        const created = await newChallenge(location, fileUrl, message, {
-          isGeoLocked: typeof isGeoLocked === 'boolean' ? isGeoLocked : true,
-        });
+        const created = await waitForUploadQueueItem(queueId);
         if (!created) {
-          throw new Error('newChallenge returned falsey');
+          throw new Error('Queued challenge returned falsey');
         }
         if (created?.pin) {
           const nextPin = {

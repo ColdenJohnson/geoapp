@@ -28,7 +28,6 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import {
-  addPhoto,
   createPhotoComment,
   deletePhoto,
   fetchChallengeByPinId,
@@ -42,17 +41,21 @@ import {
   readPinCommentsCache,
   readPinMetaCache,
   readPinPhotosCache,
-  updatePinPhotosCache,
   writePinCommentsCache,
   writePinMetaCache,
   writePinPhotosCache,
 } from '@/lib/pinChallengeCache';
-import { setUploadResolver } from '../lib/promiseStore';
 import { goBackOrHome } from '@/lib/navigation';
 import {
   getChallengeUploadBlockedMessage,
   normalizeChallengeCoordinate,
 } from '@/lib/challengeGeoAccess';
+import {
+  removeUploadQueueItem,
+  retryUploadQueueItem,
+  subscribeUploadQueue,
+  syncQueuedPhotosForPin,
+} from '@/lib/uploadQueue';
 import BottomBar from '@/components/ui/BottomBar';
 import AppHeader from '@/components/ui/AppHeader';
 import { CTAButton } from '@/components/ui/Buttons';
@@ -141,6 +144,44 @@ function formatShortDate(value) {
     return 'Unknown';
   }
   return `${MONTH_LABELS[parsed.getMonth()]} ${parsed.getDate()}, ${parsed.getFullYear()}`;
+}
+
+function getOptimisticUploadState(photo) {
+  if (photo?.optimistic !== true) return null;
+  const state = typeof photo?.upload_state === 'string' ? photo.upload_state.trim() : '';
+  return state || 'pending';
+}
+
+function formatOptimisticUploadStateLabel(state) {
+  switch (state) {
+    case 'uploading':
+      return 'Uploading';
+    case 'finalizing':
+      return 'Finalizing';
+    case 'failed':
+      return 'Failed';
+    case 'pending':
+    default:
+      return 'Pending';
+  }
+}
+
+function getOptimisticUploadStateMessage(photo) {
+  const state = getOptimisticUploadState(photo);
+  if (!state) {
+    return 'Comments are available for uploaded photos.';
+  }
+  if (state === 'failed') {
+    const errorText = typeof photo?.upload_error === 'string' ? photo.upload_error.trim() : '';
+    return errorText || 'This upload failed before it reached the server.';
+  }
+  if (state === 'finalizing') {
+    return 'The photo file reached storage and is being attached to the challenge.';
+  }
+  if (state === 'uploading') {
+    return 'The photo file is still uploading.';
+  }
+  return 'Waiting for a usable network connection to resume uploading.';
 }
 
 function getAvatarInitial(comment) {
@@ -444,6 +485,10 @@ export default function ViewPhotoChallengeScreen() {
     () => photos.find((photo) => String(photo?._id) === String(selectedPhotoId)) || null,
     [photos, selectedPhotoId]
   );
+  const selectedPhotoUploadState = getOptimisticUploadState(selectedPhoto);
+  const selectedPhotoUploadStateLabel = formatOptimisticUploadStateLabel(selectedPhotoUploadState);
+  const selectedPhotoUploadMessage = getOptimisticUploadStateMessage(selectedPhoto);
+  const selectedPhotoQueueId = typeof selectedPhoto?.queue_id === 'string' ? selectedPhoto.queue_id : null;
   const selectedPhotoCanComment = Boolean(selectedPhoto && !selectedPhoto.optimistic);
   const selectedPhotoCanDelete = Boolean(
     selectedPhoto &&
@@ -615,6 +660,28 @@ export default function ViewPhotoChallengeScreen() {
       cancelled = true;
     };
   }, [load, pinId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncQueuedPhotos() {
+      if (!pinId) return;
+      const queuedPhotos = await syncQueuedPhotosForPin(pinId);
+      if (cancelled || !Array.isArray(queuedPhotos)) return;
+      setServerPhotos(queuedPhotos);
+      prefetchPhotoUrls(queuedPhotos);
+    }
+
+    void syncQueuedPhotos();
+    const unsubscribe = subscribeUploadQueue(() => {
+      void syncQueuedPhotos();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [pinId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -900,53 +967,18 @@ export default function ViewPhotoChallengeScreen() {
       return;
     }
     setUploading(true);
-    let uploadResultForRollback = null;
-    const uploadPromise = new Promise((resolve) => {
-      setUploadResolver(resolve);
-      router.push({
-        pathname: '/upload',
-        params: {
-          prompt: promptText,
-          pinId,
-          created_by_handle: handleText || '',
-        },
-      });
+    router.push({
+      pathname: '/upload',
+      params: {
+        prompt: promptText,
+        pinId,
+        created_by_handle: handleText || '',
+      },
     });
-
-    uploadPromise
-      .then(async (uploadResult) => {
-        const uploadedPhotoUrl = typeof uploadResult === 'string'
-          ? uploadResult
-          : uploadResult?.fileUrl;
-        if (!uploadedPhotoUrl) { // If promise resolves to falsey (i.e. user exits upload screen)
-          return;
-        }
-        const photoLocation = uploadResult?.photoLocation || null;
-        uploadResultForRollback = uploadedPhotoUrl;
-        await addPhoto(pinId, uploadedPhotoUrl, { photoLocation });
-        invalidateStats();
-        await load({ showSpinner: false });
-      })
-      .catch((error) => {
-        console.error('Failed to add photo after upload', error);
-        if (uploadResultForRollback) {
-          void updatePinPhotosCache(pinId, (current) => (
-            Array.isArray(current)
-              ? current.filter((photo) => photo?.remote_file_url !== uploadResultForRollback)
-              : current
-          ));
-        }
-        void load({ showSpinner: false });
-        showToast(error?.response?.data?.error || 'Upload failed', 2500);
-      })
-      .finally(() => {
-        setUploading(false);
-      });
+    setUploading(false);
   }, [
     challengeMeta,
     handleText,
-    invalidateStats,
-    load,
     pinId,
     promptText,
     refreshViewerLocation,
@@ -955,6 +987,33 @@ export default function ViewPhotoChallengeScreen() {
     uploading,
     viewerLocation,
   ]);
+
+  const retrySelectedPhotoUpload = useCallback(async () => {
+    if (!selectedPhotoQueueId) return;
+    try {
+      await retryUploadQueueItem(selectedPhotoQueueId);
+      showToast('Retrying upload...', 2200);
+    } catch (error) {
+      console.error('Failed to retry queued photo upload', error);
+      showToast('Unable to retry upload.', 2500);
+    }
+  }, [selectedPhotoQueueId, showToast]);
+
+  const removeSelectedQueuedPhoto = useCallback(async () => {
+    if (!selectedPhotoQueueId) return;
+    try {
+      const removed = await removeUploadQueueItem(selectedPhotoQueueId);
+      if (!removed) {
+        showToast('Unable to remove upload.', 2500);
+        return;
+      }
+      closePhotoDetail();
+      showToast('Removed failed upload.', 2200);
+    } catch (error) {
+      console.error('Failed to remove queued photo upload', error);
+      showToast('Unable to remove upload.', 2500);
+    }
+  }, [closePhotoDetail, selectedPhotoQueueId, showToast]);
 
   const onToggleSortMode = useCallback(() => {
     setSortMode((currentMode) => (
@@ -1288,12 +1347,27 @@ export default function ViewPhotoChallengeScreen() {
               {item?.created_by_handle ? `@${item.created_by_handle}` : 'anon'}
             </Text>
           </View>
-          <View style={styles.galleryEloChip}>
-            <MaterialIcons name="emoji-events" size={13} color={colors.primary} />
-            <Text style={styles.galleryEloText}>
-              {Number.isFinite(item?.global_elo) ? item.global_elo : 1000}
-            </Text>
-          </View>
+          {item?.optimistic ? (
+            <View
+              style={[
+                styles.galleryStatusChip,
+                item?.upload_state === 'failed'
+                  ? styles.galleryStatusChipFailed
+                  : styles.galleryStatusChipPending,
+              ]}
+            >
+              <Text style={styles.galleryStatusText}>
+                {formatOptimisticUploadStateLabel(getOptimisticUploadState(item))}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.galleryEloChip}>
+              <MaterialIcons name="emoji-events" size={13} color={colors.primary} />
+              <Text style={styles.galleryEloText}>
+                {Number.isFinite(item?.global_elo) ? item.global_elo : 1000}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     </Pressable>
@@ -1570,6 +1644,35 @@ export default function ViewPhotoChallengeScreen() {
                   </View>
                 </View>
                 */}
+                {selectedPhoto?.optimistic ? (
+                  <View style={styles.uploadStateCard}>
+                    <Text style={styles.uploadStateEyebrow}>Upload status</Text>
+                    <Text style={styles.uploadStateTitle}>{selectedPhotoUploadStateLabel}</Text>
+                    <Text style={styles.uploadStateText}>{selectedPhotoUploadMessage}</Text>
+                    {selectedPhotoUploadState === 'failed' ? (
+                      <View style={styles.uploadStateActions}>
+                        <Pressable
+                          onPress={retrySelectedPhotoUpload}
+                          style={({ pressed }) => [
+                            styles.uploadStateActionButton,
+                            pressed && { opacity: 0.72 },
+                          ]}
+                        >
+                          <Text style={styles.uploadStateActionText}>Retry</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={removeSelectedQueuedPhoto}
+                          style={({ pressed }) => [
+                            styles.uploadStateSecondaryButton,
+                            pressed && { opacity: 0.72 },
+                          ]}
+                        >
+                          <Text style={styles.uploadStateSecondaryText}>Remove</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
                 <View style={styles.commentsSectionHeader}>
                   <Text style={styles.commentsSectionTitle}>Comments</Text>
                   <Text style={styles.commentsSectionSubtitle}>{`${photoComments.length} total`}</Text>
@@ -1577,7 +1680,7 @@ export default function ViewPhotoChallengeScreen() {
                 {!selectedPhotoCanComment ? (
                   <View style={styles.pendingCommentNotice}>
                     <Text style={styles.pendingCommentText}>
-                      Comments will be available after this upload finishes syncing.
+                      {selectedPhotoUploadMessage}
                     </Text>
                   </View>
                 ) : null}
@@ -1630,7 +1733,9 @@ export default function ViewPhotoChallengeScreen() {
               ) : (
                 <View style={styles.commentComposerDisabled}>
                   <Text style={styles.commentComposerDisabledText}>
-                    Comments are unavailable until the photo finishes uploading.
+                    {selectedPhotoUploadState === 'failed'
+                      ? 'Comments are unavailable until this failed upload is retried or removed.'
+                      : 'Comments are unavailable until the photo finishes uploading.'}
                   </Text>
                 </View>
               )}
@@ -1763,6 +1868,25 @@ function createStyles(colors) {
       borderColor: colors.border,
     },
     galleryEloText: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: '900',
+    },
+    galleryStatusChip: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+    },
+    galleryStatusChipPending: {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+    },
+    galleryStatusChipFailed: {
+      backgroundColor: colors.bg,
+      borderColor: colors.danger,
+    },
+    galleryStatusText: {
       color: colors.text,
       fontSize: 11,
       fontWeight: '900',
@@ -1942,6 +2066,65 @@ function createStyles(colors) {
       fontSize: 12,
       fontWeight: '900',
       textAlign: 'center',
+    },
+    uploadStateCard: {
+      padding: spacing.md,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      gap: spacing.xs,
+    },
+    uploadStateEyebrow: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: '900',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
+    uploadStateTitle: {
+      color: colors.text,
+      fontSize: fontSizes.md,
+      fontWeight: '900',
+    },
+    uploadStateText: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '700',
+      lineHeight: 20,
+    },
+    uploadStateActions: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    uploadStateActionButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.pill,
+      backgroundColor: colors.primary,
+    },
+    uploadStateActionText: {
+      color: colors.primaryTextOn,
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    uploadStateSecondaryButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    uploadStateSecondaryText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
     },
     commentsSectionHeader: {
       flexDirection: 'row',

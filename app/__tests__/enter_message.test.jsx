@@ -8,8 +8,8 @@ jest.mock('@/lib/promiseStore', () => ({
   resolveUpload: jest.fn(),
 }));
 
-jest.mock('@/lib/uploadHelpers', () => ({
-  uploadImage: jest.fn(),
+jest.mock('@/lib/uploadQueue', () => ({
+  enqueueNewChallengeUpload: jest.fn(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -17,31 +17,41 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 const { resolveGeoLock, resolveMessage, resolveUpload } = require('@/lib/promiseStore');
-const { uploadImage } = require('@/lib/uploadHelpers');
+const { enqueueNewChallengeUpload } = require('@/lib/uploadQueue');
 const { router } = require('expo-router');
 const cameraModule = require('react-native-vision-camera');
+const expoRouter = require('expo-router');
 
 describe('EnterMessageScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     router.back.mockClear();
     cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
+    expoRouter.useLocalSearchParams.mockReturnValue({
+      latitude: '11',
+      longitude: '22',
+    });
   });
 
-  it('uploads the captured photo and resolves promises in the background', async () => {
-    uploadImage.mockResolvedValue('https://download');
+  it('queues the captured photo and resolves promises in the background', async () => {
+    enqueueNewChallengeUpload.mockResolvedValue({ id: 'queue-1' });
 
     const { getByPlaceholderText, getByText } = render(<EnterMessageScreen initialUri="file://mock.jpg" />);
 
     fireEvent.changeText(getByPlaceholderText(/challenge prompt/i), '  hello world  ');
     fireEvent.press(getByText('CREATE>'));
 
-    expect(resolveMessage).toHaveBeenCalledWith('hello world');
-    expect(resolveGeoLock).toHaveBeenCalledWith(false);
-    expect(router.back).toHaveBeenCalled();
-
-    await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
-    expect(resolveUpload).toHaveBeenCalledWith('https://download');
+    await waitFor(() => expect(enqueueNewChallengeUpload).toHaveBeenCalledWith({
+      sourceUri: 'file://mock.jpg',
+      message: 'hello world',
+      location: { coords: { latitude: 11, longitude: 22 } },
+      isGeoLocked: false,
+      photoLocation: { coords: { latitude: 11, longitude: 22 } },
+    }));
+    await waitFor(() => expect(resolveMessage).toHaveBeenCalledWith('hello world'));
+    await waitFor(() => expect(resolveGeoLock).toHaveBeenCalledWith(false));
+    await waitFor(() => expect(resolveUpload).toHaveBeenCalledWith({ queued: true, queueId: 'queue-1' }));
+    await waitFor(() => expect(router.back).toHaveBeenCalled());
   });
 
   it('renders the shared camera controls before a photo is taken', () => {
@@ -55,7 +65,7 @@ describe('EnterMessageScreen', () => {
   });
 
   it('sends unlocked challenge type when checkbox is toggled off', async () => {
-    uploadImage.mockResolvedValue('https://download');
+    enqueueNewChallengeUpload.mockResolvedValue({ id: 'queue-2' });
 
     const { getByPlaceholderText, getByText } = render(<EnterMessageScreen initialUri="file://mock.jpg" />);
 
@@ -63,8 +73,10 @@ describe('EnterMessageScreen', () => {
     fireEvent.changeText(getByPlaceholderText(/challenge prompt/i), 'not geolocked');
     fireEvent.press(getByText('CREATE>'));
 
-    expect(resolveGeoLock).toHaveBeenCalledWith(true);
-    await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
+    await waitFor(() => expect(enqueueNewChallengeUpload).toHaveBeenCalledWith(expect.objectContaining({
+      isGeoLocked: true,
+    })));
+    await waitFor(() => expect(resolveGeoLock).toHaveBeenCalledWith(true));
   });
   it('requests permission when camera access is denied', () => {
     cameraModule.useCameraPermission.mockReturnValue({ hasPermission: false, requestPermission: jest.fn() });

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -18,16 +18,14 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  addPhoto,
   fetchRankedQuests,
   fetchSavedQuests,
   saveQuest,
   unsaveQuest
 } from '@/lib/api';
 import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
-import { setUploadResolver, setUploadSubmitResolver } from '@/lib/promiseStore';
-import { AuthContext } from '@/hooks/AuthContext';
-import { readPinCommentsCache, updatePinPhotosCache } from '@/lib/pinChallengeCache';
+import { setUploadSubmitResolver } from '@/lib/promiseStore';
+import { readPinCommentsCache } from '@/lib/pinChallengeCache';
 import { getTopRankedPhotoComment } from '@/lib/photoCommentRanking';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import {
@@ -172,7 +170,6 @@ export default function ActiveChallengesScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { invalidateStats } = useContext(AuthContext);
   const { message: toastMessage, show: showToast } = useToast(3000);
 
   const [challenges, setChallenges] = useState([]);
@@ -447,59 +444,27 @@ export default function ActiveChallengesScreen() {
   const beginUploadForChallenge = useCallback((challenge) => {
     if (!challenge?.pinId) return;
     const uploadRequestId = `quest-upload-${challenge.pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    let uploadedPhotoUrlForRollback = null;
     setUploadingPinId(challenge.pinId);
     setUploadSubmitResolver((submitResult) => {
       if (submitResult?.submitted) {
         advanceChallengeQueue('upload');
       }
     }, uploadRequestId);
-    const uploadPromise = new Promise((resolve) => {
-      setUploadResolver(resolve, uploadRequestId);
-      router.push({
-        pathname: '/upload',
-        params: {
-          next: '/view_photochallenge',
-          pinId: challenge.pinId,
-          prompt: challenge.prompt,
-          created_by_handle: challenge.creatorHandleRaw || '',
-          uploadRequestId,
-        },
-      });
+    router.push({
+      pathname: '/upload',
+      params: {
+        next: '/view_photochallenge',
+        pinId: challenge.pinId,
+        prompt: challenge.prompt,
+        created_by_handle: challenge.creatorHandleRaw || '',
+        uploadRequestId,
+      },
     });
 
     // Only lock while handing off into the upload flow. Once the user is back on quests,
     // let the upload finish in the background without freezing the deck.
     setUploadingPinId(null);
-
-    uploadPromise
-      .then(async (uploadResult) => {
-        const uploadedPhotoUrl = typeof uploadResult === 'string'
-          ? uploadResult
-          : uploadResult?.fileUrl;
-        if (!uploadedPhotoUrl) {
-          return;
-        }
-        const photoLocation = uploadResult?.photoLocation || null;
-        uploadedPhotoUrlForRollback = uploadedPhotoUrl;
-        await addPhoto(challenge.pinId, uploadedPhotoUrl, { photoLocation });
-        invalidateStats();
-      })
-      .catch((error) => {
-        if (uploadedPhotoUrlForRollback) {
-          void updatePinPhotosCache(challenge.pinId, (current) => (
-            Array.isArray(current)
-              ? current.filter((photo) => photo?.remote_file_url !== uploadedPhotoUrlForRollback)
-              : current
-          ));
-        }
-        console.error('Failed to upload photo to challenge', error);
-        showToast('Upload failed', 2500);
-      })
-      .finally(() => {
-        setUploadingPinId(null);
-      });
-  }, [advanceChallengeQueue, invalidateStats, router, showToast]);
+  }, [advanceChallengeQueue, router]);
 
   const handleUpSwipeAction = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
