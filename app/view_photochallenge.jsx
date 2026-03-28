@@ -324,14 +324,20 @@ function ZoomableDetailImage({ uri, styles, onInteractionChange }) {
       baseScale.value = scale.value;
       originX.value = clamp(event.focalX, 0, frameWidth.value || event.focalX);
       originY.value = clamp(event.focalY, 0, frameHeight.value || event.focalY);
+      panStartX.value = translateX.value;
+      panStartY.value = translateY.value;
+      panTouchStartX.value = event.focalX;
+      panTouchStartY.value = event.focalY;
     })
     .onUpdate((event) => {
-      originX.value = clamp(event.focalX, 0, frameWidth.value || event.focalX);
-      originY.value = clamp(event.focalY, 0, frameHeight.value || event.focalY);
       scale.value = clamp(baseScale.value * event.scale, 1, DETAIL_IMAGE_MAX_SCALE);
+      translateX.value = panStartX.value + (event.focalX - panTouchStartX.value);
+      translateY.value = panStartY.value + (event.focalY - panTouchStartY.value);
     })
     .onEnd(() => {
       baseScale.value = scale.value;
+      panStartX.value = translateX.value;
+      panStartY.value = translateY.value;
     });
 
   const composedGesture = pinchGesture;
