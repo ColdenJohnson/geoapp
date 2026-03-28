@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
 import { View, TextInput, Text, StyleSheet, Alert, Pressable, Image, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import auth from '@react-native-firebase/auth';
 import CountryPicker, { DARK_THEME, DEFAULT_THEME } from 'react-native-country-picker-modal';
 
@@ -28,6 +29,7 @@ export default function LoginScreen() {
   const [countryCode, setCountryCode] = useState('US');
   const [callingCode, setCallingCode] = useState('1');
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const colors = usePalette();
   const isDarkMode = useIsDarkMode();
   const countryPickerTheme = useMemo(() => (
@@ -50,6 +52,21 @@ export default function LoginScreen() {
 
     return () => clearInterval(timer);
   }, [cooldownSeconds]);
+
+  useEffect(() => {
+    const syncNetworkState = (state) => {
+      setIsOffline(state?.isConnected === false || state?.isInternetReachable === false);
+    };
+
+    NetInfo.fetch()
+      .then(syncNetworkState)
+      .catch((error) => {
+        console.warn('Failed to inspect network state on login screen', error);
+      });
+
+    const unsubscribe = NetInfo.addEventListener(syncNetworkState);
+    return () => unsubscribe();
+  }, []);
 
   const handleLogin = async () => {
     try {
@@ -167,6 +184,14 @@ export default function LoginScreen() {
         </View>
 
         <Text style={styles.title}>{authTitle}</Text>
+
+        {isOffline ? (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText}>
+              No network connection. Reconnect to continue.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={[formStyles.card, styles.card]}>
           {!isPhoneMode ? (
@@ -381,6 +406,21 @@ function createStyles(colors) {
       textAlign: 'center',
       marginTop: spacing.xs,
       marginBottom: spacing.lg,
+    },
+    offlineBanner: {
+      marginBottom: spacing.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.warning,
+      backgroundColor: colors.surface,
+    },
+    offlineBannerText: {
+      color: colors.warning,
+      fontSize: fontSizes.sm,
+      fontWeight: '700',
+      textAlign: 'center',
     },
     card: {
       marginBottom: spacing.md,

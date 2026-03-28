@@ -257,15 +257,13 @@ function ZoomableDetailImage({ uri, styles, onInteractionChange }) {
     const normalizedTouchCount = Math.max(0, nextTouchCount);
     activeTouchCount.value = normalizedTouchCount;
 
-    const nextLockActive = normalizedTouchCount > 1 || (
-      normalizedTouchCount > 0 && scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD
-    );
+    const nextLockActive = normalizedTouchCount > 1;
     if (zoomLockActive.value !== nextLockActive) {
       zoomLockActive.value = nextLockActive;
       runOnJS(emitInteractionChange)(nextLockActive);
     }
 
-    if (normalizedTouchCount === 0) {
+    if (normalizedTouchCount < 2) {
       resetZoom();
     }
   };
@@ -336,44 +334,7 @@ function ZoomableDetailImage({ uri, styles, onInteractionChange }) {
       baseScale.value = scale.value;
     });
 
-  const panGesture = Gesture.Pan()
-    .manualActivation(true)
-    .averageTouches(true)
-    .shouldCancelWhenOutside(false)
-    .onTouchesDown((event, manager) => {
-      syncInteractionState(event.numberOfTouches);
-      if (event.numberOfTouches === 1 && scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD) {
-        manager.activate();
-      }
-    })
-    .onTouchesMove((event, manager) => {
-      if (event.numberOfTouches === 1 && scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD) {
-        manager.activate();
-      }
-    })
-    .onTouchesUp((event) => {
-      syncInteractionState(event.numberOfTouches);
-    })
-    .onTouchesCancelled(() => {
-      syncInteractionState(0);
-    })
-    .onStart((event) => {
-      panStartX.value = translateX.value;
-      panStartY.value = translateY.value;
-      panTouchStartX.value = event.absoluteX;
-      panTouchStartY.value = event.absoluteY;
-    })
-    .onUpdate((event) => {
-      if (scale.value <= DETAIL_IMAGE_ZOOM_THRESHOLD) return;
-      translateX.value = panStartX.value + (event.absoluteX - panTouchStartX.value);
-      translateY.value = panStartY.value + (event.absoluteY - panTouchStartY.value);
-    })
-    .onEnd(() => {
-      panStartX.value = translateX.value;
-      panStartY.value = translateY.value;
-    });
-
-  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
+  const composedGesture = pinchGesture;
 
   const animatedZoomStyle = useAnimatedStyle(() => {
     const raised = activeTouchCount.value > 1 || scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD;
