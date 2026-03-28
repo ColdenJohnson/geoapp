@@ -65,8 +65,8 @@ const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 const DETAIL_IMAGE_MAX_SCALE = 4;
 const DETAIL_IMAGE_ZOOM_THRESHOLD = 1.01;
 const DETAIL_IMAGE_RESET_SPRING = {
-  damping: 20,
-  stiffness: 240,
+  damping: 26,
+  stiffness: 210,
 };
 
 function clamp(value, min, max) {
@@ -1430,6 +1430,7 @@ export default function ViewPhotoChallengeScreen() {
             contentContainerStyle={styles.detailListContent}
             keyboardShouldPersistTaps="handled"
             scrollEnabled={!detailImageZoomLocked}
+            removeClippedSubviews={false}
             refreshControl={
               selectedPhotoCanComment ? (
                 <RefreshControl
@@ -1499,7 +1500,7 @@ export default function ViewPhotoChallengeScreen() {
               </View>
             )}
             ListEmptyComponent={(
-              !selectedPhotoCanComment || !commentsHydrated ? null : (
+              !selectedPhotoCanComment || !commentsHydrated || detailImageZoomLocked ? null : (
                 <View style={styles.commentsEmptyState}>
                   <Text style={styles.commentsEmptyTitle}>No comments yet.</Text>
                   <Text style={styles.commentsEmptyText}>Be the first to add one.</Text>
@@ -1695,6 +1696,7 @@ function createStyles(colors) {
     detailSafe: {
       flex: 1,
       backgroundColor: colors.bg,
+      overflow: 'visible',
     },
     detailHeader: {
       flexDirection: 'row',
@@ -1768,8 +1770,11 @@ function createStyles(colors) {
     },
     detailList: {
       flex: 1,
+      position: 'relative',
       backgroundColor: colors.surface,
       overflow: 'visible',
+      zIndex: 40,
+      elevation: 40,
     },
     detailListContent: {
       paddingHorizontal: spacing.lg,
@@ -1779,9 +1784,12 @@ function createStyles(colors) {
       overflow: 'visible',
     },
     detailHeroSection: {
+      position: 'relative',
       gap: spacing.lg,
       marginBottom: spacing.md,
       overflow: 'visible',
+      zIndex: 50,
+      elevation: 50,
     },
     detailImageFrame: {
       position: 'relative',
@@ -1791,8 +1799,11 @@ function createStyles(colors) {
       borderColor: colors.border,
       backgroundColor: colors.bg,
       ...shadows.chip,
+      zIndex: 60,
+      elevation: 60,
     },
     detailImageStage: {
+      position: 'relative',
       width: '100%',
       aspectRatio: 4 / 5,
       borderRadius: 32,
