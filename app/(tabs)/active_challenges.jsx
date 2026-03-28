@@ -910,20 +910,32 @@ export default function ActiveChallengesScreen() {
       <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>{queueMode === 'saved' ? 'Saved Quests' : 'Quests'}</Text>
-            <Text style={styles.headerSubtitle}>
-              {queueMode === 'saved'
-                ? 'Swipe up to remove from saved. Tap or hold for more.'
-                : 'Swipe right to select, left to send back, up to save. Tap or hold for more.'}
-            </Text>
+            <Text style={styles.headerTitle}>Quests</Text>
+            <Text style={styles.headerSubtitle}>Swipe right to select, left to send back, tap for more.</Text>
           </View>
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.55 : 1 }]}
-            onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
-            disabled={loading}
-          >
-            <MaterialIcons name="refresh" size={22} color={colors.text} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerToggleButton,
+                { opacity: pressed || interactionLocked ? 0.55 : 1 },
+              ]}
+              onPress={() => {
+                setQueueMode((prev) => (prev === 'saved' ? 'all' : 'saved'));
+              }}
+              disabled={interactionLocked}
+            >
+              <Text style={styles.headerToggleText}>
+                {queueMode === 'saved' ? 'All' : 'Saved'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading ? 0.55 : 1 }]}
+              onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
+              disabled={loading}
+            >
+              <MaterialIcons name="refresh" size={22} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.stackStage} onLayout={handleStageLayout}>
@@ -961,23 +973,6 @@ export default function ActiveChallengesScreen() {
             disabled={interactionLocked || stack.length === 0}
           >
             <MaterialIcons name="close" size={28} color={colors.textMuted} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.footerButton,
-              queueMode === 'saved' ? styles.savedFilterButtonActive : styles.savedFilterButton,
-              { opacity: pressed || interactionLocked ? 0.75 : 1 },
-            ]}
-            onPress={() => {
-              setQueueMode((prev) => (prev === 'saved' ? 'all' : 'saved'));
-            }}
-            disabled={interactionLocked}
-          >
-            <MaterialIcons
-              name={queueMode === 'saved' ? 'bookmark' : 'bookmark-border'}
-              size={26}
-              color={queueMode === 'saved' ? colors.primaryTextOn : colors.primary}
-            />
           </Pressable>
           <Pressable
             style={({ pressed }) => [
@@ -1046,6 +1041,11 @@ function createStyles(colors) {
       minHeight: 44,
       justifyContent: 'center',
     },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
     headerTitle: {
       fontSize: 30,
       lineHeight: 34,
@@ -1059,6 +1059,18 @@ function createStyles(colors) {
       fontWeight: '800',
       letterSpacing: 0.7,
       color: colors.textMuted,
+      textTransform: 'uppercase',
+    },
+    headerToggleButton: {
+      minHeight: 44,
+      justifyContent: 'center',
+      paddingHorizontal: 2,
+    },
+    headerToggleText: {
+      fontSize: 12,
+      fontWeight: '900',
+      letterSpacing: 0.8,
+      color: colors.primary,
       textTransform: 'uppercase',
     },
     stackStage: {
@@ -1295,14 +1307,6 @@ function createStyles(colors) {
     skipFooterButton: {
       borderColor: colors.border,
       backgroundColor: colors.bg,
-    },
-    savedFilterButton: {
-      borderColor: colors.primary,
-      backgroundColor: colors.bg,
-    },
-    savedFilterButtonActive: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primary,
     },
     acceptFooterButton: {
       borderColor: colors.primary,

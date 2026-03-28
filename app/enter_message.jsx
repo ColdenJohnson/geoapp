@@ -11,13 +11,14 @@ import {
   Pressable,
   Animated,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
+import { useCameraPermission } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CTAButton } from '@/components/ui/Buttons';
+import ChallengeCameraStage from '@/components/camera/ChallengeCameraStage';
 
 import { usePalette } from '@/hooks/usePalette';
 import { fontSizes, spacing, radii } from '@/theme/tokens';
@@ -27,26 +28,23 @@ import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseSto
 import { uploadImage } from '@/lib/uploadHelpers';
 
 const MAX_LEN = 50;
-const PHOTO_RATIO = '3:4';
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
 
 export default function EnterMessageScreen({ initialUri = null }) {
   const [message, setMessage] = useState('');
   const [uri, setUri] = useState(initialUri);
-  const [facing, setFacing] = useState('back');
-  const [permission, requestPermission] = useCameraPermissions();
   const [uploading, setUploading] = useState(false);
   const [isGeoLocked, setIsGeoLocked] = useState(false);
   const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { hasPermission, requestPermission } = useCameraPermission();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isAtMaxLength = message.length >= MAX_LEN;
   const hasMessage = message.trim().length > 0;
-  const cameraRef = useRef(null);
   const inputRef = useRef(null);
   const isMounted = useRef(true);
   const didSubmitUpload = useRef(false);
@@ -105,19 +103,6 @@ export default function EnterMessageScreen({ initialUri = null }) {
     };
   }, [cardScale, keyboardOffset]);
 
-  const toggleFacing = () => {
-    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
-  };
-
-  const takePicture = async () => {
-    if (uploading) return;
-    const photo = await cameraRef.current?.takePictureAsync({
-      skipProcessing: true,
-      ratio: PHOTO_RATIO,
-    });
-    setUri(photo?.uri ?? null);
-  };
-
   const handleMessageChange = useCallback((value) => {
     setMessage(value);
     if (showEmptyMessageError) {
@@ -170,41 +155,11 @@ export default function EnterMessageScreen({ initialUri = null }) {
   };
 
   const renderCamera = () => (
-    <View style={styles.stage}>
-      <View style={styles.cameraContainer}>
-        <CameraView
-          style={styles.camera}
-          ref={cameraRef}
-          facing={facing}
-          mute={false}
-          responsiveOrientationWhenOrientationLocked
-          ratio={PHOTO_RATIO}
-        />
-        <View style={styles.cameraControlsOverlay} pointerEvents="box-none">
-          <View style={styles.shutterContainer}>
-            <View style={styles.flipButtonPlaceholder} />
-            <Pressable onPress={takePicture}>
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.shutterBtn,
-                    pressed && { opacity: 0.6 },
-                  ]}
-                >
-                  <View
-                    style={styles.shutterBtnInner}
-                  />
-                </View>
-              )}
-            </Pressable>
-            <Pressable onPress={toggleFacing} style={styles.flipButton}>
-              <FontAwesome6 name="rotate-left" size={24} color={'#F6EFE8'} />
-            </Pressable>
-          </View>
-        </View>
-      </View>
-      <Text style={styles.helper}>Snap a photo to start your challenge.</Text>
-    </View>
+    <ChallengeCameraStage
+      helperText="Snap a photo to start your challenge."
+      onPhotoCaptured={setUri}
+      disabled={uploading}
+    />
   );
 
   const renderPreview = () => (
@@ -245,7 +200,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
     </View>
   );
 
-  if (!permission || !permission.granted) {
+  if (!hasPermission) {
     return (
       <View style={[styles.container, styles.permissionGate]}>
         {renderBackButton()}
@@ -371,76 +326,6 @@ function createStyles(colors) {
     },
     scrollContentKeyboard: {
       paddingTop: spacing.lg,
-    },
-    stage: {
-      width: '100%',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    cameraContainer: {
-      width: '100%',
-      aspectRatio: PHOTO_ASPECT_RATIO,
-      overflow: 'hidden',
-      borderRadius: radii.lg,
-      backgroundColor: 'black',
-      position: 'relative',
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 16 },
-      shadowRadius: 28,
-      shadowOpacity: 0.16,
-      elevation: 14,
-      borderWidth: 1,
-      borderColor: colors.barBorder,
-    },
-    camera: {
-      flex: 1,
-    },
-    cameraControlsOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: 'flex-end',
-      paddingHorizontal: spacing.md,
-      paddingBottom: spacing.md,
-    },
-    shutterContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      width: '100%',
-    },
-    shutterBtn: {
-      borderWidth: 3,
-      borderColor: colors.primary,
-      width: 82,
-      height: 82,
-      borderRadius: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.bg,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 18,
-      shadowOpacity: 0.14,
-      elevation: 8,
-    },
-    shutterBtnInner: {
-      width: 56,
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: colors.primary,
-    },
-    flipButtonPlaceholder: {
-      width: 44,
-      height: 44,
-    },
-    flipButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(12,7,3,0.48)',
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.2)',
     },
     card: {
       width: '100%',

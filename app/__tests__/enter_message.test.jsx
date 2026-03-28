@@ -19,13 +19,13 @@ jest.mock('react-native-safe-area-context', () => ({
 const { resolveGeoLock, resolveMessage, resolveUpload } = require('@/lib/promiseStore');
 const { uploadImage } = require('@/lib/uploadHelpers');
 const { router } = require('expo-router');
-const cameraModule = require('expo-camera');
+const cameraModule = require('react-native-vision-camera');
 
 describe('EnterMessageScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     router.back.mockClear();
-    cameraModule.useCameraPermissions.mockReturnValue([{ granted: true }, jest.fn()]);
+    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
   });
 
   it('uploads the captured photo and resolves promises in the background', async () => {
@@ -44,6 +44,16 @@ describe('EnterMessageScreen', () => {
     expect(resolveUpload).toHaveBeenCalledWith('https://download');
   });
 
+  it('renders the shared camera controls before a photo is taken', () => {
+    const { getByTestId } = render(<EnterMessageScreen />);
+
+    expect(getByTestId('camera-lens-0.5x')).toBeTruthy();
+    expect(getByTestId('camera-lens-1x')).toBeTruthy();
+    expect(getByTestId('camera-timer-10')).toBeTruthy();
+    expect(getByTestId('camera-flash-toggle')).toBeTruthy();
+    expect(getByTestId('camera-shutter')).toBeTruthy();
+  });
+
   it('sends unlocked challenge type when checkbox is toggled off', async () => {
     uploadImage.mockResolvedValue('https://download');
 
@@ -57,7 +67,7 @@ describe('EnterMessageScreen', () => {
     await waitFor(() => expect(uploadImage).toHaveBeenCalledWith('file://mock.jpg'));
   });
   it('requests permission when camera access is denied', () => {
-    cameraModule.useCameraPermissions.mockReturnValue([{ granted: false }, jest.fn()]);
+    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: false, requestPermission: jest.fn() });
 
     const { getByText } = render(<EnterMessageScreen />);
 

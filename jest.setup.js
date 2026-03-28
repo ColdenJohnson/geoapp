@@ -68,6 +68,78 @@ jest.mock('expo-camera', () => {
   };
 });
 
+jest.mock('react-native-vision-camera', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  const takePhotoMock = jest.fn(async () => ({
+    path: 'mock://photo.jpg',
+    width: 1200,
+    height: 1600,
+    isRawPhoto: false,
+    orientation: 'portrait',
+    isMirrored: false,
+  }));
+
+  const devices = {
+    back: {
+      id: 'mock-back-camera',
+      position: 'back',
+      name: 'Mock Back Camera',
+      physicalDevices: ['ultra-wide-angle-camera', 'wide-angle-camera'],
+      hasFlash: true,
+      hasTorch: true,
+      minFocusDistance: 0,
+      isMultiCam: true,
+      minZoom: 0.5,
+      maxZoom: 8,
+      neutralZoom: 1,
+      minExposure: 0,
+      maxExposure: 0,
+      formats: [],
+      supportsLowLightBoost: false,
+    },
+    front: {
+      id: 'mock-front-camera',
+      position: 'front',
+      name: 'Mock Front Camera',
+      physicalDevices: ['wide-angle-camera'],
+      hasFlash: false,
+      hasTorch: false,
+      minFocusDistance: 0,
+      isMultiCam: false,
+      minZoom: 1,
+      maxZoom: 4,
+      neutralZoom: 1,
+      minExposure: 0,
+      maxExposure: 0,
+      formats: [],
+      supportsLowLightBoost: false,
+    },
+  };
+
+  const Camera = React.forwardRef((props, ref) => {
+    React.useEffect(() => {
+      props.onInitialized?.();
+    }, [props]);
+
+    React.useImperativeHandle(ref, () => ({
+      takePhoto: takePhotoMock,
+    }));
+    return <View {...props} />;
+  });
+
+  Camera.getCameraPermissionStatus = jest.fn(() => 'granted');
+  Camera.requestCameraPermission = jest.fn(async () => 'granted');
+
+  return {
+    Camera,
+    useCameraPermission: jest.fn(() => ({ hasPermission: true, requestPermission: jest.fn(async () => true) })),
+    useCameraDevice: jest.fn((position) => (position === 'front' ? devices.front : devices.back)),
+    __mocks__: { takePhotoMock, devices },
+  };
+});
+
 // Location mocks: permissions granted and watchers that can be manually triggered
 jest.mock('expo-location', () => {
   const removeWatcherMock = jest.fn();

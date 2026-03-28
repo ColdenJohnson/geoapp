@@ -1,10 +1,7 @@
-import {
-  CameraView,
-  useCameraPermissions,
-} from "expo-camera";
 import * as Location from 'expo-location';
 import { useState, useRef, useMemo, useEffect, useContext } from 'react'
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useCameraPermission } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 // import storage from '@react-native-firebase/storage';
@@ -15,13 +12,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { uploadImage } from '@/lib/uploadHelpers';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
+import ChallengeCameraStage from '@/components/camera/ChallengeCameraStage';
 import { fontSizes, spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { goBackOrHome, buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { AuthContext } from '@/hooks/AuthContext';
 import { seedPinPhotosCache, updatePinPhotosCache } from '@/lib/pinChallengeCache';
 
-const PHOTO_RATIO = '3:4';
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
 
@@ -58,13 +55,11 @@ async function getApproximatePhotoLocation() {
 }
 
 export default function Upload({ initialUri = null }) {
-  const [facing, setFacing] = useState ("back");
-  const [permission, requestPermission] = useCameraPermissions()
   const [uri, setUri] = useState(initialUri);
   const [uploading, setUploading] = useState(false);
-  const ref = useRef(null);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { hasPermission, requestPermission } = useCameraPermission();
   const { next, prompt, uploadRequestId, pinId: pinIdParam, created_by_handle: createdByHandleParam } = useLocalSearchParams();
   const promptText = useMemo(() => {
     if (typeof prompt === 'string') return prompt.trim();
@@ -147,9 +142,7 @@ export default function Upload({ initialUri = null }) {
   // }
   // For Dev
 
-  if (!permission) return <View /> // still loading
-
-  if (!permission.granted) {
+  if (!hasPermission) {
     return (
       <View style={[styles.container, styles.permissionGate]}>
         {renderBackButton()}
@@ -158,19 +151,6 @@ export default function Upload({ initialUri = null }) {
       </View>
     );
   }
-
-  const toggleFacing = () => {
-    setFacing((prev) => (prev === "back" ? "front" : "back"));
-  };
-
-  const takePicture = async () => {
-    const photo = await ref.current?.takePictureAsync({
-      skipProcessing: true,
-      ratio: PHOTO_RATIO
-    });
-    setUri(photo?.uri);
-    console.log('Photo captured:', photo?.uri);
-  };
 
   const handleUpload = async () => {
     if (!uri || uploading) return;
@@ -262,49 +242,14 @@ export default function Upload({ initialUri = null }) {
   };
 
   const renderCamera = () => {
-  return (
-    <View style={styles.stage}>
-      {promptText ? (
-        <Text style={styles.promptText} numberOfLines={2}>
-          {promptText}
-        </Text>
-      ) : null}
-      <View style={styles.cameraContainer}>
-        <CameraView
-          style={styles.camera}
-          ref={ref}
-          facing={facing}
-          mute={false}
-          responsiveOrientationWhenOrientationLocked
-          ratio={PHOTO_RATIO}
-        />
-        <View style={styles.cameraControlsOverlay} pointerEvents="box-none">
-          <View style={styles.shutterContainer}>
-            <View style={styles.flipButtonPlaceholder} />
-            <Pressable onPress={takePicture}>
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.shutterBtn,
-                    pressed && { opacity: 0.6 },
-                  ]}
-                >
-                  <View
-                    style={styles.shutterBtnInner}
-                  />
-                </View>
-              )}
-            </Pressable>
-            <Pressable onPress={toggleFacing} style={styles.flipButton}>
-              <FontAwesome6 name="rotate-left" size={24} color={'#F6EFE8'} />
-            </Pressable>
-          </View>
-        </View>
-      </View>
-      <Text style={styles.helper}>Snap a photo to upload your challenge entry.</Text>
-    </View>
-  );
-};
+    return (
+      <ChallengeCameraStage
+        promptText={promptText}
+        helperText="Snap a photo to upload your challenge entry."
+        onPhotoCaptured={setUri}
+      />
+    );
+  };
 
   const renderPreview = () => (
     <View style={styles.stage}>
@@ -377,91 +322,7 @@ function createStyles(colors) {
       justifyContent: "center",
       gap: spacing.lg,
     },
-    stage: {
-      width: "100%",
-      alignItems: "center",
-      justifyContent: "center",
-    },
     message: { color: colors.text, textAlign: "center" },
-    cameraContainer: {
-      width: "100%",
-      aspectRatio: PHOTO_ASPECT_RATIO,
-      overflow: "hidden",
-      borderRadius: radii.lg,
-      backgroundColor: "black",
-      position: "relative",
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 16 },
-      shadowRadius: 28,
-      shadowOpacity: 0.16,
-      elevation: 14,
-      borderWidth: 1,
-      borderColor: colors.barBorder,
-    },
-    camera: {
-      flex: 1,
-    },
-    cameraControlsOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      justifyContent: "flex-end",
-      paddingHorizontal: spacing.md,
-      paddingBottom: spacing.md,
-    },
-    helper: {
-      color: colors.textMuted,
-      textAlign: "center",
-      fontWeight: "700",
-      marginTop: spacing.sm,
-    },
-    promptText: {
-      width: '100%',
-      marginBottom: spacing.sm,
-      textAlign: 'center',
-      color: colors.primary,
-      fontSize: 18,
-      fontWeight: '700',
-    },
-    shutterContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-    },
-    shutterBtn: {
-      borderWidth: 3,
-      borderColor: colors.primary,
-      width: 82,
-      height: 82,
-      borderRadius: 24,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: colors.bg,
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 18,
-      shadowOpacity: 0.14,
-      elevation: 8,
-    },
-    shutterBtnInner: {
-      width: 56,
-      height: 56,
-      borderRadius: 16,
-      backgroundColor: colors.primary,
-    },
-    flipButtonPlaceholder: {
-      width: 44,
-      height: 44,
-    },
-    flipButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 14,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "rgba(12,7,3,0.48)",
-      borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.2)",
-    },
     card: {
       width: "100%",
       maxWidth: 520,

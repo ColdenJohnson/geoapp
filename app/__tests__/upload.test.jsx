@@ -31,7 +31,7 @@ const { uploadImage } = require('@/lib/uploadHelpers');
 const { resolveUpload } = require('@/lib/promiseStore');
 const { seedPinPhotosCache } = require('@/lib/pinChallengeCache');
 const { router } = require('expo-router');
-const cameraModule = require('expo-camera');
+const cameraModule = require('react-native-vision-camera');
 const expoRouter = require('expo-router');
 
 describe('Upload screen', () => {
@@ -40,11 +40,11 @@ describe('Upload screen', () => {
     router.back.mockClear();
     router.push.mockClear();
     expoRouter.useLocalSearchParams.mockReturnValue({});
-    cameraModule.useCameraPermissions.mockReturnValue([{ granted: true }, jest.fn()]);
+    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
   });
 
   it('requests permission when camera access denied', () => {
-    cameraModule.useCameraPermissions.mockReturnValue([{ granted: false }, jest.fn()]);
+    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: false, requestPermission: jest.fn() });
 
     const { getByText } = render(<Upload />);
 
@@ -59,8 +59,18 @@ describe('Upload screen', () => {
     expect(router.back).toHaveBeenCalled();
   });
 
+  it('renders the shared camera controls before a photo is taken', async () => {
+    const { getByTestId } = render(<Upload />);
+
+    expect(getByTestId('camera-lens-0.5x')).toBeTruthy();
+    expect(getByTestId('camera-lens-1x')).toBeTruthy();
+    expect(getByTestId('camera-timer-3')).toBeTruthy();
+    expect(getByTestId('camera-flash-toggle')).toBeTruthy();
+    expect(getByTestId('camera-shutter')).toBeTruthy();
+  });
+
   it('uploads existing photo when Upload is pressed', async () => {
-    cameraModule.useCameraPermissions.mockReturnValue([{ granted: true }, jest.fn()]);
+    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
     uploadImage.mockResolvedValue('https://download');
 
     const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
@@ -75,7 +85,7 @@ describe('Upload screen', () => {
 
   it('routes to the quest immediately after submit while upload continues in the background', async () => {
     let resolveUploadImage;
-    cameraModule.useCameraPermissions.mockReturnValue([{ granted: true }, jest.fn()]);
+    cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
     uploadImage.mockImplementation(() => new Promise((resolve) => {
       resolveUploadImage = resolve;
     }));
