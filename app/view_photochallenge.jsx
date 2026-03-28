@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useContext } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -21,6 +22,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   addPhoto,
   createPhotoComment,
+  deletePhoto,
   fetchChallengeByPinId,
   fetchPhotoComments,
   fetchPhotosByPinId,
@@ -166,6 +168,7 @@ export default function ViewPhotoChallengeScreen() {
   const [challengeMeta, setChallengeMeta] = useState(null);
   const [sortMode, setSortMode] = useState(SORT_MODE_ELO);
   const [selectedPhotoId, setSelectedPhotoId] = useState(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState(null);
   const [photoComments, setPhotoComments] = useState([]);
   const [commentsHydrated, setCommentsHydrated] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
@@ -213,6 +216,17 @@ export default function ViewPhotoChallengeScreen() {
     [photos, selectedPhotoId]
   );
   const selectedPhotoCanComment = Boolean(selectedPhoto && !selectedPhoto.optimistic);
+  const selectedPhotoCanDelete = Boolean(
+    selectedPhoto &&
+    !selectedPhoto.optimistic &&
+    user?.uid &&
+    String(selectedPhoto?.created_by) === String(user.uid)
+  );
+  const selectedPhotoDeletePending = Boolean(
+    selectedPhoto?._id &&
+    deletingPhotoId &&
+    String(selectedPhoto._id) === String(deletingPhotoId)
+  );
   const sortChipLabel = sortMode === SORT_MODE_ELO ? 'Elo Sorted' : 'Upload Date';
   const composerAvatarLabel = typeof profile?.handle === 'string' && profile.handle
     ? profile.handle.charAt(0).toUpperCase()
@@ -714,6 +728,84 @@ export default function ViewPhotoChallengeScreen() {
     navigateToUserProfile(pendingUid);
   }, [navigateToUserProfile, selectedPhotoId]);
 
+  const executeDeleteSelectedPhoto = useCallback(async () => {
+    const targetPhotoId = selectedPhoto?._id ? String(selectedPhoto._id) : null;
+    if (!pinId || !targetPhotoId || !selectedPhotoCanDelete || selectedPhotoDeletePending) {
+      return;
+    }
+
+    setDeletingPhotoId(targetPhotoId);
+    try {
+      const result = await deletePhoto(targetPhotoId);
+      if (!result?.success) {
+        showToast(result?.error || 'Failed to delete photo.', 2500);
+        return;
+      }
+
+      invalidateStats();
+      await writePinCommentsCache(targetPhotoId, [], { isDirty: false });
+
+      if (result?.pin_deleted === true) {
+        setServerPhotos([]);
+        await writePinPhotosCache(pinId, [], { isDirty: false });
+        closePhotoDetail();
+        goBackOrHome(router);
+        return;
+      }
+
+      const nextPhotos = serverPhotosRef.current.filter((photo) => String(photo?._id) !== targetPhotoId);
+      setServerPhotos(nextPhotos);
+      await writePinPhotosCache(pinId, nextPhotos, { isDirty: false });
+
+      if (result?.pin && typeof result.pin === 'object') {
+        setChallengeMeta(result.pin);
+        void writePinMetaCache(pinId, result.pin);
+      }
+
+      closePhotoDetail();
+      showToast('Photo deleted.', 2500);
+    } catch (error) {
+      console.error('Failed to delete selected photo', error);
+      showToast('Failed to delete photo.', 2500);
+    } finally {
+      if (isMountedRef.current) {
+        setDeletingPhotoId((current) => (current === targetPhotoId ? null : current));
+      }
+    }
+  }, [
+    closePhotoDetail,
+    invalidateStats,
+    pinId,
+    router,
+    selectedPhoto,
+    selectedPhotoCanDelete,
+    selectedPhotoDeletePending,
+    showToast,
+  ]);
+
+  const confirmDeleteSelectedPhoto = useCallback(() => {
+    if (!selectedPhotoCanDelete || selectedPhotoDeletePending) return;
+
+    const persistedPhotoCount = photos.filter((photo) => photo?.optimistic !== true).length;
+    const isLastPersistedPhoto = persistedPhotoCount <= 1;
+    Alert.alert(
+      isLastPersistedPhoto ? 'Delete photo and quest?' : 'Delete photo?',
+      isLastPersistedPhoto
+        ? 'This will permanently delete this photo. Because it is the last photo in this quest, the quest will also be removed.'
+        : 'This will permanently delete this photo.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void executeDeleteSelectedPhoto();
+          },
+        },
+      ]
+    );
+  }, [executeDeleteSelectedPhoto, photos, selectedPhotoCanDelete, selectedPhotoDeletePending]);
+
   const submitComment = useCallback(async () => {
     const normalizedText = commentDraft.trim();
     if (!selectedPhotoCanComment || !selectedPhotoId || !normalizedText) {
@@ -1143,6 +1235,25 @@ export default function ViewPhotoChallengeScreen() {
                     contentFit="cover"
                     cachePolicy="memory-disk"
                   />
+                  {selectedPhotoCanDelete ? (
+                    <Pressable
+                      onPress={confirmDeleteSelectedPhoto}
+                      disabled={selectedPhotoDeletePending}
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete your photo"
+                      hitSlop={10}
+                      style={[
+                        styles.detailDeleteButton,
+                        selectedPhotoDeletePending && styles.detailDeleteButtonDisabled,
+                      ]}
+                    >
+                      {selectedPhotoDeletePending ? (
+                        <ActivityIndicator size="small" color={colors.textMuted} />
+                      ) : (
+                        <MaterialIcons name="delete-outline" size={18} color={colors.textMuted} />
+                      )}
+                    </Pressable>
+                  ) : null}
                 </View>
                 {/*  THIS INFORMATION IS REDUNDANT, RE-ADD WHEN IT WILL BE USEFUL
                 <View style={styles.detailMetricRow}>
@@ -1425,6 +1536,23 @@ function createStyles(colors) {
       color: colors.text,
       fontSize: 12,
       fontWeight: '900',
+    },
+    detailDeleteButton: {
+      position: 'absolute',
+      top: spacing.sm,
+      right: spacing.sm,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.chip,
+    },
+    detailDeleteButtonDisabled: {
+      opacity: 0.55,
     },
     detailList: {
       flex: 1,

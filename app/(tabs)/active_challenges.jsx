@@ -14,14 +14,12 @@ import {
 import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   addPhoto,
-  fetchAllLocationPins,
-  fetchFriendPrivateLocationPins,
+  fetchRankedQuests,
   fetchSavedQuests,
   saveQuest,
   unsaveQuest
@@ -50,6 +48,10 @@ const STACK_DEPTH = 3;
 const LONG_PRESS_DELAY_MS = 380;
 const LONG_PRESS_CANCEL_DISTANCE = 8;
 const TAP_OPEN_MAX_DISTANCE = 8;
+const SESSION_CHALLENGE_CACHE = {
+  all: null,
+  saved: null,
+};
 
 function normalizeTeaserComment(comment) {
   const text = typeof comment?.text === 'string' ? comment.text.trim() : '';
@@ -148,6 +150,9 @@ function normalizeChallengePin(pin, index) {
   const teaserTopComment = teaserPhotoId
     ? normalizeTeaserComment(pin?.top_global_photo?.top_comment)
     : null;
+  const rankingScore = Number.isFinite(pin?.ranking_debug?.final_score)
+    ? pin.ranking_debug.final_score
+    : null;
 
   return {
     pinId,
@@ -160,6 +165,8 @@ function normalizeChallengePin(pin, index) {
     teaserPhotoId,
     teaserTopComment,
     friendParticipantCount,
+    rankingScore,
+    rankingScoreLabel: Number.isFinite(rankingScore) ? rankingScore.toFixed(3) : null,
   };
 }
 
@@ -188,7 +195,6 @@ export default function ActiveChallengesScreen() {
   const longPressTriggeredRef = useRef(false);
   const challengeOptionLayoutsRef = useRef({});
   const lastMenuTouchPointRef = useRef(null);
-  const hasCompletedInitialFocusLoadRef = useRef(false);
 
   const stageWidth = stageSize.width || Math.max(windowWidth - spacing.sm * 2, 0);
   const stageHeight = stageSize.height || Math.max(windowHeight - 200, 0);
@@ -379,40 +385,33 @@ export default function ActiveChallengesScreen() {
     };
   }, [clearLongPressTimer]);
 
-  const loadChallenges = useCallback(async ({ showSpinner = true, mode = 'all' } = {}) => {
+  const loadChallenges = useCallback(async ({ showSpinner = true, mode = 'all', force = false } = {}) => {
+    const cachedRows = force ? null : SESSION_CHALLENGE_CACHE[mode];
+    if (Array.isArray(cachedRows)) {
+      setChallenges(cachedRows);
+      setLoading(false);
+      return true;
+    }
     if (showSpinner) {
       setLoading(true);
     }
     try {
       const rows = mode === 'saved'
         ? await fetchSavedQuests()
-        : await Promise.all([
-            fetchAllLocationPins({ isGeoLocked: false }),
-            fetchFriendPrivateLocationPins({ isGeoLocked: false }),
-          ]).then(([publicRows, privateRows]) => {
-            const merged = [
-              ...(Array.isArray(publicRows) ? publicRows : []),
-              ...(Array.isArray(privateRows) ? privateRows : []),
-            ];
-            return Array.from(
-              new Map(
-                merged
-                  .filter((pin) => pin?._id)
-                  .map((pin) => [String(pin._id), pin])
-              ).values()
-            );
-          });
-      const sorted = Array.isArray(rows) && mode !== 'saved'
-        ? [...rows].sort((a, b) => {
-            const left = Date.parse(a?.updatedAt || 0);
-            const right = Date.parse(b?.updatedAt || 0);
-            return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
-          })
-        : Array.isArray(rows)
-          ? rows
-          : [];
+        : await fetchRankedQuests({ includeRankingDebug: true });
+      const sorted = Array.isArray(rows) ? rows : [];
       const normalizedChallenges = sorted.map((pin, index) => normalizeChallengePin(pin, index));
       const hydratedChallenges = await overlayCachedTeaserComments(normalizedChallenges);
+      if (
+        mode === 'all' &&
+        hydratedChallenges.length === 0 &&
+        Array.isArray(SESSION_CHALLENGE_CACHE.all) &&
+        SESSION_CHALLENGE_CACHE.all.length > 0
+      ) {
+        setChallenges(SESSION_CHALLENGE_CACHE.all);
+        return false;
+      }
+      SESSION_CHALLENGE_CACHE[mode] = hydratedChallenges;
       setChallenges(hydratedChallenges);
       return true;
     } catch (error) {
@@ -429,16 +428,6 @@ export default function ActiveChallengesScreen() {
     loadChallenges({ showSpinner: true, mode: queueMode });
   }, [loadChallenges, queueMode]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!hasCompletedInitialFocusLoadRef.current) {
-        hasCompletedInitialFocusLoadRef.current = true;
-        return undefined;
-      }
-      loadChallenges({ showSpinner: false, mode: queueMode });
-    }, [loadChallenges, queueMode])
-  );
-
   useEffect(() => {
     closeChallengeOptions();
   }, [closeChallengeOptions, queueMode]);
@@ -446,12 +435,17 @@ export default function ActiveChallengesScreen() {
   const advanceChallengeQueue = useCallback((direction) => {
     setChallenges((prev) => {
       if (!Array.isArray(prev) || prev.length === 0) return prev;
+      let next = prev;
       if (direction === 'save' && queueMode === 'saved') {
-        return prev.slice(1);
+        next = prev.slice(1);
+        SESSION_CHALLENGE_CACHE[queueMode] = next;
+        return next;
       }
       if (prev.length < 2) return prev;
       const [first, ...rest] = prev;
-      return [...rest, first];
+      next = [...rest, first];
+      SESSION_CHALLENGE_CACHE[queueMode] = next;
+      return next;
     });
   }, [queueMode]);
 
@@ -858,6 +852,11 @@ export default function ActiveChallengesScreen() {
             <View style={styles.handleChip}>
               <Text style={styles.handleChipText}>{challenge.creatorHandle}</Text>
             </View>
+            {challenge.rankingScoreLabel ? (
+              <View style={styles.scoreChip}>
+                <Text style={styles.scoreChipText}>{challenge.rankingScoreLabel}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.promptBlock}>
@@ -930,7 +929,7 @@ export default function ActiveChallengesScreen() {
           </View>
           <Pressable
             style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.55 : 1 }]}
-            onPress={() => loadChallenges({ showSpinner: true, mode: queueMode })}
+            onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
             disabled={loading}
           >
             <MaterialIcons name="refresh" size={22} color={colors.text} />
@@ -1163,6 +1162,22 @@ function createStyles(colors) {
       fontSize: 10,
       textTransform: 'uppercase',
       letterSpacing: 1.1,
+      fontWeight: '900',
+    },
+    scoreChip: {
+      borderRadius: radii.pill,
+      backgroundColor: 'rgba(0,0,0,0.36)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.2)',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      minWidth: 64,
+      alignItems: 'center',
+    },
+    scoreChipText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      letterSpacing: 0.3,
       fontWeight: '900',
     },
     photoCountChip: {
