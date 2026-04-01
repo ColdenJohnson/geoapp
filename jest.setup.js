@@ -92,6 +92,27 @@ jest.mock('react-native-vision-camera', () => {
     orientation: 'portrait',
     isMirrored: false,
   }));
+  const useCameraFormatMock = jest.fn((device) => device?.formats?.[0]);
+  let lastCameraProps = null;
+  const mockFormat = {
+    photoWidth: 1200,
+    photoHeight: 1600,
+    videoWidth: 1200,
+    videoHeight: 1600,
+    minFps: 30,
+    maxFps: 30,
+    minISO: 25,
+    maxISO: 800,
+    fieldOfView: 60,
+    maxZoom: 8,
+    autoFocusSystem: 'contrast-detection',
+    videoStabilizationModes: [],
+    supportsPhotoHdr: false,
+    supportsVideoHdr: false,
+    supportsDepthCapture: false,
+    supportsVideoSnapshot: true,
+    pixelFormats: ['yuv'],
+  };
 
   const devices = {
     back: {
@@ -108,7 +129,7 @@ jest.mock('react-native-vision-camera', () => {
       neutralZoom: 1,
       minExposure: 0,
       maxExposure: 0,
-      formats: [],
+      formats: [mockFormat],
       supportsLowLightBoost: false,
     },
     front: {
@@ -125,12 +146,13 @@ jest.mock('react-native-vision-camera', () => {
       neutralZoom: 1,
       minExposure: 0,
       maxExposure: 0,
-      formats: [],
+      formats: [mockFormat],
       supportsLowLightBoost: false,
     },
   };
 
   const Camera = React.forwardRef((props, ref) => {
+    lastCameraProps = props;
     React.useEffect(() => {
       props.onInitialized?.();
     }, [props]);
@@ -148,7 +170,14 @@ jest.mock('react-native-vision-camera', () => {
     Camera,
     useCameraPermission: jest.fn(() => ({ hasPermission: true, requestPermission: jest.fn(async () => true) })),
     useCameraDevice: jest.fn((position) => (position === 'front' ? devices.front : devices.back)),
-    __mocks__: { takePhotoMock, devices },
+    useCameraFormat: useCameraFormatMock,
+    __mocks__: {
+      takePhotoMock,
+      devices,
+      mockFormat,
+      useCameraFormatMock,
+      getLastCameraProps: () => lastCameraProps,
+    },
   };
 });
 

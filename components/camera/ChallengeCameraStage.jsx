@@ -1,15 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import { Camera, useCameraDevice, useCameraFormat } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
 
 import { usePalette } from '@/hooks/usePalette';
 import { fontSizes, radii, spacing } from '@/theme/tokens';
 
 const PHOTO_ASPECT_RATIO = 3 / 4;
+const NATIVE_PHOTO_ASPECT_RATIO = 1 / PHOTO_ASPECT_RATIO;
 const DEFAULT_LENS = '1x';
 const HALF_LENS = '0.5x';
 const TIMER_OPTIONS = [0, 3, 10];
+const PHOTO_FORMAT_FILTERS = [
+  { photoAspectRatio: NATIVE_PHOTO_ASPECT_RATIO },
+  { photoResolution: 'max' },
+  { videoResolution: 'max' },
+];
 
 function clamp(value, min, max) {
   if (!Number.isFinite(value)) {
@@ -54,6 +60,7 @@ export default function ChallengeCameraStage({
 
   const backDevice = preferredBackDevice || fallbackBackDevice;
   const activeDevice = cameraPosition === 'back' ? backDevice : frontDevice;
+  const cameraFormat = useCameraFormat(activeDevice, PHOTO_FORMAT_FILTERS);
 
   const supportsHalfZoom = useMemo(() => (
     cameraPosition === 'back' &&
@@ -190,6 +197,7 @@ export default function ChallengeCameraStage({
             ref={cameraRef}
             style={styles.camera}
             device={activeDevice}
+            format={cameraFormat}
             isActive
             photo
             zoom={selectedZoom}
