@@ -583,8 +583,8 @@ export default function ActiveChallengesScreen() {
     const topChallenge = challenges[0];
     swipeAnimatingPinId.current = topChallenge.pinId;
     const isSave = direction === 'save';
-    const isUpload = direction === 'upload';
-    const exitX = isUpload ? cardWidth + 180 : -cardWidth - 180;
+    const isAccept = direction === 'accept';
+    const exitX = isAccept ? cardWidth + 180 : -cardWidth - 180;
     const exitY = -Math.max(cardHeight, 240) - 180;
     const toValue = isSave
       ? { x: 0, y: exitY }
@@ -595,15 +595,15 @@ export default function ActiveChallengesScreen() {
       duration: 200,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (direction !== 'upload') {
+      if (direction !== 'accept') {
         advanceChallengeQueue(direction);
       }
       requestAnimationFrame(() => {
         cardPan.setValue({ x: 0, y: 0 });
         swipeAnimatingPinId.current = null;
         setIsAnimating(false);
-        if (finished && direction === 'upload') {
-          beginUploadForChallenge(topChallenge);
+        if (finished && direction === 'accept') {
+          handleViewPhotos(topChallenge);
         }
         if (finished && direction === 'save') {
           handleUpSwipeAction(topChallenge);
@@ -612,12 +612,12 @@ export default function ActiveChallengesScreen() {
     });
   }, [
     advanceChallengeQueue,
-    beginUploadForChallenge,
     cardHeight,
     cardPan,
     cardWidth,
     challenges,
     closeChallengeOptions,
+    handleViewPhotos,
     handleUpSwipeAction,
     swipeLocked,
   ]);
@@ -681,7 +681,7 @@ export default function ActiveChallengesScreen() {
         return;
       }
       if (gestureState.dx > SWIPE_THRESHOLD) {
-        commitSwipe('upload');
+        commitSwipe('accept');
         return;
       }
       if (gestureState.dx < -SWIPE_THRESHOLD) {
@@ -791,7 +791,7 @@ export default function ActiveChallengesScreen() {
         {isTop && tracksPan ? (
           <>
             <Animated.View style={[styles.selectBadge, { opacity: selectOpacity }]}>
-              <Text style={styles.selectBadgeText}>UPLOAD</Text>
+              <Text style={styles.selectBadgeText}>SELECT</Text>
             </Animated.View>
             <Animated.View style={[styles.skipBadge, { opacity: skipOpacity }]}>
               <Text style={styles.skipBadgeText}>SKIP</Text>
@@ -885,7 +885,11 @@ export default function ActiveChallengesScreen() {
         <View style={styles.headerRow}>
           <View style={styles.headerTextBlock}>
             <Text style={styles.headerTitle}>Quests</Text>
-            <Text style={styles.headerSubtitle}>Swipe right to upload, left to send back, tap for more.</Text>
+            <Text style={styles.headerSubtitle}>
+              {queueMode === 'saved'
+                ? 'Swipe up to remove from saved. Tap or hold for more.'
+                : 'Swipe right to select, left to send back, up to save. Tap or hold for more.'}
+            </Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -967,11 +971,11 @@ export default function ActiveChallengesScreen() {
               styles.cameraFooterButton,
               { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
             ]}
-            onPress={() => beginUploadForChallenge(activeChallenge)}
-            accessibilityLabel="Upload directly to this quest"
+            onPress={() => commitSwipe('accept')}
+            accessibilityLabel="Select quest"
             disabled={interactionLocked || !activeChallenge}
           >
-            <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
+            <MaterialIcons name="photo-library" size={28} color={colors.primaryTextOn} />
           </Pressable>
         </View>
 
