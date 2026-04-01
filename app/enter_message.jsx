@@ -17,7 +17,7 @@ import { useCameraPermission } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CTAButton } from '@/components/ui/Buttons';
 import ChallengeCameraStage from '@/components/camera/ChallengeCameraStage';
@@ -32,6 +32,7 @@ import { enqueueNewChallengeUpload } from '@/lib/uploadQueue';
 const MAX_LEN = 50;
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
+const BACK_BUTTON_HEIGHT = 20 + spacing.xs * 2;
 
 export default function EnterMessageScreen({ initialUri = null }) {
   const [message, setMessage] = useState('');
@@ -54,6 +55,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const keyboardOffset = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
   const contentBottomPadding = (keyboardVisible ? spacing.lg : spacing.sm) + insets.bottom + EXTRA_BOTTOM_BUFFER;
+  const backButtonClearance = insets.top + spacing.sm + BACK_BUTTON_HEIGHT + spacing.sm;
   const challengeLocation = useMemo(() => {
     const latitude = Number(
       typeof latitudeParam === 'string'
@@ -239,12 +241,13 @@ export default function EnterMessageScreen({ initialUri = null }) {
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {renderBackButton()}
         {uri ? (
           <Animated.ScrollView
             style={[
               styles.scrollFrame,
+              { paddingTop: backButtonClearance },
               { transform: [{ translateY: keyboardOffset }] },
             ]}
             contentContainerStyle={[
@@ -294,6 +297,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
             style={[
               styles.content,
               keyboardVisible && styles.contentKeyboard,
+              { paddingTop: backButtonClearance + (keyboardVisible ? spacing.lg : spacing.sm) },
               { paddingBottom: contentBottomPadding },
               { transform: [{ translateY: keyboardOffset }] },
             ]}
@@ -301,7 +305,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
             {renderCamera()}
           </Animated.View>
         )}
-      </View>
+      </SafeAreaView>
     </TouchableWithoutFeedback>
   );
 }

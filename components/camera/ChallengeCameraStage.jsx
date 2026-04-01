@@ -273,6 +273,8 @@ export default function ChallengeCameraStage({
           </View>
 
           <View style={styles.bottomControls}>
+            <View style={styles.bottomControlsSpacer} />
+
             <View style={styles.lensGroup}>
               {supportsHalfZoom ? (
                 <Pressable
@@ -318,23 +320,6 @@ export default function ChallengeCameraStage({
             </View>
 
             <Pressable
-              testID="camera-shutter"
-              onPress={handleShutterPress}
-              disabled={shutterDisabled}
-            >
-              {({ pressed }) => (
-                <View
-                  style={[
-                    styles.shutterBtn,
-                    (pressed || shutterDisabled) && { opacity: shutterDisabled ? 0.45 : 0.6 },
-                  ]}
-                >
-                  <View style={styles.shutterBtnInner} />
-                </View>
-              )}
-            </Pressable>
-
-            <Pressable
               testID="camera-flip"
               onPress={handleFlipPress}
               disabled={secondaryControlsDisabled}
@@ -349,6 +334,24 @@ export default function ChallengeCameraStage({
           </View>
         </View>
       </View>
+
+      <Pressable
+        testID="camera-shutter"
+        onPress={handleShutterPress}
+        disabled={shutterDisabled}
+        style={styles.shutterWrap}
+      >
+        {({ pressed }) => (
+          <View
+            style={[
+              styles.shutterBtn,
+              (pressed || shutterDisabled) && { opacity: shutterDisabled ? 0.45 : 0.6 },
+            ]}
+          >
+            <View style={styles.shutterBtnInner} />
+          </View>
+        )}
+      </Pressable>
 
       <Text style={styles.helper}>{helperText}</Text>
     </View>
@@ -503,6 +506,10 @@ function createStyles(colors) {
       justifyContent: 'space-between',
       width: '100%',
     },
+    bottomControlsSpacer: {
+      width: 44,
+      height: 44,
+    },
     lensGroup: {
       minWidth: 104,
       height: 44,
@@ -553,6 +560,9 @@ function createStyles(colors) {
       shadowRadius: 18,
       shadowOpacity: 0.14,
       elevation: 8,
+    },
+    shutterWrap: {
+      marginTop: spacing.md,
     },
     shutterBtnInner: {
       width: 56,
