@@ -71,7 +71,6 @@ const SORT_MODE_DATE = 'date';
 const COMMENT_MAX_LENGTH = 200;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DETAIL_IMAGE_MAX_SCALE = 4;
-const DETAIL_IMAGE_ZOOM_THRESHOLD = 1.01;
 const DETAIL_IMAGE_RESET_SPRING = {
   damping: 26,
   stiffness: 210,
@@ -343,7 +342,6 @@ function ZoomableDetailImage({ uri, styles, onInteractionChange }) {
   const composedGesture = pinchGesture;
 
   const animatedZoomStyle = useAnimatedStyle(() => {
-    const raised = activeTouchCount.value > 1 || scale.value > DETAIL_IMAGE_ZOOM_THRESHOLD;
     return {
       transformOrigin: [originX.value, originY.value, 0],
       transform: [
@@ -351,27 +349,27 @@ function ZoomableDetailImage({ uri, styles, onInteractionChange }) {
         { translateY: translateY.value },
         { scale: scale.value },
       ],
-      zIndex: raised ? 40 : 1,
-      elevation: raised ? 10 : 0,
     };
   });
 
   return (
     <View style={styles.detailImageStage}>
-      <GestureDetector gesture={composedGesture}>
-        <Animated.View
-          collapsable={false}
-          onLayout={handleLayout}
-          style={[styles.detailImageZoomSurface, animatedZoomStyle]}
-        >
-          <Image
-            source={uri ? { uri } : undefined}
-            style={styles.detailImage}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        </Animated.View>
-      </GestureDetector>
+      <View style={styles.detailImageViewport}>
+        <GestureDetector gesture={composedGesture}>
+          <Animated.View
+            collapsable={false}
+            onLayout={handleLayout}
+            style={[styles.detailImageZoomSurface, animatedZoomStyle]}
+          >
+            <Image
+              source={uri ? { uri } : undefined}
+              style={styles.detailImage}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+          </Animated.View>
+        </GestureDetector>
+      </View>
     </View>
   );
 }
@@ -1880,7 +1878,6 @@ function createStyles(colors) {
     detailSafe: {
       flex: 1,
       backgroundColor: colors.bg,
-      overflow: 'visible',
     },
     detailHeader: {
       flexDirection: 'row',
@@ -1956,48 +1953,42 @@ function createStyles(colors) {
       flex: 1,
       position: 'relative',
       backgroundColor: colors.surface,
-      overflow: 'visible',
-      zIndex: 40,
-      elevation: 40,
+      overflow: 'hidden',
     },
     detailListContent: {
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
       paddingBottom: spacing.xl,
       gap: 0,
-      overflow: 'visible',
     },
     detailHeroSection: {
       position: 'relative',
       gap: spacing.lg,
       marginBottom: spacing.md,
-      overflow: 'visible',
-      zIndex: 50,
-      elevation: 50,
     },
     detailImageFrame: {
       position: 'relative',
       borderRadius: 32,
-      overflow: 'visible',
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.bg,
       ...shadows.chip,
-      zIndex: 60,
-      elevation: 60,
     },
     detailImageStage: {
       position: 'relative',
       width: '100%',
       aspectRatio: 4 / 5,
       borderRadius: 32,
-      overflow: 'visible',
+    },
+    detailImageViewport: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 32,
+      overflow: 'hidden',
     },
     detailImageZoomSurface: {
       width: '100%',
       height: '100%',
-      borderRadius: 32,
-      overflow: 'visible',
     },
     detailImage: {
       width: '100%',

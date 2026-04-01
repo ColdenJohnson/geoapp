@@ -246,6 +246,7 @@ export default function PublicUserProfileScreen() {
       <AppHeader
         onBack={() => goBackOrHome(router)}
         backText={router.canGoBack?.() ? 'Back' : 'Home'}
+        transparent={true}
       />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
