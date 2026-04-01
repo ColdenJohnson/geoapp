@@ -17,6 +17,7 @@ import { enqueueAddPhotoUpload } from '@/lib/uploadQueue';
 
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
+const BACK_BUTTON_HEIGHT = 20 + spacing.xs * 2;
 
 function normalizeCoordinate(value) {
   const latitude = Number(value?.coords?.latitude ?? value?.latitude);
@@ -89,6 +90,7 @@ export default function Upload({ initialUri = null }) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isMounted = useRef(true);
   const didSubmitUpload = useRef(false);
+  const backButtonClearance = insets.top + spacing.sm + BACK_BUTTON_HEIGHT;
   const { profile } = useContext(AuthContext);
 
   useEffect(() => () => {
@@ -245,7 +247,15 @@ export default function Upload({ initialUri = null }) {
 return (
   <View style={styles.container}>
     {renderBackButton()}
-    <View style={[styles.content, { paddingBottom: spacing.sm + insets.bottom + EXTRA_BOTTOM_BUFFER }]}>
+    <View
+      style={[
+        styles.content,
+        {
+          paddingTop: backButtonClearance,
+          paddingBottom: spacing.sm + insets.bottom + EXTRA_BOTTOM_BUFFER,
+        },
+      ]}
+    >
       {uri ? renderPreview() : renderCamera()}
     </View>
   </View>
