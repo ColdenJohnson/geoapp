@@ -29,6 +29,7 @@ const ROUTABLE_PATHS = new Set([
   '/(tabs)/vote',
   '/(tabs)/profile',
   '/view_photochallenge',
+  '/view_photochallenge/[pinId]/view_photo/[photoId]',
   '/user_profile/[uid]',
   '/friends',
   '/edit_profile',
@@ -48,9 +49,18 @@ function buildNavigationTarget(data) {
     return null;
   }
 
+  const pinId = data?.pinId != null ? `${data.pinId}` : null;
+  const photoId = data?.photoId != null ? `${data.photoId}` : null;
+  if (normalizedRoute === '/view_photochallenge' && pinId && photoId) {
+    return {
+      pathname: '/view_photochallenge/[pinId]/view_photo/[photoId]',
+      params: { pinId, photoId },
+    };
+  }
+
   const params = {};
-  if (data?.pinId != null) {
-    params.pinId = `${data.pinId}`;
+  if (pinId != null) {
+    params.pinId = pinId;
   }
   if (data?.uid != null) {
     params.uid = `${data.uid}`;

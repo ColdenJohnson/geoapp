@@ -92,6 +92,40 @@ describe('usePushNotifications', () => {
     }));
   });
 
+  it('routes directly to challenge photo detail when pinId and photoId are provided', async () => {
+    const response = {
+      notification: {
+        request: {
+          content: {
+            data: {
+              route: '/view_photochallenge',
+              pinId: 'pin-abc',
+              photoId: 'photo-xyz',
+            },
+          },
+        },
+      },
+    };
+
+    const { __mocks__: { responseListeners } } = Notifications;
+
+    render(<TestHarness user={{ uid: 'user-3' }} />);
+
+    await waitFor(() => {
+      expect(responseListeners.length).toBeGreaterThan(0);
+    });
+
+    responseListeners.forEach((cb) => cb(response));
+
+    await waitFor(() =>
+      expect(testingRouter.push).toHaveBeenCalledWith({
+        pathname: '/view_photochallenge/[pinId]/view_photo/[photoId]',
+        params: { pinId: 'pin-abc', photoId: 'photo-xyz' },
+      })
+    );
+  });
+
+
   it('routes to a public user profile when a uid is provided', async () => {
     const response = {
       notification: {
@@ -146,6 +180,33 @@ describe('usePushNotifications', () => {
       route: '/(tabs)/vote',
       uid: 'user-4',
     }));
+  });
+
+  it('handles cold-start challenge photo notification by routing directly to photo detail', async () => {
+    const response = {
+      notification: {
+        request: {
+          content: {
+            data: {
+              route: '/view_photochallenge',
+              pinId: 'pin-cold',
+              photoId: 'photo-cold',
+            },
+          },
+        },
+      },
+    };
+
+    Notifications.getLastNotificationResponseAsync.mockResolvedValueOnce(response);
+
+    render(<TestHarness user={{ uid: 'user-4' }} />);
+
+    await waitFor(() =>
+      expect(testingRouter.push).toHaveBeenCalledWith({
+        pathname: '/view_photochallenge/[pinId]/view_photo/[photoId]',
+        params: { pinId: 'pin-cold', photoId: 'photo-cold' },
+      })
+    );
   });
 
   it('logs a received event when a foreground notification arrives', async () => {
