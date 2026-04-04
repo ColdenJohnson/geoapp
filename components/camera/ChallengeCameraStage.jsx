@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, useCameraDevice, useCameraFormat } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
+import { VolumeManager } from 'react-native-volume-manager';
 
 import { usePalette } from '@/hooks/usePalette';
 import { fontSizes, radii, spacing } from '@/theme/tokens';
@@ -44,6 +45,7 @@ export default function ChallengeCameraStage({
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const cameraRef = useRef(null);
+  const lastVolumeTriggerAtRef = useRef(0);
   const preferredBackDevice = useCameraDevice('back', {
     physicalDevices: ['ultra-wide-angle-camera', 'wide-angle-camera'],
   });
@@ -53,6 +55,7 @@ export default function ChallengeCameraStage({
   const [lensPreset, setLensPreset] = useState(DEFAULT_LENS);
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isTimerExpanded, setIsTimerExpanded] = useState(false);
   const [countdownValue, setCountdownValue] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -93,6 +96,7 @@ export default function ChallengeCameraStage({
     ? zoomValues.half
     : zoomValues.normal;
   const currentLensLabel = lensPreset === HALF_LENS && supportsHalfZoom ? HALF_LENS : DEFAULT_LENS;
+  const timerIconName = timerSeconds === 0 ? 'timer-off' : 'timer';
 
   const shutterDisabled = disabled || isCapturing || countdownValue !== null || !activeDevice || !isCameraReady;
   const secondaryControlsDisabled = disabled || isCapturing || countdownValue !== null || !activeDevice;
@@ -192,6 +196,25 @@ export default function ChallengeCameraStage({
 
   const cameraStatusText = cameraError || (!activeDevice ? 'Preparing camera...' : null);
 
+  useEffect(() => {
+    const subscription = VolumeManager.addVolumeListener(() => {
+      const now = Date.now();
+      if (now - lastVolumeTriggerAtRef.current < 450) {
+        return;
+      }
+
+      lastVolumeTriggerAtRef.current = now;
+      handleShutterPress();
+    });
+
+    void VolumeManager.showNativeVolumeUI({ enabled: false });
+
+    return () => {
+      subscription?.remove?.();
+      void VolumeManager.showNativeVolumeUI({ enabled: true });
+    };
+  }, [handleShutterPress]);
+
   return (
     <View style={styles.stage}>
       {promptText ? (
@@ -253,32 +276,57 @@ export default function ChallengeCameraStage({
               />
             </Pressable>
 
-            <View style={styles.timerGroup}>
-              {TIMER_OPTIONS.map((option) => {
-                const selected = timerSeconds === option;
-                return (
-                  <Pressable
-                    key={option}
-                    testID={`camera-timer-${option}`}
-                    onPress={() => setTimerSeconds(option)}
-                    disabled={secondaryControlsDisabled}
-                    style={({ pressed }) => [
-                      styles.timerOption,
-                      selected && styles.timerOptionActive,
-                      secondaryControlsDisabled && styles.timerOptionDisabled,
-                      pressed && !secondaryControlsDisabled ? styles.controlPressed : null,
-                    ]}
-                  >
-                    <Text style={[
-                      styles.timerOptionText,
-                      selected && styles.timerOptionTextActive,
-                    ]}
-                    >
-                      {formatTimerLabel(option)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.timerControls}>
+              <Pressable
+                testID="camera-timer-toggle"
+                onPress={() => setIsTimerExpanded((current) => !current)}
+                disabled={secondaryControlsDisabled}
+                style={({ pressed }) => [
+                  styles.topControlButton,
+                  (isTimerExpanded || timerSeconds > 0) && styles.topControlButtonActive,
+                  secondaryControlsDisabled && styles.topControlButtonDisabled,
+                  pressed && !secondaryControlsDisabled ? styles.controlPressed : null,
+                ]}
+              >
+                <MaterialIcons
+                  name={timerIconName}
+                  size={18}
+                  color={(isTimerExpanded || timerSeconds > 0) ? colors.primary : '#F6EFE8'}
+                />
+              </Pressable>
+
+              {isTimerExpanded ? (
+                <View style={styles.timerGroup}>
+                  {TIMER_OPTIONS.map((option) => {
+                    const selected = timerSeconds === option;
+                    return (
+                      <Pressable
+                        key={option}
+                        testID={`camera-timer-${option}`}
+                        onPress={() => {
+                          setTimerSeconds(option);
+                          setIsTimerExpanded(false);
+                        }}
+                        disabled={secondaryControlsDisabled}
+                        style={({ pressed }) => [
+                          styles.timerOption,
+                          selected && styles.timerOptionActive,
+                          secondaryControlsDisabled && styles.timerOptionDisabled,
+                          pressed && !secondaryControlsDisabled ? styles.controlPressed : null,
+                        ]}
+                      >
+                        <Text style={[
+                          styles.timerOptionText,
+                          selected && styles.timerOptionTextActive,
+                        ]}
+                        >
+                          {formatTimerLabel(option)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -453,6 +501,11 @@ function createStyles(colors) {
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.2)',
       overflow: 'hidden',
+    },
+    timerControls: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
     },
     timerOption: {
       minWidth: 50,
