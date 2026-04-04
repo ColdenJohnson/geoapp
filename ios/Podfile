@@ -68,11 +68,9 @@ target 'SideQuest' do
       next unless target.name == 'fmt'
 
       target.build_configurations.each do |config|
-        definitions = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
-        definitions = [definitions] unless definitions.is_a?(Array)
-        definitions << 'FMT_USE_CONSTEVAL=0' unless definitions.include?('FMT_USE_CONSTEVAL=0')
-        definitions << 'MT_USE_CONSTEVAL=0' unless definitions.include?('MT_USE_CONSTEVAL=0')
-        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = definitions
+        # fmt 11.0.2 has consteval issues with newer Apple clang in C++20 mode.
+        # Keep this override scoped to fmt only.
+        config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
       end
     end
   end
