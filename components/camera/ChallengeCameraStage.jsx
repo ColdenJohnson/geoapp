@@ -92,6 +92,7 @@ export default function ChallengeCameraStage({
   const selectedZoom = lensPreset === HALF_LENS && supportsHalfZoom
     ? zoomValues.half
     : zoomValues.normal;
+  const currentLensLabel = lensPreset === HALF_LENS && supportsHalfZoom ? HALF_LENS : DEFAULT_LENS;
 
   const shutterDisabled = disabled || isCapturing || countdownValue !== null || !activeDevice || !isCameraReady;
   const secondaryControlsDisabled = disabled || isCapturing || countdownValue !== null || !activeDevice;
@@ -181,6 +182,14 @@ export default function ChallengeCameraStage({
     setCameraPosition((current) => (current === 'back' ? 'front' : 'back'));
   }, [secondaryControlsDisabled]);
 
+  const handleLensToggle = useCallback(() => {
+    if (secondaryControlsDisabled || !supportsHalfZoom) {
+      return;
+    }
+
+    setLensPreset((current) => (current === HALF_LENS ? DEFAULT_LENS : HALF_LENS));
+  }, [secondaryControlsDisabled, supportsHalfZoom]);
+
   const cameraStatusText = cameraError || (!activeDevice ? 'Preparing camera...' : null);
 
   return (
@@ -242,13 +251,6 @@ export default function ChallengeCameraStage({
                 size={18}
                 color={flashEnabled ? colors.primary : '#F6EFE8'}
               />
-              <Text style={[
-                styles.topControlText,
-                flashEnabled && styles.topControlTextActive,
-              ]}
-              >
-                Flash
-              </Text>
             </Pressable>
 
             <View style={styles.timerGroup}>
@@ -283,49 +285,18 @@ export default function ChallengeCameraStage({
           <View style={styles.bottomControls}>
             <View style={styles.bottomControlsSpacer} />
 
-            <View style={styles.lensGroup}>
-              {supportsHalfZoom ? (
-                <Pressable
-                  testID="camera-lens-0.5x"
-                  onPress={() => setLensPreset(HALF_LENS)}
-                  disabled={secondaryControlsDisabled}
-                  style={({ pressed }) => [
-                    styles.lensButton,
-                    lensPreset === HALF_LENS && styles.lensButtonActive,
-                    secondaryControlsDisabled && styles.lensButtonDisabled,
-                    pressed && !secondaryControlsDisabled ? styles.controlPressed : null,
-                  ]}
-                >
-                  <Text style={[
-                    styles.lensText,
-                    lensPreset === HALF_LENS && styles.lensTextActive,
-                  ]}
-                  >
-                    {HALF_LENS}
-                  </Text>
-                </Pressable>
-              ) : null}
-
-              <Pressable
-                testID="camera-lens-1x"
-                onPress={() => setLensPreset(DEFAULT_LENS)}
-                disabled={secondaryControlsDisabled}
-                style={({ pressed }) => [
-                  styles.lensButton,
-                  lensPreset === DEFAULT_LENS && styles.lensButtonActive,
-                  secondaryControlsDisabled && styles.lensButtonDisabled,
-                  pressed && !secondaryControlsDisabled ? styles.controlPressed : null,
-                ]}
-              >
-                <Text style={[
-                  styles.lensText,
-                  lensPreset === DEFAULT_LENS && styles.lensTextActive,
-                ]}
-                >
-                  {DEFAULT_LENS}
-                </Text>
-              </Pressable>
-            </View>
+            <Pressable
+              testID="camera-lens-toggle"
+              onPress={handleLensToggle}
+              disabled={secondaryControlsDisabled || !supportsHalfZoom}
+              style={({ pressed }) => [
+                styles.lensToggleButton,
+                (secondaryControlsDisabled || !supportsHalfZoom) && styles.lensToggleButtonDisabled,
+                pressed && !secondaryControlsDisabled && supportsHalfZoom ? styles.controlPressed : null,
+              ]}
+            >
+              <Text style={styles.lensToggleText}>{currentLensLabel}</Text>
+            </Pressable>
 
             <Pressable
               testID="camera-flip"
@@ -447,14 +418,12 @@ function createStyles(colors) {
       gap: spacing.sm,
     },
     topControlButton: {
-      minWidth: 96,
+      width: 40,
       height: 40,
-      paddingHorizontal: spacing.sm + 2,
       borderRadius: 14,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: spacing.xs,
       backgroundColor: 'rgba(12,7,3,0.48)',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.2)',
@@ -518,41 +487,24 @@ function createStyles(colors) {
       width: 44,
       height: 44,
     },
-    lensGroup: {
-      minWidth: 104,
-      height: 44,
-      paddingHorizontal: 4,
-      borderRadius: 16,
-      flexDirection: 'row',
+    lensToggleButton: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 4,
       backgroundColor: 'rgba(12,7,3,0.48)',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.2)',
     },
-    lensButton: {
-      minWidth: 42,
-      height: 34,
-      borderRadius: 12,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: spacing.xs,
-    },
-    lensButtonActive: {
-      backgroundColor: colors.bg,
-    },
-    lensButtonDisabled: {
+    lensToggleButtonDisabled: {
       opacity: 0.45,
     },
-    lensText: {
+    lensToggleText: {
       color: '#F6EFE8',
       fontSize: fontSizes.sm,
       fontWeight: '800',
       letterSpacing: 0.2,
-    },
-    lensTextActive: {
-      color: colors.primary,
     },
     shutterBtn: {
       borderWidth: 3,
