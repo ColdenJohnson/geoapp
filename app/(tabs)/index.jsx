@@ -55,6 +55,19 @@ export default function HomeScreen() {
   const { user, friends, invalidateStats } = useContext(AuthContext);
   const colors = usePalette();
 
+  function getPinDisplayHandle(pin) {
+    const topPhotoHandle = typeof pin?.top_global_photo?.created_by_handle === 'string'
+      ? pin.top_global_photo.created_by_handle.trim()
+      : '';
+    if (topPhotoHandle) {
+      return topPhotoHandle;
+    }
+    const creatorHandle = typeof pin?.created_by_handle === 'string'
+      ? pin.created_by_handle.trim()
+      : '';
+    return creatorHandle;
+  }
+
   function uploadPhotoToChallenge(pin) {
     if (!pin?._id) {
       showToast('No valid challenge selected.');
@@ -76,7 +89,7 @@ export default function HomeScreen() {
         next: '/view_photochallenge',
         pinId,
         prompt: pin?.message || '',
-        created_by_handle: pin?.created_by_handle || '',
+        created_by_handle: getPinDisplayHandle(pin),
         uploadRequestId,
       },
     });
@@ -356,7 +369,7 @@ export default function HomeScreen() {
     router.push(buildViewPhotoChallengeRoute({
       pinId: pin._id,
       message: pin?.message || '',
-      createdByHandle: pin?.created_by_handle || '',
+      createdByHandle: getPinDisplayHandle(pin),
     }));
   }
 
@@ -465,7 +478,8 @@ export default function HomeScreen() {
     if (!pin || !group?.representativeCoordinate) return null;
 
     const pinId = String(pin._id);
-    const handleLabel = pin?.created_by_handle ? `@${pin.created_by_handle}` : 'anon';
+    const pinDisplayHandle = getPinDisplayHandle(pin);
+    const handleLabel = pinDisplayHandle ? `@${pinDisplayHandle}` : 'anon';
     const isFriendStyledPin = isFriendPin(pin);
     const uploadBlockedMessage = getPinUploadBlockedMessage(pin);
     const uploadLocked = Boolean(uploadBlockedMessage);

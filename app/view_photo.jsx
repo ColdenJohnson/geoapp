@@ -396,6 +396,16 @@ export default function ViewPhotoScreen() {
     deletingPhotoId &&
     String(selectedPhoto._id) === String(deletingPhotoId)
   );
+  const orderedPhotoComments = useMemo(() => {
+    if (!Array.isArray(photoComments) || photoComments.length <= 1) {
+      return photoComments;
+    }
+    const toTimestamp = (value) => {
+      const parsed = value ? new Date(value).getTime() : Number.NaN;
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    return [...photoComments].sort((a, b) => toTimestamp(a?.createdAt) - toTimestamp(b?.createdAt));
+  }, [photoComments]);
   const composerAvatarLabel = typeof profile?.handle === 'string' && profile.handle
     ? profile.handle.charAt(0).toUpperCase()
     : 'Y';
@@ -1114,7 +1124,7 @@ export default function ViewPhotoScreen() {
         </View>
       ) : (
         <FlatList
-          data={photoComments}
+          data={orderedPhotoComments}
           keyExtractor={(item) => String(item?._id)}
           style={styles.detailList}
           contentContainerStyle={styles.detailListContent}
