@@ -184,13 +184,13 @@ export default function Upload({ initialUri = null }) {
       }
 
       if (nextPath === '/view_photochallenge' && pinId) {
-        router.push(buildViewPhotoChallengeRoute({
+        router.replace(buildViewPhotoChallengeRoute({
           pinId,
           message: promptText,
           createdByHandle,
         }));
       } else if (nextPath) {
-        router.push(String(nextPath));
+        router.replace(String(nextPath));
       } else {
         goBackOrHome(router);
       }
