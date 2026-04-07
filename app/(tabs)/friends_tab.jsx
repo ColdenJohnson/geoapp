@@ -192,7 +192,7 @@ export default function FriendsTabScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      refreshFriendRequests({ force: true });
+      refreshFriendRequests({ force: false });
       refreshFriendActivity({
         force: false,
         showLoading: !friendActivityFetchedAt && !activityItems.length && !activitySuggestions.length,

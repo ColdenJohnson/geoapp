@@ -48,6 +48,7 @@ export function AuthProvider({ children }) {
   const latestFriendsRef = useRef([]);
   const latestFriendRequestsRef = useRef({ incoming: [], outgoing: [] });
   const friendRequestsInFlightRef = useRef(false);
+  const friendRequestsHasLoadedRef = useRef(false);
   const friendActivityInFlightRef = useRef(false);
   const friendActivityHasLoadedRef = useRef(false);
 
@@ -143,6 +144,7 @@ export function AuthProvider({ children }) {
     latestFriendsRef.current = [];
     latestFriendRequestsRef.current = { incoming: [], outgoing: [] };
     friendRequestsInFlightRef.current = false;
+    friendRequestsHasLoadedRef.current = false;
     friendActivityInFlightRef.current = false;
     friendActivityHasLoadedRef.current = false;
     setFriendActivityItems([]);
@@ -237,6 +239,7 @@ export function AuthProvider({ children }) {
       const nextRequests = requestsData || { incoming: [], outgoing: [] };
       setFriends(nextFriends);
       setFriendRequests(nextRequests);
+      friendRequestsHasLoadedRef.current = true;
       setFriendsDirty(false);
       await AsyncStorage.setItem(
         friendsCacheKey(user.uid),
@@ -251,12 +254,13 @@ export function AuthProvider({ children }) {
   async function refreshFriendRequests({ force = false } = {}) {
     if (!user?.uid) return null;
     if (friendRequestsInFlightRef.current) return null;
-    if (!force && latestFriendRequestsRef.current?.incoming && latestFriendRequestsRef.current?.outgoing) return latestFriendRequestsRef.current;
+    if (!force && friendRequestsHasLoadedRef.current) return latestFriendRequestsRef.current;
     friendRequestsInFlightRef.current = true;
     try {
       const requestsData = await fetchFriendRequests();
       const nextRequests = requestsData || { incoming: [], outgoing: [] };
       setFriendRequests(nextRequests);
+      friendRequestsHasLoadedRef.current = true;
       await AsyncStorage.setItem(
         friendsCacheKey(user.uid),
         JSON.stringify({ friends: latestFriendsRef.current, friendRequests: nextRequests })
