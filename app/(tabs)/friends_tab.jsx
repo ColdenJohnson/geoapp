@@ -210,21 +210,6 @@ export default function FriendsTabScreen() {
 
   const openChallenge = useCallback((item) => {
     if (!item?.can_open || !item?.pin_id) return;
-    const shouldOpenPhoto =
-      (item?.type === 'challenge_participated' || item?.type === 'friend_comment' || item?.type === 'your_photo_comment')
-      && !!item?.photo_id;
-    if (shouldOpenPhoto) {
-      router.push({
-        pathname: '/view_photo',
-        params: {
-          pinId: item.pin_id,
-          photoId: String(item.photo_id),
-          message: item.challenge_prompt || '',
-          created_by_handle: item.challenge_created_by_handle || '',
-        },
-      });
-      return;
-    }
     router.push(buildViewPhotoChallengeRoute({
       pinId: item.pin_id,
       message: item.challenge_prompt || '',
@@ -626,9 +611,7 @@ export default function FriendsTabScreen() {
             />
           ) : null}
           {item?.can_open && !item?.comment_text ? (
-            <Text style={styles.activityLink}>
-              {item?.type === 'challenge_participated' && item?.photo_id ? 'View Photo' : 'View Quest'}
-            </Text>
+            <Text style={styles.activityLink}>View Quest</Text>
           ) : null}
         </Pressable>
       </View>
