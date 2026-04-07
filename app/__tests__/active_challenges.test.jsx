@@ -57,6 +57,8 @@ jest.mock('@/lib/photoCommentRanking', () => ({
 }));
 
 const { fetchRankedQuests, fetchSavedQuests } = require('@/lib/api');
+const { saveQuest } = require('@/lib/api');
+const { unsaveQuest } = require('@/lib/api');
 const ActiveChallengesScreen = require('@/app/(tabs)/active_challenges').default;
 
 describe('ActiveChallengesScreen search', () => {
@@ -105,5 +107,19 @@ describe('ActiveChallengesScreen search', () => {
     fireEvent.changeText(searchInput, 'xyz');
 
     await waitFor(() => expect(queryByText(/No quests found for that search./)).toBeTruthy());
+  });
+
+  it('toggles the active quest saved state from the card save button', async () => {
+    const { getByTestId, queryByText } = render(<ActiveChallengesScreen />);
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+
+    fireEvent.press(getByTestId('quest-card-save-button-quest-1'));
+
+    await waitFor(() => expect(saveQuest).toHaveBeenCalledWith('quest-1'));
+
+    fireEvent.press(getByTestId('quest-card-save-button-quest-1'));
+
+    await waitFor(() => expect(unsaveQuest).toHaveBeenCalledWith('quest-1'));
   });
 });

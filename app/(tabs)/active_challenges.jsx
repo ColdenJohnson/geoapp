@@ -55,6 +55,7 @@ const SESSION_CHALLENGE_CACHE = {
   all: null,
   saved: null,
 };
+const SESSION_SAVED_PIN_IDS = new Set();
 
 function normalizeTeaserComment(comment) {
   const text = typeof comment?.text === 'string' ? comment.text.trim() : '';
@@ -128,7 +129,7 @@ async function overlayCachedTeaserComments(challengeItems) {
   });
 }
 
-function normalizeChallengePin(pin, index) {
+function normalizeChallengePin(pin, index, { isSaved = false } = {}) {
   const pinId = pin?._id ? String(pin._id) : `challenge-${index}`;
   const prompt = typeof pin?.message === 'string' && pin.message.trim()
     ? pin.message.trim()
@@ -170,6 +171,7 @@ function normalizeChallengePin(pin, index) {
     teaserPhotoId,
     teaserTopComment,
     friendParticipantCount,
+    isSaved,
   };
 }
 
@@ -422,7 +424,12 @@ export default function ActiveChallengesScreen() {
         ? await fetchSavedQuests()
         : await fetchRankedQuests({ includeRankingDebug: true });
       const sorted = Array.isArray(rows) ? rows : [];
-      const normalizedChallenges = sorted.map((pin, index) => normalizeChallengePin(pin, index));
+      const normalizedChallenges = sorted.map((pin, index) => {
+        const pinId = pin?._id ? String(pin._id) : `challenge-${index}`;
+        return normalizeChallengePin(pin, index, {
+          isSaved: mode === 'saved' || SESSION_SAVED_PIN_IDS.has(pinId),
+        });
+      });
       const hydratedChallenges = await overlayCachedTeaserComments(normalizedChallenges);
       if (
         mode === 'all' &&
@@ -432,6 +439,20 @@ export default function ActiveChallengesScreen() {
       ) {
         setChallenges(SESSION_CHALLENGE_CACHE.all);
         return false;
+      }
+      if (mode === 'saved') {
+        SESSION_SAVED_PIN_IDS.clear();
+        hydratedChallenges.forEach((challenge) => {
+          if (challenge?.pinId) {
+            SESSION_SAVED_PIN_IDS.add(challenge.pinId);
+          }
+        });
+        if (Array.isArray(SESSION_CHALLENGE_CACHE.all)) {
+          SESSION_CHALLENGE_CACHE.all = SESSION_CHALLENGE_CACHE.all.map((challenge) => ({
+            ...challenge,
+            isSaved: SESSION_SAVED_PIN_IDS.has(challenge?.pinId),
+          }));
+        }
       }
       SESSION_CHALLENGE_CACHE[mode] = hydratedChallenges;
       setChallenges(hydratedChallenges);
@@ -465,6 +486,56 @@ export default function ActiveChallengesScreen() {
     if (!normalizedQuestSearchInput) return;
     setForceQuestSearch(true);
   }, [normalizedQuestSearchInput]);
+
+  const handleQueueModeToggle = useCallback(() => {
+    setQueueMode((prev) => (prev === 'saved' ? 'all' : 'saved'));
+  }, []);
+
+  const syncChallengeSavedState = useCallback((challenge, nextIsSaved) => {
+    const pinId = challenge?.pinId;
+    if (!pinId) return;
+
+    if (nextIsSaved) {
+      SESSION_SAVED_PIN_IDS.add(pinId);
+    } else {
+      SESSION_SAVED_PIN_IDS.delete(pinId);
+    }
+
+    const applySavedState = (items, { removeIfUnsaved = false, upsertIfSaved = false } = {}) => {
+      if (!Array.isArray(items)) return items;
+
+      let found = false;
+      const nextItems = items.reduce((acc, item) => {
+        if (item?.pinId !== pinId) {
+          acc.push(item);
+          return acc;
+        }
+
+        found = true;
+        if (!nextIsSaved && removeIfUnsaved) {
+          return acc;
+        }
+
+        acc.push({ ...item, isSaved: nextIsSaved });
+        return acc;
+      }, []);
+
+      if (nextIsSaved && upsertIfSaved && !found) {
+        nextItems.unshift({ ...challenge, isSaved: true });
+      }
+
+      return nextItems;
+    };
+
+    setChallenges((prev) => applySavedState(prev, {
+      removeIfUnsaved: queueMode === 'saved',
+    }));
+    SESSION_CHALLENGE_CACHE.all = applySavedState(SESSION_CHALLENGE_CACHE.all);
+    SESSION_CHALLENGE_CACHE.saved = applySavedState(SESSION_CHALLENGE_CACHE.saved, {
+      removeIfUnsaved: true,
+      upsertIfSaved: true,
+    });
+  }, [queueMode]);
 
   const advanceChallengeQueue = useCallback((direction, challengePinId) => {
     setChallenges((prev) => {
@@ -519,6 +590,7 @@ export default function ActiveChallengesScreen() {
         showToast('Unsave failed', 2500);
         return;
       }
+      syncChallengeSavedState(challenge, false);
       showToast('Removed from saved', 2200);
       return;
     }
@@ -527,10 +599,11 @@ export default function ActiveChallengesScreen() {
       showToast('Save failed', 2500);
       return;
     }
+    syncChallengeSavedState(challenge, true);
     if (!result?.alreadySaved) {
       showToast('Saved for later', 2200);
     }
-  }, [queueMode, showToast]);
+  }, [queueMode, showToast, syncChallengeSavedState]);
 
   const handleShareChallenge = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
@@ -558,12 +631,40 @@ export default function ActiveChallengesScreen() {
       showToast('Save failed', 2500);
       return;
     }
+    syncChallengeSavedState(challenge, true);
     if (result?.alreadySaved || queueMode === 'saved') {
       showToast('Already saved', 2200);
       return;
     }
     showToast('Saved for later', 2200);
-  }, [queueMode, showToast]);
+  }, [queueMode, showToast, syncChallengeSavedState]);
+
+  const toggleChallengeSavedState = useCallback(async (challenge) => {
+    if (!challenge?.pinId) return;
+
+    if (challenge.isSaved) {
+      const result = await unsaveQuest(challenge.pinId);
+      if (!result?.success) {
+        showToast('Unsave failed', 2500);
+        return;
+      }
+      syncChallengeSavedState(challenge, false);
+      showToast('Removed from saved', 2200);
+      return;
+    }
+
+    const result = await saveQuest(challenge.pinId);
+    if (!result?.success) {
+      showToast('Save failed', 2500);
+      return;
+    }
+    syncChallengeSavedState(challenge, true);
+    if (result?.alreadySaved) {
+      showToast('Already saved', 2200);
+      return;
+    }
+    showToast('Saved for later', 2200);
+  }, [showToast, syncChallengeSavedState]);
 
   const handleViewPhotos = useCallback((challenge) => {
     if (!challenge?.pinId) return;
@@ -809,6 +910,7 @@ export default function ActiveChallengesScreen() {
       : isSecond
         ? [{ scale: nextCardScale }, { translateY: nextCardTranslateY }, { rotate: nextCardRotate }]
         : baseTransforms;
+    const cardSaveIconName = challenge.isSaved ? 'bookmark' : 'bookmark-border';
     const friendParticipationLabel = formatFriendParticipationLabel(challenge.friendParticipantCount);
     const teaserComment = challenge.teaserTopComment;
     const showsBottomTeaser = !!friendParticipationLabel || !!teaserComment?.text;
@@ -862,6 +964,26 @@ export default function ActiveChallengesScreen() {
             <View style={styles.handleChip}>
               <Text style={styles.handleChipText}>{challenge.featuredPhotoHandle}</Text>
             </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.cardIconButton,
+                !isTop && styles.cardIconButtonInactive,
+                pressed && isTop ? styles.cardIconButtonPressed : null,
+              ]}
+              onPress={(event) => {
+                event?.stopPropagation?.();
+                toggleChallengeSavedState(challenge);
+              }}
+              onPressIn={(event) => {
+                event?.stopPropagation?.();
+              }}
+              disabled={!isTop || interactionLocked}
+              hitSlop={8}
+              accessibilityLabel="Save quest"
+              testID={`quest-card-save-button-${challenge.pinId}`}
+            >
+              <MaterialIcons name={cardSaveIconName} size={20} color="#FFFFFF" />
+            </Pressable>
           </View>
 
           <View style={styles.promptBlock}>
@@ -918,152 +1040,152 @@ export default function ActiveChallengesScreen() {
     queueMode,
     styles,
     interactionLocked,
+    toggleChallengeSavedState,
   ]);
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.safe}>
         <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Quests</Text>
-            <View style={styles.headerSearchRow}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerTextBlock}>
+              <Text style={styles.headerTitle}>Quests</Text>
+              <View style={styles.headerSearchRow}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    { opacity: pressed || !normalizedQuestSearchInput ? 0.55 : 1 },
+                  ]}
+                  onPress={handleQuestSearchSubmit}
+                  disabled={!normalizedQuestSearchInput}
+                  accessibilityLabel="Search quests"
+                  testID="quest-search-button"
+                >
+                  <MaterialIcons name="search" size={22} color={colors.text} />
+                </Pressable>
+                <TextInput
+                  style={[formStyles.input, styles.headerSearchInput]}
+                  placeholder="Search quests"
+                  value={questSearchInput}
+                  onChangeText={handleQuestSearchInputChange}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  onSubmitEditing={handleQuestSearchSubmit}
+                  placeholderTextColor={colors.textMuted}
+                  selectionColor={colors.primary}
+                  cursorColor={colors.text}
+                  testID="quest-search-input"
+                />
+              </View>
+            </View>
+            <View style={styles.headerActions}>
               <Pressable
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  { opacity: pressed || !normalizedQuestSearchInput ? 0.55 : 1 },
-                ]}
-                onPress={handleQuestSearchSubmit}
-                disabled={!normalizedQuestSearchInput}
-                accessibilityLabel="Search quests"
-                testID="quest-search-button"
+                style={({ pressed }) => [styles.iconButton, { opacity: pressed || interactionLocked ? 0.55 : 1 }]}
+                onPress={handleQueueModeToggle}
+                disabled={interactionLocked}
+                accessibilityLabel={queueMode === 'saved' ? 'Show all quests' : 'Show saved quests'}
+                testID="quest-saved-queue-button"
               >
-                <MaterialIcons name="search" size={22} color={colors.text} />
+                <MaterialIcons
+                  name={queueMode === 'saved' ? 'bookmark' : 'bookmark-border'}
+                  size={22}
+                  color={colors.text}
+                />
               </Pressable>
-              <TextInput
-                style={[formStyles.input, styles.headerSearchInput]}
-                placeholder="Search quests"
-                value={questSearchInput}
-                onChangeText={handleQuestSearchInputChange}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="search"
-                onSubmitEditing={handleQuestSearchSubmit}
-                placeholderTextColor={colors.textMuted}
-                selectionColor={colors.primary}
-                cursorColor={colors.text}
-                testID="quest-search-input"
-              />
+              <Pressable
+                style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading ? 0.55 : 1 }]}
+                onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
+                disabled={loading}
+              >
+                <MaterialIcons name="refresh" size={22} color={colors.text} />
+              </Pressable>
             </View>
           </View>
-          <View style={styles.headerActions}>
+
+          <View style={styles.stackStage} onLayout={handleStageLayout}>
+            {loading ? (
+              <View style={styles.centeredState}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.stateText}>Loading active challenges…</Text>
+              </View>
+            ) : stack.length === 0 ? (
+              <View style={styles.centeredState}>
+                <MaterialIcons name="explore-off" size={32} color={colors.textMuted} />
+                <Text style={styles.stateText}>
+                  {questSearchEnabled && challenges.length > 0
+                    ? 'No quests found for that search.'
+                    : queueMode === 'saved'
+                      ? 'No saved challenges yet.'
+                      : 'No non-geo challenges yet.'}
+                </Text>
+              </View>
+            ) : (
+              stack
+                .slice()
+                .reverse()
+                .map((challenge, reversedIndex) => {
+                  const stackIndex = stack.length - reversedIndex - 1;
+                  return renderChallengeCard(challenge, stackIndex);
+                })
+            )}
+          </View>
+
+          <View style={styles.footerButtons}>
             <Pressable
               style={({ pressed }) => [
-                styles.headerToggleButton,
-                { opacity: pressed || interactionLocked ? 0.55 : 1 },
+                styles.footerButton,
+                styles.skipFooterButton,
+                { opacity: pressed || interactionLocked || !activeChallenge ? 0.6 : 1 },
               ]}
-              onPress={() => {
-                setQueueMode((prev) => (prev === 'saved' ? 'all' : 'saved'));
-              }}
-              disabled={interactionLocked}
+              onPress={() => commitSwipe('skip')}
+              accessibilityLabel="Skip quest"
+              disabled={interactionLocked || !activeChallenge}
             >
-              <Text style={styles.headerToggleText}>
-                {queueMode === 'saved' ? 'All' : 'Saved'}
-              </Text>
+              <MaterialIcons name="close" size={28} color={colors.textMuted} />
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading ? 0.55 : 1 }]}
-              onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
-              disabled={loading}
+              style={({ pressed }) => [
+                styles.footerButton,
+                styles.viewFooterButton,
+                { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
+              ]}
+              onPress={() => handleViewPhotos(activeChallenge)}
+              accessibilityLabel="View quest photos"
+              disabled={interactionLocked || !activeChallenge}
             >
-              <MaterialIcons name="refresh" size={22} color={colors.text} />
+              <MaterialIcons name="photo-library" size={28} color={colors.textMuted} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.footerButton,
+                styles.cameraFooterButton,
+                { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
+              ]}
+              onPress={() => commitSwipe('accept')}
+              accessibilityLabel="Add photo to quest"
+              disabled={interactionLocked || !activeChallenge}
+            >
+              <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
             </Pressable>
           </View>
-        </View>
 
-        <View style={styles.stackStage} onLayout={handleStageLayout}>
-          {loading ? (
-            <View style={styles.centeredState}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.stateText}>Loading active challenges…</Text>
-            </View>
-          ) : stack.length === 0 ? (
-            <View style={styles.centeredState}>
-              <MaterialIcons name="explore-off" size={32} color={colors.textMuted} />
-              <Text style={styles.stateText}>
-                {questSearchEnabled && challenges.length > 0
-                  ? 'No quests found for that search.'
-                  : queueMode === 'saved'
-                    ? 'No saved challenges yet.'
-                    : 'No non-geo challenges yet.'}
-              </Text>
-            </View>
-          ) : (
-            stack
-              .slice()
-              .reverse()
-              .map((challenge, reversedIndex) => {
-                const stackIndex = stack.length - reversedIndex - 1;
-                return renderChallengeCard(challenge, stackIndex);
-              })
-          )}
-        </View>
+          <PressHoldActionMenu
+            visible={challengeOptions !== null}
+            position={challengeOptionsPosition}
+            menuSize={challengeMenuSize}
+            titleLabel="Quest Options"
+            title={challengeOptions?.challenge?.prompt || ''}
+            subtitle={challengeOptions?.challenge?.creatorHandle || null}
+            sections={challengeOptionSections}
+            activeOptionId={activeChallengeOptionId}
+            onRequestClose={closeChallengeOptions}
+            onMenuLayout={handleChallengeMenuLayout}
+            onOptionLayout={handleChallengeMenuOptionLayout}
+            onOptionPress={handleChallengeMenuSelection}
+          />
 
-        <View style={styles.footerButtons}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.footerButton,
-              styles.skipFooterButton,
-              { opacity: pressed || interactionLocked || !activeChallenge ? 0.6 : 1 },
-            ]}
-            onPress={() => commitSwipe('skip')}
-            accessibilityLabel="Skip quest"
-            disabled={interactionLocked || !activeChallenge}
-          >
-            <MaterialIcons name="close" size={28} color={colors.textMuted} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.footerButton,
-              styles.viewFooterButton,
-              { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
-            ]}
-            onPress={() => handleViewPhotos(activeChallenge)}
-            accessibilityLabel="View quest photos"
-            disabled={interactionLocked || !activeChallenge}
-          >
-            <MaterialIcons name="photo-library" size={28} color={colors.textMuted} />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.footerButton,
-              styles.cameraFooterButton,
-              { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
-            ]}
-            onPress={() => commitSwipe('accept')}
-            accessibilityLabel="Add photo to quest"
-            disabled={interactionLocked || !activeChallenge}
-          >
-            <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
-          </Pressable>
-        </View>
-
-        <PressHoldActionMenu
-          visible={challengeOptions !== null}
-          position={challengeOptionsPosition}
-          menuSize={challengeMenuSize}
-          titleLabel="Quest Options"
-          title={challengeOptions?.challenge?.prompt || ''}
-          subtitle={challengeOptions?.challenge?.creatorHandle || null}
-          sections={challengeOptionSections}
-          activeOptionId={activeChallengeOptionId}
-          onRequestClose={closeChallengeOptions}
-          onMenuLayout={handleChallengeMenuLayout}
-          onOptionLayout={handleChallengeMenuOptionLayout}
-          onOptionPress={handleChallengeMenuSelection}
-        />
-
-        <Toast message={toastMessage} bottomOffset={toastBottomOffset} />
+          <Toast message={toastMessage} bottomOffset={toastBottomOffset} />
         </View>
       </SafeAreaView>
     </TouchableWithoutFeedback>
@@ -1231,6 +1353,22 @@ function createStyles(colors) {
       textTransform: 'uppercase',
       letterSpacing: 1.1,
       fontWeight: '900',
+    },
+    cardIconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: 'rgba(0,0,0,0.25)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.22)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cardIconButtonInactive: {
+      opacity: 0.72,
+    },
+    cardIconButtonPressed: {
+      backgroundColor: 'rgba(0,0,0,0.38)',
     },
     photoCountChip: {
       flexDirection: 'row',
