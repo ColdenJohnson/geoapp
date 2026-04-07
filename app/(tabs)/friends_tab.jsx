@@ -513,7 +513,7 @@ export default function FriendsTabScreen() {
     styles,
   ]);
 
-  const renderActivityListHeader = useCallback(() => (
+  const activityListHeader = useMemo(() => (
     <View>
       {renderTopChrome()}
       {renderSearchSection()}
@@ -609,9 +609,6 @@ export default function FriendsTabScreen() {
               contentFit="cover"
               cachePolicy="memory-disk"
             />
-          ) : null}
-          {item?.can_open && !item?.comment_text ? (
-            <Text style={styles.activityLink}>View Quest</Text>
           ) : null}
         </Pressable>
       </View>
@@ -712,7 +709,7 @@ export default function FriendsTabScreen() {
             data={activityFeedData}
             keyExtractor={(item) => item.key}
             renderItem={renderActivityRow}
-            ListHeaderComponent={renderActivityListHeader}
+            ListHeaderComponent={activityListHeader}
             ListEmptyComponent={renderActivityEmpty}
             ListFooterComponent={renderActivityListFooter}
             contentContainerStyle={[styles.content, { paddingBottom: spacing['4xl'] }]}
