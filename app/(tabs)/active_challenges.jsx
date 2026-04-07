@@ -142,6 +142,10 @@ function normalizeChallengePin(pin, index) {
     : null;
   const teaserPhotoId = pin?.top_global_photo?.photo_id ? String(pin.top_global_photo.photo_id) : null;
   const creatorHandleRaw = handle.startsWith('@') ? handle.slice(1) : handle;
+  const featuredHandle = typeof pin?.top_global_photo?.created_by_handle === 'string' && pin.top_global_photo.created_by_handle.trim()
+    ? pin.top_global_photo.created_by_handle.trim()
+    : handle;
+  const featuredPhotoHandleRaw = featuredHandle.startsWith('@') ? featuredHandle.slice(1) : featuredHandle;
   const friendParticipantCount = Number.isFinite(pin?.friend_participant_count)
     ? Math.max(0, pin.friend_participant_count)
     : 0;
@@ -154,6 +158,7 @@ function normalizeChallengePin(pin, index) {
     prompt,
     creatorHandle: `@${creatorHandleRaw}`,
     creatorHandleRaw,
+    featuredPhotoHandle: `@${featuredPhotoHandleRaw}`,
     creatorName,
     uploadsCount,
     teaserPhoto,
@@ -819,7 +824,7 @@ export default function ActiveChallengesScreen() {
           <View style={styles.dimLayer} pointerEvents="none" />
           <View style={styles.topMeta}>
             <View style={styles.handleChip}>
-              <Text style={styles.handleChipText}>{challenge.creatorHandle}</Text>
+              <Text style={styles.handleChipText}>{challenge.featuredPhotoHandle}</Text>
             </View>
           </View>
 
