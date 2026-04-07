@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
   PanResponder,
   Pressable,
   SafeAreaView,
   Share,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableWithoutFeedback,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -35,8 +38,10 @@ import {
   getPressHoldActionMenuPosition,
 } from '@/components/ui/PressHoldActionMenu';
 import { Toast, useToast } from '@/components/ui/Toast';
+import { createFormStyles } from '@/components/ui/FormStyles';
 import { usePalette } from '@/hooks/usePalette';
 import { PUBLIC_BASE_URL } from '@/lib/apiClient';
+import { filterChallengesByPrompt, isQuestSearchReady, normalizeQuestSearchText } from '@/lib/questSearch';
 import { spacing, radii } from '@/theme/tokens';
 
 const CARD_ASPECT_RATIO = 3 / 4;
@@ -175,6 +180,7 @@ export default function ActiveChallengesScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const { message: toastMessage, show: showToast } = useToast(3000);
 
   const [challenges, setChallenges] = useState([]);
@@ -186,6 +192,8 @@ export default function ActiveChallengesScreen() {
   const [challengeOptions, setChallengeOptions] = useState(null);
   const [challengeMenuSize, setChallengeMenuSize] = useState(PRESS_HOLD_ACTION_MENU_DEFAULT_SIZE);
   const [activeChallengeOptionId, setActiveChallengeOptionId] = useState(null);
+  const [questSearchInput, setQuestSearchInput] = useState('');
+  const [forceQuestSearch, setForceQuestSearch] = useState(false);
   const cardPan = useRef(new Animated.ValueXY()).current;
   const swipeAnimatingPinId = useRef(null);
   const longPressTimerRef = useRef(null);
@@ -258,6 +266,23 @@ export default function ActiveChallengesScreen() {
   const toastBottomOffset = footerSafePadding + 22;
   const swipeLocked = loading || isAnimating || uploadingPinId !== null;
   const interactionLocked = swipeLocked || challengeOptions !== null;
+  const normalizedQuestSearchInput = useMemo(
+    () => normalizeQuestSearchText(questSearchInput),
+    [questSearchInput]
+  );
+  const liveQuestSearchEnabled = useMemo(
+    () => isQuestSearchReady(questSearchInput),
+    [questSearchInput]
+  );
+  const questSearchEnabled = normalizedQuestSearchInput.length > 0 && (forceQuestSearch || liveQuestSearchEnabled);
+  const filteredChallenges = useMemo(() => (
+    questSearchEnabled
+      ? filterChallengesByPrompt(challenges, questSearchInput)
+      : challenges
+  ), [challenges, questSearchEnabled, questSearchInput]);
+  const stack = filteredChallenges.slice(0, STACK_DEPTH);
+  const activeChallenge = stack[0] ?? null;
+  const panTargetPinId = swipeAnimatingPinId.current ?? activeChallenge?.pinId ?? null;
   const challengeOptionsPosition = useMemo(() => {
     if (!challengeOptions) return null;
 
@@ -429,18 +454,33 @@ export default function ActiveChallengesScreen() {
     closeChallengeOptions();
   }, [closeChallengeOptions, queueMode]);
 
-  const advanceChallengeQueue = useCallback((direction) => {
+  const handleQuestSearchInputChange = useCallback((value) => {
+    setQuestSearchInput(value);
+    if (!normalizeQuestSearchText(value)) {
+      setForceQuestSearch(false);
+    }
+  }, []);
+
+  const handleQuestSearchSubmit = useCallback(() => {
+    if (!normalizedQuestSearchInput) return;
+    setForceQuestSearch(true);
+  }, [normalizedQuestSearchInput]);
+
+  const advanceChallengeQueue = useCallback((direction, challengePinId) => {
     setChallenges((prev) => {
-      if (!Array.isArray(prev) || prev.length === 0) return prev;
+      if (!Array.isArray(prev) || prev.length === 0 || !challengePinId) return prev;
+      const challengeIndex = prev.findIndex((challenge) => challenge?.pinId === challengePinId);
+      if (challengeIndex === -1) return prev;
       let next = prev;
       if (direction === 'save' && queueMode === 'saved') {
-        next = prev.slice(1);
+        next = prev.filter((challenge) => challenge?.pinId !== challengePinId);
         SESSION_CHALLENGE_CACHE[queueMode] = next;
         return next;
       }
       if (prev.length < 2) return prev;
-      const [first, ...rest] = prev;
-      next = [...rest, first];
+      next = prev.slice();
+      const [selectedChallenge] = next.splice(challengeIndex, 1);
+      next.push(selectedChallenge);
       SESSION_CHALLENGE_CACHE[queueMode] = next;
       return next;
     });
@@ -452,7 +492,7 @@ export default function ActiveChallengesScreen() {
     setUploadingPinId(challenge.pinId);
     setUploadSubmitResolver((submitResult) => {
       if (submitResult?.submitted) {
-        advanceChallengeQueue('upload');
+        advanceChallengeQueue('upload', challenge.pinId);
       }
     }, uploadRequestId);
     router.push({
@@ -583,9 +623,9 @@ export default function ActiveChallengesScreen() {
   }, [cardPan, triggerMenuOpenHaptic]);
 
   const commitSwipe = useCallback((direction) => {
-    if (swipeLocked || challenges.length === 0) return;
+    if (swipeLocked || !activeChallenge) return;
     closeChallengeOptions();
-    const topChallenge = challenges[0];
+    const topChallenge = activeChallenge;
     swipeAnimatingPinId.current = topChallenge.pinId;
     const isSave = direction === 'save';
     const isAccept = direction === 'accept';
@@ -601,7 +641,7 @@ export default function ActiveChallengesScreen() {
       useNativeDriver: true,
     }).start(({ finished }) => {
       if (direction !== 'accept') {
-        advanceChallengeQueue(direction);
+        advanceChallengeQueue(direction, topChallenge.pinId);
       }
       requestAnimationFrame(() => {
         cardPan.setValue({ x: 0, y: 0 });
@@ -617,10 +657,10 @@ export default function ActiveChallengesScreen() {
     });
   }, [
     advanceChallengeQueue,
+    activeChallenge,
     cardHeight,
     cardPan,
     cardWidth,
-    challenges,
     closeChallengeOptions,
     beginUploadForChallenge,
     handleUpSwipeAction,
@@ -640,13 +680,13 @@ export default function ActiveChallengesScreen() {
   }, [challengeOptions, clearLongPressTimer, openChallengeOptions, swipeLocked]);
 
   const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !interactionLocked && challenges.length > 0,
+    onStartShouldSetPanResponder: () => !interactionLocked && !!activeChallenge,
     onMoveShouldSetPanResponder: (_, gestureState) =>
       !interactionLocked &&
-      challenges.length > 0 &&
+      !!activeChallenge &&
       (Math.abs(gestureState.dx) > 6 || Math.abs(gestureState.dy) > 6),
     onPanResponderGrant: (_, gestureState) => {
-      startLongPress(challenges[0], gestureState.x0, gestureState.y0);
+      startLongPress(activeChallenge, gestureState.x0, gestureState.y0);
     },
     onPanResponderMove: (_, gestureState) => {
       if (
@@ -696,10 +736,10 @@ export default function ActiveChallengesScreen() {
       if (
         Math.abs(gestureState.dx) <= TAP_OPEN_MAX_DISTANCE &&
         Math.abs(gestureState.dy) <= TAP_OPEN_MAX_DISTANCE &&
-        challenges[0]?.pinId
+        activeChallenge?.pinId
       ) {
         openChallengeOptions(
-          challenges[0],
+          activeChallenge,
           gestureState.moveX || gestureState.x0,
           gestureState.moveY || gestureState.y0
         );
@@ -717,21 +757,17 @@ export default function ActiveChallengesScreen() {
     cardPan,
     challengeOptions,
     challengeMenuOptionsById,
-    challenges,
     clearLongPressTimer,
     closeChallengeOptions,
     commitSwipe,
     handleChallengeMenuSelection,
     interactionLocked,
+    activeChallenge,
     openChallengeOptions,
     resetCardPosition,
     startLongPress,
     syncChallengeOptionHighlight,
   ]);
-
-  const stack = challenges.slice(0, STACK_DEPTH);
-  const activeChallenge = stack[0] ?? null;
-  const panTargetPinId = swipeAnimatingPinId.current ?? activeChallenge?.pinId ?? null;
   const handleStageLayout = useCallback((event) => {
     const { width, height } = event.nativeEvent.layout;
     setStageSize((prev) => {
@@ -885,16 +921,40 @@ export default function ActiveChallengesScreen() {
   ]);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView style={styles.safe}>
+        <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
         <View style={styles.headerRow}>
           <View style={styles.headerTextBlock}>
             <Text style={styles.headerTitle}>Quests</Text>
-            <Text style={styles.headerSubtitle}>
-              {queueMode === 'saved'
-                ? 'Swipe up to remove from saved. Tap or hold for more.'
-                : 'Swipe right to add a photo, left to send back, up to save. Tap or hold for more.'}
-            </Text>
+            <View style={styles.headerSearchRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.iconButton,
+                  { opacity: pressed || !normalizedQuestSearchInput ? 0.55 : 1 },
+                ]}
+                onPress={handleQuestSearchSubmit}
+                disabled={!normalizedQuestSearchInput}
+                accessibilityLabel="Search quests"
+                testID="quest-search-button"
+              >
+                <MaterialIcons name="search" size={22} color={colors.text} />
+              </Pressable>
+              <TextInput
+                style={[formStyles.input, styles.headerSearchInput]}
+                placeholder="Search quests"
+                value={questSearchInput}
+                onChangeText={handleQuestSearchInputChange}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                onSubmitEditing={handleQuestSearchSubmit}
+                placeholderTextColor={colors.textMuted}
+                selectionColor={colors.primary}
+                cursorColor={colors.text}
+                testID="quest-search-input"
+              />
+            </View>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -931,7 +991,11 @@ export default function ActiveChallengesScreen() {
             <View style={styles.centeredState}>
               <MaterialIcons name="explore-off" size={32} color={colors.textMuted} />
               <Text style={styles.stateText}>
-                {queueMode === 'saved' ? 'No saved challenges yet.' : 'No non-geo challenges yet.'}
+                {questSearchEnabled && challenges.length > 0
+                  ? 'No quests found for that search.'
+                  : queueMode === 'saved'
+                    ? 'No saved challenges yet.'
+                    : 'No non-geo challenges yet.'}
               </Text>
             </View>
           ) : (
@@ -1000,8 +1064,9 @@ export default function ActiveChallengesScreen() {
         />
 
         <Toast message={toastMessage} bottomOffset={toastBottomOffset} />
-      </View>
-    </SafeAreaView>
+        </View>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -1018,7 +1083,7 @@ function createStyles(colors) {
     },
     headerRow: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       justifyContent: 'space-between',
       marginBottom: spacing.sm,
       gap: spacing.sm,
@@ -1035,13 +1100,13 @@ function createStyles(colors) {
     },
     headerTextBlock: {
       flex: 1,
-      minHeight: 44,
-      justifyContent: 'center',
+      minWidth: 0,
     },
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
+      paddingTop: 2,
     },
     headerTitle: {
       fontSize: 30,
@@ -1050,13 +1115,17 @@ function createStyles(colors) {
       color: colors.primary,
       letterSpacing: -0.3,
     },
-    headerSubtitle: {
-      marginTop: 2,
-      fontSize: 11,
-      fontWeight: '800',
-      letterSpacing: 0.7,
-      color: colors.textMuted,
-      textTransform: 'uppercase',
+    headerSearchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      marginTop: spacing.xs,
+    },
+    headerSearchInput: {
+      flex: 1,
+      height: 44,
+      borderRadius: 16,
+      paddingVertical: 0,
     },
     headerToggleButton: {
       minHeight: 44,
