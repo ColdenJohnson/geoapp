@@ -964,26 +964,48 @@ export default function ActiveChallengesScreen() {
             <View style={styles.handleChip}>
               <Text style={styles.handleChipText}>{challenge.featuredPhotoHandle}</Text>
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.cardIconButton,
-                !isTop && styles.cardIconButtonInactive,
-                pressed && isTop ? styles.cardIconButtonPressed : null,
-              ]}
-              onPress={(event) => {
-                event?.stopPropagation?.();
-                toggleChallengeSavedState(challenge);
-              }}
-              onPressIn={(event) => {
-                event?.stopPropagation?.();
-              }}
-              disabled={!isTop || interactionLocked}
-              hitSlop={8}
-              accessibilityLabel="Save quest"
-              testID={`quest-card-save-button-${challenge.pinId}`}
-            >
-              <MaterialIcons name={cardSaveIconName} size={20} color="#FFFFFF" />
-            </Pressable>
+            <View style={styles.cardActionRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardIconButton,
+                  !isTop && styles.cardIconButtonInactive,
+                  pressed && isTop ? styles.cardIconButtonPressed : null,
+                ]}
+                onPress={(event) => {
+                  event?.stopPropagation?.();
+                  handleShareChallenge(challenge);
+                }}
+                onPressIn={(event) => {
+                  event?.stopPropagation?.();
+                }}
+                disabled={!isTop || interactionLocked}
+                hitSlop={8}
+                accessibilityLabel="Share quest"
+                testID={`quest-card-share-button-${challenge.pinId}`}
+              >
+                <MaterialIcons name="share" size={18} color="#FFFFFF" />
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cardIconButton,
+                  !isTop && styles.cardIconButtonInactive,
+                  pressed && isTop ? styles.cardIconButtonPressed : null,
+                ]}
+                onPress={(event) => {
+                  event?.stopPropagation?.();
+                  toggleChallengeSavedState(challenge);
+                }}
+                onPressIn={(event) => {
+                  event?.stopPropagation?.();
+                }}
+                disabled={!isTop || interactionLocked}
+                hitSlop={8}
+                accessibilityLabel="Save quest"
+                testID={`quest-card-save-button-${challenge.pinId}`}
+              >
+                <MaterialIcons name={cardSaveIconName} size={20} color="#FFFFFF" />
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.promptBlock}>
@@ -1039,6 +1061,7 @@ export default function ActiveChallengesScreen() {
     challengeOptions,
     queueMode,
     styles,
+    handleShareChallenge,
     interactionLocked,
     toggleChallengeSavedState,
   ]);
@@ -1048,8 +1071,8 @@ export default function ActiveChallengesScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
           <View style={styles.headerRow}>
-            <View style={styles.headerTextBlock}>
-              <Text style={styles.headerTitle}>Quests</Text>
+            <Text style={styles.headerTitle}>Quests</Text>
+            <View style={[styles.headerControlsRow, { width: cardWidth }]}>
               <View style={styles.headerSearchRow}>
                 <Pressable
                   style={({ pressed }) => [
@@ -1078,28 +1101,30 @@ export default function ActiveChallengesScreen() {
                   testID="quest-search-input"
                 />
               </View>
-            </View>
-            <View style={styles.headerActions}>
-              <Pressable
-                style={({ pressed }) => [styles.iconButton, { opacity: pressed || interactionLocked ? 0.55 : 1 }]}
-                onPress={handleQueueModeToggle}
-                disabled={interactionLocked}
-                accessibilityLabel={queueMode === 'saved' ? 'Show all quests' : 'Show saved quests'}
-                testID="quest-saved-queue-button"
-              >
-                <MaterialIcons
-                  name={queueMode === 'saved' ? 'bookmark' : 'bookmark-border'}
-                  size={22}
-                  color={colors.text}
-                />
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading ? 0.55 : 1 }]}
-                onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
-                disabled={loading}
-              >
-                <MaterialIcons name="refresh" size={22} color={colors.text} />
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable
+                  style={({ pressed }) => [styles.iconButton, { opacity: pressed || interactionLocked ? 0.55 : 1 }]}
+                  onPress={handleQueueModeToggle}
+                  disabled={interactionLocked}
+                  accessibilityLabel={queueMode === 'saved' ? 'Show all quests' : 'Show saved quests'}
+                  testID="quest-saved-queue-button"
+                >
+                  <MaterialIcons
+                    name={queueMode === 'saved' ? 'bookmark' : 'bookmark-border'}
+                    size={22}
+                    color={colors.text}
+                  />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading ? 0.55 : 1 }]}
+                  onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
+                  disabled={loading}
+                  accessibilityLabel="Refresh quests"
+                  testID="quest-refresh-button"
+                >
+                  <MaterialIcons name="refresh" size={22} color={colors.text} />
+                </Pressable>
+              </View>
             </View>
           </View>
 
@@ -1204,11 +1229,9 @@ function createStyles(colors) {
       paddingHorizontal: spacing.md,
     },
     headerRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: spacing.sm,
-      gap: spacing.sm,
+      gap: spacing.xs,
     },
     iconButton: {
       width: 44,
@@ -1224,13 +1247,19 @@ function createStyles(colors) {
       flex: 1,
       minWidth: 0,
     },
+    headerControlsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'center',
+      gap: spacing.sm,
+    },
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      paddingTop: 2,
     },
     headerTitle: {
+      alignSelf: 'flex-start',
       fontSize: 30,
       lineHeight: 34,
       fontWeight: '900',
@@ -1240,8 +1269,8 @@ function createStyles(colors) {
     headerSearchRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      flex: 1,
       gap: spacing.xs,
-      marginTop: spacing.xs,
     },
     headerSearchInput: {
       flex: 1,
@@ -1363,6 +1392,11 @@ function createStyles(colors) {
       borderColor: 'rgba(255,255,255,0.22)',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    cardActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
     },
     cardIconButtonInactive: {
       opacity: 0.72,
