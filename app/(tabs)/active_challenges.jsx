@@ -608,7 +608,7 @@ export default function ActiveChallengesScreen() {
         swipeAnimatingPinId.current = null;
         setIsAnimating(false);
         if (finished && direction === 'accept') {
-          handleViewPhotos(topChallenge);
+          beginUploadForChallenge(topChallenge);
         }
         if (finished && direction === 'save') {
           handleUpSwipeAction(topChallenge);
@@ -622,7 +622,7 @@ export default function ActiveChallengesScreen() {
     cardWidth,
     challenges,
     closeChallengeOptions,
-    handleViewPhotos,
+    beginUploadForChallenge,
     handleUpSwipeAction,
     swipeLocked,
   ]);
@@ -796,7 +796,7 @@ export default function ActiveChallengesScreen() {
         {isTop && tracksPan ? (
           <>
             <Animated.View style={[styles.selectBadge, { opacity: selectOpacity }]}>
-              <Text style={styles.selectBadgeText}>SELECT</Text>
+              <Text style={styles.selectBadgeText}>ADD PHOTO</Text>
             </Animated.View>
             <Animated.View style={[styles.skipBadge, { opacity: skipOpacity }]}>
               <Text style={styles.skipBadgeText}>SKIP</Text>
@@ -893,7 +893,7 @@ export default function ActiveChallengesScreen() {
             <Text style={styles.headerSubtitle}>
               {queueMode === 'saved'
                 ? 'Swipe up to remove from saved. Tap or hold for more.'
-                : 'Swipe right to select, left to send back, up to save. Tap or hold for more.'}
+                : 'Swipe right to add a photo, left to send back, up to save. Tap or hold for more.'}
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -977,10 +977,10 @@ export default function ActiveChallengesScreen() {
               { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
             ]}
             onPress={() => commitSwipe('accept')}
-            accessibilityLabel="Select quest"
+            accessibilityLabel="Add photo to quest"
             disabled={interactionLocked || !activeChallenge}
           >
-            <MaterialIcons name="photo-library" size={28} color={colors.primaryTextOn} />
+            <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
           </Pressable>
         </View>
 
