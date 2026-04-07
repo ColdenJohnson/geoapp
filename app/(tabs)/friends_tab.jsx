@@ -26,7 +26,7 @@ import {
   requestFriend,
   searchUserByHandle,
 } from '@/lib/api';
-import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
+import { buildViewPhotoChallengePhotoRoute, buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
@@ -125,6 +125,7 @@ export default function FriendsTabScreen() {
   const [searching, setSearching] = useState(false);
   const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingSuggestionRequests, setPendingSuggestionRequests] = useState({});
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -185,10 +186,12 @@ export default function FriendsTabScreen() {
     activityHasScrolledRef.current = false;
     await Promise.all([
       refreshFriends({ force: true }),
+      refreshFriendRequests({ force: true }),
       refreshFriendActivity({ force: true, showLoading: false }),
     ]);
+    setPendingSuggestionRequests({});
     setRefreshing(false);
-  }, [refreshFriendActivity, refreshFriends]);
+  }, [refreshFriendActivity, refreshFriendRequests, refreshFriends]);
 
   useFocusEffect(
     useCallback(() => {
@@ -210,6 +213,18 @@ export default function FriendsTabScreen() {
 
   const openChallenge = useCallback((item) => {
     if (!item?.can_open || !item?.pin_id) return;
+    if (item?.comment_text && item?.photo_id) {
+      router.push(buildViewPhotoChallengeRoute({
+        pinId: item.pin_id,
+        message: item.challenge_prompt || '',
+        createdByHandle: item.challenge_created_by_handle || '',
+      }));
+      router.push(buildViewPhotoChallengePhotoRoute({
+        pinId: item.pin_id,
+        photoId: item.photo_id,
+      }));
+      return;
+    }
     router.push(buildViewPhotoChallengeRoute({
       pinId: item.pin_id,
       message: item.challenge_prompt || '',
@@ -272,23 +287,29 @@ export default function FriendsTabScreen() {
     setFriendActionBusy(true);
     const resp = await requestFriend({ handle, target_uid: targetUid });
     if (resp?.success) {
-      const status = resp?.status;
+      if (targetUid) {
+        setPendingSuggestionRequests((prev) => ({ ...prev, [targetUid]: true }));
+      }
       setSearchMessage(
-        status === 'accepted'
-          ? 'You are already friends.'
-          : status === 'pending'
-            ? 'Friend request sent.'
-            : 'Request updated.'
+        resp?.status === 'pending' ? 'Friend request sent.' : 'Request updated.'
       );
+      await refreshFriendRequests({ force: true });
       if (clearSearch) {
         setSearchResults([]);
         setFriendSearchInput('');
       }
     } else {
+      if (targetUid) {
+        setPendingSuggestionRequests((prev) => {
+          const next = { ...prev };
+          delete next[targetUid];
+          return next;
+        });
+      }
       Alert.alert('Friend Request', resp?.error || 'Failed to send friend request.');
     }
     setFriendActionBusy(false);
-  }, []);
+  }, [refreshFriendRequests]);
 
   const acceptRequest = useCallback(async (uid) => {
     if (!uid) return;
@@ -545,20 +566,39 @@ export default function FriendsTabScreen() {
           {!activitySuggestions.length ? (
             <Text style={styles.emptyText}>No suggestions right now.</Text>
           ) : (
-            activitySuggestions.map((item) => renderUserRow(item, {
-              keyPrefix: 'suggestion',
-              metaText: item?.mutual_count ? `${item.mutual_count} mutual ${item.mutual_count === 1 ? 'friend' : 'friends'}` : null,
-              rightAction: (suggestion) => (
-                <CTAButton
-                  title="Add"
-                  onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
-                  variant="filled"
-                  style={styles.smallButton}
-                  textStyle={styles.smallButtonText}
-                  disabled={friendActionBusy}
-                />
-              ),
-            }))
+            activitySuggestions.map((item) => {
+              const requestPending = !!pendingSuggestionRequests[item?.uid]
+                || pendingOutgoing.some((request) => request?.uid === item?.uid);
+              return renderUserRow(item, {
+                keyPrefix: 'suggestion',
+                rowMuted: requestPending,
+                metaText: item?.mutual_count ? `${item.mutual_count} mutual ${item.mutual_count === 1 ? 'friend' : 'friends'}` : null,
+                rightAction: (suggestion) => {
+                  if (requestPending) {
+                    return (
+                      <CTAButton
+                        title="Request Pending"
+                        variant="secondary"
+                        style={styles.smallButton}
+                        textStyle={styles.smallButtonText}
+                        disabled={true}
+                      />
+                    );
+                  }
+
+                  return (
+                    <CTAButton
+                      title="Add"
+                      onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
+                      variant="filled"
+                      style={styles.smallButton}
+                      textStyle={styles.smallButtonText}
+                      disabled={friendActionBusy}
+                    />
+                  );
+                },
+              });
+            })
           )}
         </View>
       );
@@ -619,6 +659,8 @@ export default function FriendsTabScreen() {
     friendActionBusy,
     openChallenge,
     openUserProfile,
+    pendingOutgoing,
+    pendingSuggestionRequests,
     renderUserRow,
     sendFriendRequest,
     styles,

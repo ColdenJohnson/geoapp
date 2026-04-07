@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { useRootNavigationState, useRouter } from 'expo-router';
 
 import { logNotificationEvent, registerPushToken } from '@/lib/api';
+import { buildViewPhotoChallengePhotoRoute } from '@/lib/navigation';
 
 // Show alerts/sounds/badges when a notification arrives in the foreground.
 Notifications.setNotificationHandler({
@@ -52,10 +53,7 @@ function buildNavigationTarget(data) {
   const pinId = data?.pinId != null ? `${data.pinId}` : null;
   const photoId = data?.photoId != null ? `${data.photoId}` : null;
   if (normalizedRoute === '/view_photochallenge' && pinId && photoId) {
-    return {
-      pathname: '/view_photochallenge/[pinId]/view_photo/[photoId]',
-      params: { pinId, photoId },
-    };
+    return buildViewPhotoChallengePhotoRoute({ pinId, photoId });
   }
 
   const params = {};
