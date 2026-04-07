@@ -30,6 +30,7 @@ import { buildViewPhotoChallengePhotoRoute, buildViewPhotoChallengeRoute } from 
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
+import { Toast, useToast } from '@/components/ui/Toast';
 import { fontSizes, radii, spacing } from '@/theme/tokens';
 
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
@@ -130,6 +131,7 @@ export default function FriendsTabScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
+  const { message: toastMessage, show: showToast } = useToast(2500);
   const prefilledHandleRef = useRef('');
   const activityHasScrolledRef = useRef(false);
   const sharedHandle = useMemo(
@@ -212,7 +214,13 @@ export default function FriendsTabScreen() {
   }, [router]);
 
   const openChallenge = useCallback((item) => {
-    if (!item?.can_open || !item?.pin_id) return;
+    if (!item?.pin_id) return;
+    if (!item?.can_open) {
+      if (item?.challenge_is_geo_locked) {
+        showToast('Unable to open this activity because it is location locked.', 2500);
+      }
+      return;
+    }
     if (item?.comment_text && item?.photo_id) {
       router.push(buildViewPhotoChallengeRoute({
         pinId: item.pin_id,
@@ -230,7 +238,7 @@ export default function FriendsTabScreen() {
       message: item.challenge_prompt || '',
       createdByHandle: item.challenge_created_by_handle || '',
     }));
-  }, [router]);
+  }, [router, showToast]);
 
   const runFriendSearch = useCallback(async (query, { showLoading = false, allowShort = false } = {}) => {
     const trimmed = normalizeHandleQuery(query ?? friendSearchInput);
@@ -632,12 +640,12 @@ export default function FriendsTabScreen() {
         </View>
 
         <Pressable
-          disabled={!item?.can_open}
+          disabled={!item?.pin_id}
           onPress={() => openChallenge(item)}
           style={({ pressed }) => [
             styles.activityBody,
             !item?.can_open && styles.activityBodyStatic,
-            item?.can_open && pressed && styles.pressed,
+            item?.pin_id && pressed && styles.pressed,
           ]}
         >
           <Text style={styles.activityPrompt}>{item?.challenge_prompt}</Text>
@@ -782,6 +790,7 @@ export default function FriendsTabScreen() {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
+      <Toast message={toastMessage} bottomOffset={spacing.xl} />
     </SafeAreaView>
   );
 }
