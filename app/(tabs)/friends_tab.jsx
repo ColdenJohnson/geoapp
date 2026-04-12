@@ -130,6 +130,7 @@ export default function FriendsTabScreen() {
   const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingSuggestionRequests, setPendingSuggestionRequests] = useState({});
+  const [optimisticCanceledOutgoingRequests, setOptimisticCanceledOutgoingRequests] = useState({});
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -147,8 +148,10 @@ export default function FriendsTabScreen() {
   ), [friendRequests.incoming]);
 
   const pendingOutgoing = useMemo(() => (
-    [...(friendRequests.outgoing || [])].sort((a, b) => parseDateMs(b?.requested_at) - parseDateMs(a?.requested_at))
-  ), [friendRequests.outgoing]);
+    [...(friendRequests.outgoing || [])]
+      .filter((request) => !optimisticCanceledOutgoingRequests[request?.uid])
+      .sort((a, b) => parseDateMs(b?.requested_at) - parseDateMs(a?.requested_at))
+  ), [friendRequests.outgoing, optimisticCanceledOutgoingRequests]);
 
   const recentFriends = useMemo(() => (
     [...friends]
@@ -301,6 +304,12 @@ export default function FriendsTabScreen() {
     if (resp?.success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       if (targetUid) {
+        setOptimisticCanceledOutgoingRequests((prev) => {
+          if (!prev[targetUid]) return prev;
+          const next = { ...prev };
+          delete next[targetUid];
+          return next;
+        });
         setPendingSuggestionRequests((prev) => ({ ...prev, [targetUid]: true }));
       }
       setSearchMessage(
@@ -352,13 +361,28 @@ export default function FriendsTabScreen() {
 
   const cancelRequest = useCallback(async (uid) => {
     if (!uid) return;
+    setOptimisticCanceledOutgoingRequests((prev) => ({ ...prev, [uid]: true }));
     setFriendActionBusy(true);
     const resp = await cancelFriendRequest(uid);
-    if (!resp?.success) {
+    if (resp?.success) {
+      setPendingSuggestionRequests((prev) => {
+        if (!prev[uid]) return prev;
+        const next = { ...prev };
+        delete next[uid];
+        return next;
+      });
+      await refreshFriendRequests({ force: true });
+    } else {
+      setOptimisticCanceledOutgoingRequests((prev) => {
+        if (!prev[uid]) return prev;
+        const next = { ...prev };
+        delete next[uid];
+        return next;
+      });
       Alert.alert('Friend Request', resp?.error || 'Failed to cancel friend request.');
     }
     setFriendActionBusy(false);
-  }, []);
+  }, [refreshFriendRequests]);
 
   const renderUserRow = useCallback((item, {
     keyPrefix,

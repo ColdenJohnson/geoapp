@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockShowToast = jest.fn();
 
@@ -44,6 +44,7 @@ jest.mock('@/components/ui/Toast', () => ({
   useToast: () => ({ message: null, show: mockShowToast }),
 }));
 
+import { cancelFriendRequest } from '@/lib/api';
 import FriendsTabScreen from '@/app/(tabs)/friends_tab';
 import { AuthContext } from '@/hooks/AuthContext';
 
@@ -110,5 +111,43 @@ describe('FriendsTabScreen', () => {
     });
 
     expect(markFriendActivitySeen).toHaveBeenCalled();
+  });
+
+  it('removes an outgoing request optimistically when cancel is pressed', async () => {
+    let resolveCancel;
+    cancelFriendRequest.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveCancel = resolve;
+    }));
+    const refreshFriendRequests = jest.fn(async () => ({ incoming: [], outgoing: [] }));
+
+    const { getAllByText, getByText, queryByText } = renderScreen({
+      friendRequests: {
+        incoming: [],
+        outgoing: [{
+          uid: 'outgoing-1',
+          display_name: 'Outgoing Friend',
+          handle: 'outgoing_friend',
+          requested_at: '2026-04-07T00:00:00.000Z',
+        }],
+      },
+      refreshFriendRequests,
+    });
+
+    fireEvent.press(getAllByText('Friends')[1]);
+
+    expect(getByText('Outgoing Friend')).toBeTruthy();
+
+    fireEvent.press(getByText('Cancel'));
+
+    expect(queryByText('Outgoing Friend')).toBeNull();
+    expect(getByText('No outgoing requests.')).toBeTruthy();
+
+    await act(async () => {
+      resolveCancel({ success: true });
+    });
+
+    await waitFor(() => {
+      expect(refreshFriendRequests).toHaveBeenCalledWith({ force: true });
+    });
   });
 });
