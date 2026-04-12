@@ -34,6 +34,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import { textStyles } from '@/theme/typography';
 
 const MARKER_REFRESH_WINDOW_MS = 240;
 
@@ -709,17 +710,14 @@ function createStyles(colors) {
       paddingVertical: 4,
     },
     calloutLabel: {
-      fontSize: 10,
-      textTransform: 'uppercase',
-      letterSpacing: 1.3,
+      ...textStyles.eyebrow,
       color: colors.primary,
-      fontWeight: '800',
       marginBottom: 6,
     },
     calloutPrompt: {
+      ...textStyles.bodyStrong,
       fontSize: 15,
       lineHeight: 20,
-      fontWeight: '800',
       color: colors.text,
     },
     calloutDivider: {
@@ -728,8 +726,7 @@ function createStyles(colors) {
       marginVertical: 10,
     },
     calloutMeta: {
-      fontSize: 12,
-      fontWeight: '700',
+      ...textStyles.bodyXsStrong,
       color: colors.textMuted,
     },
     calloutActionButton: {

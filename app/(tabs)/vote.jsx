@@ -7,6 +7,7 @@ import { voteGlobalDuel, isTokenFresh } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import DuelDeck from '@/components/vote/DuelDeck';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import { textStyles } from '@/theme/typography';
 import {
   advanceGlobalDuelQueue,
   DEFAULT_PRELOAD_COUNT,
@@ -417,14 +418,13 @@ function createStyles(colors) {
     },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     emptyText: {
+      ...textStyles.bodyStrong,
       color: colors.text,
-      fontSize: 16,
-      fontWeight: '700',
       lineHeight: 24,
       textAlign: 'center',
       paddingHorizontal: 24,
     },
-    loadingText: { color: colors.textMuted, textAlign: 'center', fontSize: 14, fontWeight: '800' },
+    loadingText: { ...textStyles.buttonSmall, color: colors.textMuted, textAlign: 'center' },
     deckArea: {
       flex: 1,
       width: '100%',
@@ -439,39 +439,32 @@ function createStyles(colors) {
       alignSelf: 'flex-end',
     },
     metaLabel: {
-      fontSize: 10,
-      fontWeight: '800',
+      ...textStyles.eyebrow,
       letterSpacing: 1.1,
-      textTransform: 'uppercase',
       color: colors.primary,
     },
     metaHandle: {
+      ...textStyles.heading,
       fontSize: 28,
       lineHeight: 32,
-      fontWeight: '900',
       color: '#FFFFFF',
       letterSpacing: 0.2,
     },
     metaDetail: {
-      fontSize: 12,
+      ...textStyles.bodyXsStrong,
       color: '#FFFFFF',
-      fontWeight: '700',
       letterSpacing: 0.3,
     },
     metaTextRight: {
       textAlign: 'right',
     },
     kicker: {
-      fontSize: 10,
-      fontWeight: '900',
-      letterSpacing: 3.1,
-      textTransform: 'uppercase',
+      ...textStyles.kicker,
       color: colors.primary,
     },
     sessionTitle: {
       marginTop: 4,
-      fontSize: 24,
-      fontWeight: '800',
+      ...textStyles.heading,
       color: colors.text,
       textAlign: 'center',
       paddingHorizontal: 20,
@@ -479,10 +472,8 @@ function createStyles(colors) {
     },
     remainingVotes: {
       marginTop: 8,
-      fontSize: 10,
+      ...textStyles.eyebrow,
       color: colors.textMuted,
-      textTransform: 'uppercase',
-      fontWeight: '800',
       letterSpacing: 1.4,
     },
     helperRow: {
@@ -494,12 +485,10 @@ function createStyles(colors) {
       zIndex: 20,
     },
     helperText: {
+      ...textStyles.buttonCapsSmall,
       color: 'rgba(255, 255, 255, 0.62)',
       textAlign: 'center',
-      fontSize: 11,
-      fontWeight: '800',
       letterSpacing: 1.2,
-      textTransform: 'uppercase',
     },
   });
 }

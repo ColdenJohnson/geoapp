@@ -8,6 +8,7 @@ import TabBarBackground from '@/components/ui/TabBarBackground';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePalette } from '@/hooks/usePalette';
 import { Colors } from '@/theme/Colors';
+import { textStyles } from '@/theme/typography';
 
 export const unstable_settings = {
   initialRouteName: 'active_challenges',
@@ -27,9 +28,7 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '800',
-          letterSpacing: 0.5,
+          ...textStyles.tabLabel,
         },
         tabBarItemStyle: {
           paddingTop: 2,

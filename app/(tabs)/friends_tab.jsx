@@ -31,7 +31,8 @@ import { usePalette } from '@/hooks/usePalette';
 import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { Toast, useToast } from '@/components/ui/Toast';
-import { fontSizes, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
 
@@ -813,10 +814,8 @@ function createStyles(colors) {
       alignSelf: 'center',
     },
     pageTitle: {
-      fontSize: fontSizes['2xl'],
-      fontWeight: '900',
+      ...textStyles.pageTitle,
       color: colors.primary,
-      fontFamily: 'SpaceMono',
       letterSpacing: 0.3,
       marginBottom: spacing.lg,
     },
@@ -842,11 +841,9 @@ function createStyles(colors) {
       backgroundColor: colors.surface,
     },
     segmentText: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '900',
       letterSpacing: 0.9,
-      textTransform: 'uppercase',
     },
     segmentTextActive: {
       color: colors.primary,
@@ -877,16 +874,12 @@ function createStyles(colors) {
       paddingHorizontal: 2,
     },
     sectionTitle: {
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
-      letterSpacing: 1.1,
-      textTransform: 'uppercase',
+      ...textStyles.sectionTitle,
       color: colors.text,
     },
     sectionCount: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
       letterSpacing: 0.8,
     },
     searchInput: {
@@ -920,21 +913,18 @@ function createStyles(colors) {
       minWidth: 0,
     },
     personName: {
+      ...textStyles.bodyStrong,
       color: colors.text,
-      fontWeight: '800',
-      fontSize: fontSizes.md,
     },
     personMeta: {
+      ...textStyles.bodySmallStrong,
       color: colors.primary,
-      fontSize: fontSizes.sm,
       marginTop: 3,
-      fontWeight: '700',
     },
     personMetaSecondary: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
       marginTop: 3,
-      fontWeight: '700',
     },
     personAction: {
       alignItems: 'flex-end',
@@ -951,7 +941,7 @@ function createStyles(colors) {
       paddingHorizontal: spacing.md,
     },
     smallButtonText: {
-      fontSize: fontSizes.sm,
+      ...textStyles.buttonSmall,
     },
     activityCard: {
       backgroundColor: colors.bg,
@@ -974,19 +964,17 @@ function createStyles(colors) {
       minWidth: 0,
     },
     activityHeadline: {
+      ...textStyles.bodyStrong,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontWeight: '700',
       lineHeight: 21,
     },
     activityHeadlineName: {
+      ...textStyles.bodyStrong,
       color: colors.primary,
-      fontWeight: '900',
     },
     activityTimestamp: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       marginTop: 4,
     },
     activityBody: {
@@ -998,15 +986,13 @@ function createStyles(colors) {
       opacity: 0.92,
     },
     activityPrompt: {
+      ...textStyles.bodyStrong,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontWeight: '800',
       lineHeight: 22,
     },
     activityComment: {
+      ...textStyles.italicStrong,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontStyle: 'italic',
       lineHeight: 22,
       marginTop: spacing.sm,
     },
@@ -1020,8 +1006,7 @@ function createStyles(colors) {
     activityLink: {
       marginTop: spacing.sm,
       color: colors.primary,
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
+      ...textStyles.buttonSmall,
       letterSpacing: 0.5,
     },
     activityFooter: {
@@ -1040,9 +1025,8 @@ function createStyles(colors) {
       borderColor: colors.primary,
     },
     avatarFallbackText: {
+      ...textStyles.bodyStrong,
       color: colors.primaryTextOn,
-      fontWeight: '900',
-      fontSize: fontSizes.md,
     },
     centerRow: {
       alignItems: 'center',

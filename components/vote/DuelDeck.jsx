@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { usePalette } from '@/hooks/usePalette';
+import { textStyles } from '@/theme/typography';
 
 const VOTE_SWIPE_THRESHOLD = 140;
 const MIN_THRESHOLD_PX = 56;
@@ -389,17 +390,14 @@ function createStyles(colors) {
       justifyContent: 'center',
     },
     winnerCheck: {
-      fontSize: 44,
-      fontWeight: '900',
+      ...textStyles.displayLarge,
       color: colors.primary_darkened || colors.primary,
       marginTop: -2,
     },
     winnerText: {
       marginTop: 14,
-      fontSize: 34,
-      fontWeight: '900',
+      ...textStyles.display,
       color: '#FFFFFF',
-      letterSpacing: 0.4,
     },
     dividerRail: {
       position: 'absolute',
@@ -427,8 +425,7 @@ function createStyles(colors) {
       zIndex: 2,
     },
     handleGlyph: {
-      fontSize: 18,
-      fontWeight: '900',
+      ...textStyles.titleStrong,
       color: colors.text,
       letterSpacing: 0.8,
     },
@@ -441,9 +438,8 @@ function createStyles(colors) {
       zIndex: 1,
     },
     hintArrow: {
-      fontSize: 29,
+      ...textStyles.pageTitle,
       color: "#ffffff",
-      fontWeight: '800',
       lineHeight: 29,
     },
   });

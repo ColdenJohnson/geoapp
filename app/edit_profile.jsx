@@ -11,12 +11,13 @@ import { usePalette } from '@/hooks/usePalette';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import { CTAButton } from '@/components/ui/Buttons';
 import { PreferenceToggleRow } from '@/components/ui/PreferenceToggleRow';
-import { spacing, fontSizes } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
 import { goBackOrHome } from '@/lib/navigation';
 import { normalizeThemePreference } from '@/theme/themePreference';
+import { textStyles } from '@/theme/typography';
 
 const BIO_MAX_LENGTH = 100;
 const HANDLE_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
@@ -443,13 +444,10 @@ function createStyles(colors) {
       flexGrow: 1,
     },
     pageTitle: {
-      fontSize: fontSizes.xl,
-      fontWeight: '900',
+      ...textStyles.pageTitleCompact,
       color: colors.primary,
       marginBottom: spacing.md,
       textAlign: 'center',
-      letterSpacing: 0.4,
-      fontFamily: 'SpaceMono',
     },
     actionRow: {
       flexDirection: 'row',
@@ -508,9 +506,8 @@ function createStyles(colors) {
       gap: 6,
     },
     profileOverlayText: {
+      ...textStyles.buttonSmall,
       color: colors.text,
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
       letterSpacing: 0.6,
     },
     formCard: {
@@ -539,19 +536,16 @@ function createStyles(colors) {
       backgroundColor: colors.surface,
     },
     segmentText: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '900',
       letterSpacing: 0.9,
-      textTransform: 'uppercase',
     },
     segmentTextActive: {
       color: colors.primary,
     },
     preferenceHelp: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       lineHeight: 18,
       marginTop: spacing.sm,
     },
@@ -563,22 +557,18 @@ function createStyles(colors) {
       alignSelf: 'center',
     },
     deleteText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: 15,
-      fontWeight: '700',
     },
     sectionTitle: {
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
-      letterSpacing: 1.1,
-      textTransform: 'uppercase',
+      ...textStyles.sectionTitle,
       color: colors.text,
       marginBottom: spacing.sm,
       marginTop: spacing.md,
     },
     statusText: {
+      ...textStyles.bodySmallStrong,
       color: colors.danger,
-      fontWeight: '700',
       marginBottom: spacing.sm,
     },
     invalidInput: {
@@ -588,8 +578,7 @@ function createStyles(colors) {
       marginTop: spacing.xs,
       textAlign: 'right',
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
+      ...textStyles.bodySmallStrong,
     },
   });
 }

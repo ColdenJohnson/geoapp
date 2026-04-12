@@ -3,7 +3,8 @@
 import React, { useMemo } from 'react';
 import { Pressable, Text, StyleSheet, View } from 'react-native';
 import { usePalette } from '@/hooks/usePalette';
-import { spacing, radii, fontSizes, shadows } from '@/theme/tokens';
+import { spacing, radii, shadows } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 export function CTAButton({ title, onPress, variant = 'primary', style, textStyle, disabled = false }) {
   const colors = usePalette();
@@ -92,9 +93,7 @@ function createStyles(colors) {
       transform: [{ scale: 0.985 }],
     },
     text: {
-      fontSize: fontSizes.md,
-      fontWeight: '800',
-      letterSpacing: 0.7,
+      ...textStyles.button,
     },
     textPrimary: { color: colors.primary },
     textSecondary: { color: colors.text },
@@ -119,9 +118,7 @@ function createStyles(colors) {
       marginRight: spacing.sm,
     },
     outlineText: {
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
-      letterSpacing: 0.6,
+      ...textStyles.buttonSmall,
       color: colors.text,
     },
   });

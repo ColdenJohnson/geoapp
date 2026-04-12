@@ -3,7 +3,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { usePalette } from '@/hooks/usePalette';
-import { spacing, fontSizes } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 export default function TopBar({ title, subtitle, right = null, style }) {
   const colors = usePalette();
@@ -44,14 +45,11 @@ function createStyles(colors) {
       paddingRight: spacing.md,
     },
     title: {
-      fontSize: fontSizes.lg,
-      fontWeight: '800',
-      letterSpacing: 0.4,
+      ...textStyles.titleStrong,
       color: colors.text,
     },
     subtitle: {
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
+      ...textStyles.bodySmallStrong,
       letterSpacing: 0.5,
       color: colors.textMuted,
     },

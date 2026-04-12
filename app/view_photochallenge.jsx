@@ -43,7 +43,8 @@ import { Toast, useToast } from '@/components/ui/Toast';
 import { AuthContext } from '@/hooks/AuthContext';
 import { usePalette } from '@/hooks/usePalette';
 import { PUBLIC_BASE_URL } from '@/lib/apiClient';
-import { fontSizes, radii, shadows, spacing } from '@/theme/tokens';
+import { radii, shadows, spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 const SORT_MODE_ELO = 'elo';
 const SORT_MODE_DATE = 'date';
@@ -721,9 +722,8 @@ function createStyles(colors) {
       borderColor: colors.border,
     },
     gallerySummaryChipText: {
+      ...textStyles.chip,
       color: colors.text,
-      fontSize: 12,
-      fontWeight: '800',
     },
     galleryRow: {
       justifyContent: 'space-between',
@@ -770,9 +770,8 @@ function createStyles(colors) {
       backgroundColor: 'rgba(26, 26, 26, 0.54)',
     },
     galleryHandle: {
+      ...textStyles.body3xsBold,
       color: '#FFFFFF',
-      fontSize: 10,
-      fontWeight: '900',
       letterSpacing: 0.5,
     },
     galleryEloChip: {
@@ -787,9 +786,8 @@ function createStyles(colors) {
       borderColor: colors.border,
     },
     galleryEloText: {
+      ...textStyles.chipSmall,
       color: colors.text,
-      fontSize: 11,
-      fontWeight: '900',
     },
     galleryStatusChip: {
       paddingHorizontal: spacing.sm,
@@ -806,9 +804,8 @@ function createStyles(colors) {
       borderColor: colors.danger,
     },
     galleryStatusText: {
+      ...textStyles.chipSmall,
       color: colors.text,
-      fontSize: 11,
-      fontWeight: '900',
     },
     emptyState: {
       alignItems: 'center',
@@ -818,14 +815,12 @@ function createStyles(colors) {
       gap: spacing.sm,
     },
     emptyTitle: {
+      ...textStyles.title,
       color: colors.text,
-      fontSize: fontSizes.lg,
-      fontWeight: '900',
     },
     emptyText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       textAlign: 'center',
       lineHeight: 20,
     },

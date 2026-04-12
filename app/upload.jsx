@@ -9,11 +9,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
 import ChallengeCameraStage from '@/components/camera/ChallengeCameraStage';
-import { fontSizes, spacing, radii } from '@/theme/tokens';
+import { spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { goBackOrHome, buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { AuthContext } from '@/hooks/AuthContext';
 import { enqueueAddPhotoUpload } from '@/lib/uploadQueue';
+import { textStyles } from '@/theme/typography';
 
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const EXTRA_BOTTOM_BUFFER = spacing.md;
@@ -286,11 +287,8 @@ function createStyles(colors) {
       paddingLeft: spacing.xs,
     },
     backText: {
+      ...textStyles.navLabel,
       color: colors.text,
-      fontSize: fontSizes.sm,
-      fontWeight: "800",
-      letterSpacing: 0.3,
-      textTransform: "uppercase",
     },
     content: {
       flex: 1,
@@ -298,7 +296,7 @@ function createStyles(colors) {
       justifyContent: "center",
       gap: spacing.lg,
     },
-    message: { color: colors.text, textAlign: "center" },
+    message: { ...textStyles.body, color: colors.text, textAlign: "center" },
     card: {
       width: "100%",
       maxWidth: 520,
@@ -339,11 +337,8 @@ function createStyles(colors) {
       paddingVertical: 0,
     },
     createText: {
-      fontSize: 26,
-      fontWeight: "800",
-      letterSpacing: 1.2,
+      ...textStyles.accentAction,
       color: colors.primary,
-      fontFamily: "SpaceMono",
     },
   });
 }

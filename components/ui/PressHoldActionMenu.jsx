@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { usePalette } from '@/hooks/usePalette';
+import { textStyles } from '@/theme/typography';
 
 export const PRESS_HOLD_ACTION_MENU_DEFAULT_SIZE = {
   width: 236,
@@ -288,22 +289,16 @@ function createStyles(colors) {
     },
     titleLabel: {
       marginBottom: 3,
-      fontSize: 9,
-      fontWeight: '900',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
+      ...textStyles.eyebrowTight,
       color: colors.textMuted,
     },
     title: {
-      fontSize: 14,
-      lineHeight: 18,
-      fontWeight: '900',
+      ...textStyles.titleStrong,
       color: colors.text,
     },
     subtitle: {
       marginTop: 4,
-      fontSize: 11,
-      fontWeight: '700',
+      ...textStyles.body2xsBold,
       color: colors.textMuted,
     },
     section: {
@@ -338,8 +333,7 @@ function createStyles(colors) {
       backgroundColor: 'rgba(255,107,53,0.12)',
     },
     quickLabel: {
-      fontSize: 11,
-      fontWeight: '900',
+      ...textStyles.chipSmall,
       color: colors.text,
     },
     listAction: {
@@ -360,8 +354,7 @@ function createStyles(colors) {
     },
     listLabel: {
       flex: 1,
-      fontSize: 13,
-      fontWeight: '900',
+      ...textStyles.bodySmallBold,
       color: colors.text,
     },
     optionActive: {

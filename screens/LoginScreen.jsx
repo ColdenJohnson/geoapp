@@ -11,8 +11,9 @@ import { useIsDarkMode, usePalette } from '@/hooks/usePalette';
 import BottomBar from '@/components/ui/BottomBar';
 import { CTAButton, OutlineIconButton } from '@/components/ui/Buttons';
 import { createFormStyles } from '@/components/ui/FormStyles';
-import { spacing, radii, fontSizes } from '@/theme/tokens';
+import { spacing, radii } from '@/theme/tokens';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { textStyles } from '@/theme/typography';
 
 
 
@@ -385,23 +386,17 @@ function createStyles(colors) {
       marginBottom: spacing.sm,
     },
     brand: {
-      fontSize: fontSizes.xl,
-      fontWeight: '900',
-      letterSpacing: 0.9,
+      ...textStyles.brand,
       color: colors.primary,
-      fontFamily: 'SpaceMono',
     },
     title: {
-      fontSize: fontSizes['2xl'],
-      fontWeight: '900',
-      letterSpacing: 0.8,
+      ...textStyles.pageTitle,
       color: colors.text,
       textAlign: 'center',
-      fontFamily: 'SpaceMono',
       marginBottom: spacing.lg,
     },
     subtitle: {
-      fontSize: fontSizes.md,
+      ...textStyles.body,
       color: colors.textMuted,
       textAlign: 'center',
       marginTop: spacing.xs,
@@ -417,9 +412,8 @@ function createStyles(colors) {
       backgroundColor: colors.surface,
     },
     offlineBannerText: {
+      ...textStyles.bodySmallStrong,
       color: colors.warning,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       textAlign: 'center',
     },
     card: {
@@ -451,13 +445,13 @@ function createStyles(colors) {
       alignSelf: 'flex-start',
     },
     resendText: {
+      ...textStyles.buttonSmall,
       color: colors.primary,
-      fontWeight: '800',
     },
     cooldownText: {
+      ...textStyles.bodyXsStrong,
       color: colors.textMuted,
       marginTop: spacing.xs,
-      fontWeight: '600',
     },
     toggleRow: {
       flexDirection: 'row',
@@ -471,8 +465,8 @@ function createStyles(colors) {
       marginRight: spacing.xs,
     },
     toggleLink: {
+      ...textStyles.buttonSmall,
       color: colors.primary,
-      fontWeight: '800',
     },
     actionBar: {
       marginTop: spacing.sm,
@@ -492,11 +486,9 @@ function createStyles(colors) {
       marginTop: spacing.lg,
     },
     altTitle: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: 11,
       letterSpacing: 1.1,
-      textTransform: 'uppercase',
-      fontWeight: '800',
       marginBottom: spacing.sm,
       textAlign: 'center',
     },
@@ -516,13 +508,12 @@ function createStyles(colors) {
     },
     methodTextActive: {
       color: colors.primary,
-      fontWeight: '800',
     },
     error: {
+      ...textStyles.bodySmallStrong,
       color: colors.danger,
       marginTop: spacing.md,
       textAlign: 'center',
-      fontWeight: '700',
     },
   });
 }

@@ -5,7 +5,8 @@ import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
 import { VolumeManager } from 'react-native-volume-manager';
 
 import { usePalette } from '@/hooks/usePalette';
-import { fontSizes, radii, spacing } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 const PHOTO_ASPECT_RATIO = 3 / 4;
 const NATIVE_PHOTO_ASPECT_RATIO = 1 / PHOTO_ASPECT_RATIO;
@@ -397,8 +398,7 @@ function createStyles(colors) {
       marginBottom: spacing.sm,
       textAlign: 'center',
       color: colors.primary,
-      fontSize: 18,
-      fontWeight: '700',
+      ...textStyles.bodyEmphasis,
     },
     cameraContainer: {
       width: '100%',
@@ -429,9 +429,9 @@ function createStyles(colors) {
       paddingHorizontal: spacing.lg,
     },
     cameraStatusText: {
+      ...textStyles.bodySmallStrong,
       color: '#F6EFE8',
       textAlign: 'center',
-      fontWeight: '700',
       backgroundColor: 'rgba(12,7,3,0.56)',
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
@@ -445,8 +445,7 @@ function createStyles(colors) {
       backgroundColor: 'rgba(12,7,3,0.24)',
     },
     countdownText: {
-      fontSize: 72,
-      fontWeight: '900',
+      ...textStyles.countdown,
       color: '#FFFFFF',
       textShadowColor: 'rgba(0,0,0,0.32)',
       textShadowOffset: { width: 0, height: 4 },
@@ -484,10 +483,8 @@ function createStyles(colors) {
       opacity: 0.45,
     },
     topControlText: {
+      ...textStyles.buttonCapsSmall,
       color: '#F6EFE8',
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
-      textTransform: 'uppercase',
       letterSpacing: 0.4,
     },
     topControlTextActive: {
@@ -521,11 +518,9 @@ function createStyles(colors) {
       opacity: 0.45,
     },
     timerOptionText: {
+      ...textStyles.buttonCapsSmall,
       color: '#F6EFE8',
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
       letterSpacing: 0.45,
-      textTransform: 'uppercase',
     },
     timerOptionTextActive: {
       color: colors.primary,
@@ -554,9 +549,8 @@ function createStyles(colors) {
       opacity: 0.45,
     },
     lensToggleText: {
+      ...textStyles.buttonSmall,
       color: '#F6EFE8',
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
       letterSpacing: 0.2,
     },
     shutterBtn: {
@@ -600,9 +594,9 @@ function createStyles(colors) {
       opacity: 0.72,
     },
     helper: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
       textAlign: 'center',
-      fontWeight: '700',
       marginTop: spacing.sm,
     },
   });

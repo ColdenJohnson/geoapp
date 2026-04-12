@@ -46,6 +46,7 @@ import { usePalette } from '@/hooks/usePalette';
 import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 import { filterChallengesByPrompt, isQuestSearchReady, normalizeQuestSearchText } from '@/lib/questSearch';
 import { spacing, radii } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 const CARD_ASPECT_RATIO = 3 / 4;
 const SWIPE_THRESHOLD = 110;
@@ -1545,11 +1546,8 @@ function createStyles(colors) {
     },
     headerTitle: {
       alignSelf: 'flex-start',
-      fontSize: 30,
-      lineHeight: 34,
-      fontWeight: '900',
+      ...textStyles.headingLg,
       color: colors.primary,
-      letterSpacing: -0.3,
     },
     statusBannerOverlay: {
       position: 'absolute',
@@ -1576,9 +1574,8 @@ function createStyles(colors) {
       borderColor: 'rgba(220,38,38,0.18)',
     },
     statusBannerText: {
+      ...textStyles.bodyXsStrong,
       color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: '700',
       textAlign: 'center',
     },
     headerSearchRow: {
@@ -1599,11 +1596,9 @@ function createStyles(colors) {
       paddingHorizontal: 2,
     },
     headerToggleText: {
-      fontSize: 12,
-      fontWeight: '900',
+      ...textStyles.buttonCaps,
       letterSpacing: 0.8,
       color: colors.primary,
-      textTransform: 'uppercase',
     },
     stackStage: {
       flex: 1,
@@ -1618,8 +1613,7 @@ function createStyles(colors) {
       paddingHorizontal: spacing.lg,
     },
     stateText: {
-      fontSize: 14,
-      fontWeight: '700',
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
       textAlign: 'center',
     },
@@ -1677,10 +1671,9 @@ function createStyles(colors) {
       maxWidth: 170,
     },
     creatorChipText: {
+      ...textStyles.eyebrow,
       color: colors.primary,
-      fontSize: 10,
       letterSpacing: 0.4,
-      fontWeight: '800',
     },
     handleChip: {
       borderRadius: radii.pill,
@@ -1692,11 +1685,10 @@ function createStyles(colors) {
       maxWidth: 160,
     },
     handleChipText: {
+      ...textStyles.eyebrow,
       color: colors.primary,
-      fontSize: 10,
       textTransform: 'uppercase',
       letterSpacing: 1.1,
-      fontWeight: '900',
     },
     cardIconButton: {
       width: 36,
@@ -1732,9 +1724,8 @@ function createStyles(colors) {
       maxWidth: 96,
     },
     photoCountText: {
+      ...textStyles.chip,
       color: '#FFFFFF',
-      fontWeight: '900',
-      fontSize: 12,
     },
     promptBlock: {
       position: 'absolute',
@@ -1743,10 +1734,9 @@ function createStyles(colors) {
       top: 70,
     },
     promptText: {
+      ...textStyles.heading,
       color: '#FFFFFF',
-      fontSize: 24,
       lineHeight: 28,
-      fontWeight: '900',
     },
     bottomTeaser: {
       position: 'absolute',
@@ -1767,22 +1757,20 @@ function createStyles(colors) {
       width: '100%',
     },
     bottomTeaserLabel: {
+      ...textStyles.bodySmallBold,
       flex: 1,
       color: '#FFFFFF',
-      fontWeight: '900',
-      fontSize: 13,
       lineHeight: 17,
     },
     bottomTeaserComment: {
+      ...textStyles.bodySmallStrong,
       flex: 1,
       color: '#FFFFFF',
-      fontSize: 13,
       lineHeight: 17,
-      fontWeight: '700',
     },
     bottomTeaserHandle: {
+      ...textStyles.bodySmallBold,
       color: colors.primary,
-      fontWeight: '900',
     },
     selectBadge: {
       position: 'absolute',
@@ -1796,9 +1784,8 @@ function createStyles(colors) {
       transform: [{ rotate: '-14deg' }],
     },
     selectBadgeText: {
+      ...textStyles.buttonCaps,
       color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '900',
       letterSpacing: 0.6,
     },
     skipBadge: {
@@ -1814,9 +1801,8 @@ function createStyles(colors) {
       transform: [{ rotate: '14deg' }],
     },
     skipBadgeText: {
+      ...textStyles.buttonCaps,
       color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '900',
       letterSpacing: 0.6,
     },
     saveBadge: {
@@ -1832,9 +1818,8 @@ function createStyles(colors) {
       paddingVertical: 6,
     },
     saveBadgeText: {
+      ...textStyles.buttonCaps,
       color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '900',
       letterSpacing: 0.6,
     },
     footerButtons: {

@@ -1,6 +1,7 @@
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { textStyles } from '@/theme/typography';
 
 const OUTLINE_SIZE = 52;
 const SHELL_SIZE = 48;
@@ -200,7 +201,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    ...textStyles.body2xsBold,
   },
 });

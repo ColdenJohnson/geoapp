@@ -23,8 +23,9 @@ import { CTAButton } from '@/components/ui/Buttons';
 import ChallengeCameraStage from '@/components/camera/ChallengeCameraStage';
 
 import { usePalette } from '@/hooks/usePalette';
-import { fontSizes, spacing, radii } from '@/theme/tokens';
+import { spacing, radii } from '@/theme/tokens';
 import { goBackOrHome } from '@/lib/navigation';
+import { textStyles } from '@/theme/typography';
 
 import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseStore';
 import { enqueueNewChallengeUpload } from '@/lib/uploadQueue';
@@ -326,11 +327,8 @@ function createStyles(colors) {
       paddingLeft: spacing.xs,
     },
     backText: {
+      ...textStyles.navLabel,
       color: colors.text,
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
-      letterSpacing: 0.3,
-      textTransform: 'uppercase',
     },
     content: {
       flex: 1,
@@ -384,12 +382,9 @@ function createStyles(colors) {
       justifyContent: 'center',
     },
     title: {
-      fontSize: 26,
-      fontWeight: '900',
+      ...textStyles.accentTitle,
       color: colors.primary,
       textAlign: 'center',
-      letterSpacing: 0.6,
-      fontFamily: 'SpaceMono',
     },
     noteBlock: {
       width: '100%',
@@ -418,15 +413,12 @@ function createStyles(colors) {
       gap: 2,
     },
     geoLockLabel: {
-      fontSize: 13,
-      fontWeight: '800',
+      ...textStyles.sectionTitle,
       color: colors.text,
-      textTransform: 'uppercase',
       letterSpacing: 0.45,
     },
     geoLockHint: {
-      fontSize: 11,
-      fontWeight: '700',
+      ...textStyles.body2xsBold,
       color: colors.textMuted,
       lineHeight: 15,
     },
@@ -439,8 +431,7 @@ function createStyles(colors) {
     input: {
       width: '100%',
       minHeight: 50,
-      fontSize: 18,
-      lineHeight: 22,
+      ...textStyles.inputLarge,
       backgroundColor: colors.bg,
       borderRadius: radii.md,
       padding: spacing.md,
@@ -452,7 +443,6 @@ function createStyles(colors) {
       shadowRadius: 20,
       shadowOpacity: 0.12,
       elevation: 8,
-      fontWeight: '600',
     },
     inputMaxed: { color: colors.danger },
     actions: { width: '100%', flexDirection: 'row', gap: spacing.md },
@@ -463,12 +453,9 @@ function createStyles(colors) {
       paddingVertical: 0,
     },
     createText: {
-      fontSize: 26,
-      fontWeight: '800',
-      letterSpacing: 1.2,
+      ...textStyles.accentAction,
       color: colors.primary,
-      fontFamily: 'SpaceMono',
     },
-    helper: { color: colors.textMuted, textAlign: 'center', fontWeight: '700', marginTop: spacing.sm },
+    helper: { ...textStyles.bodySmallStrong, color: colors.textMuted, textAlign: 'center', marginTop: spacing.sm },
   });
 }

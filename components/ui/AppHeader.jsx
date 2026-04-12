@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePalette } from '@/hooks/usePalette';
-import { fontSizes, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 export default function AppHeader({
   title = null,
@@ -75,30 +76,21 @@ function createStyles(colors) {
       opacity: 0.4,
     },
     backText: {
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
+      ...textStyles.navLabel,
       color: colors.text,
-      letterSpacing: 0.3,
-      textTransform: 'uppercase',
     },
     right: {
       marginLeft: spacing.md,
     },
     title: {
       marginTop: spacing.xs,
-      fontSize: fontSizes.lg,
-      fontWeight: '900',
+      ...textStyles.pageTitleCompact,
       color: colors.primary,
-      letterSpacing: 0.4,
-      fontFamily: 'SpaceMono',
     },
     subtitle: {
       marginTop: spacing.xs,
-      fontSize: 11,
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontWeight: '800',
-      letterSpacing: 0.8,
-      textTransform: 'uppercase',
     },
   });
 }

@@ -7,8 +7,9 @@ import { AuthContext } from '../hooks/AuthContext';
 import { acceptFriendRequest, rejectFriendRequest, cancelFriendRequest } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import { createFormStyles } from '@/components/ui/FormStyles';
-import { spacing, fontSizes } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { CTAButton } from '@/components/ui/Buttons';
+import { textStyles } from '@/theme/typography';
 
 export default function FriendsScreen() {
   const { friends, friendRequests, friendsLoading, refreshFriends, invalidateFriends } = useContext(AuthContext);
@@ -191,16 +192,13 @@ function createStyles(colors) {
       marginBottom: spacing.lg,
     },
     pageTitle: {
-      fontSize: fontSizes.xl,
-      fontWeight: '900',
+      ...textStyles.pageTitleCompact,
       color: colors.primary,
-      fontFamily: 'SpaceMono',
       letterSpacing: 0.4,
     },
     backText: {
+      ...textStyles.bodyStrong,
       color: colors.primary,
-      fontSize: fontSizes.md,
-      fontWeight: '800',
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -210,16 +208,12 @@ function createStyles(colors) {
       marginBottom: spacing.xs,
     },
     sectionTitle: {
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
-      letterSpacing: 1.1,
-      textTransform: 'uppercase',
+      ...textStyles.sectionTitle,
       color: colors.text,
     },
     sectionCount: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
       letterSpacing: 0.8,
     },
     row: {
@@ -244,14 +238,13 @@ function createStyles(colors) {
       opacity: 0.72,
     },
     rowName: {
+      ...textStyles.bodyStrong,
       color: colors.text,
-      fontWeight: '700',
     },
     rowMeta: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
       marginTop: 2,
-      fontWeight: '700',
     },
     miniActionRow: {
       flexDirection: 'row',
@@ -259,16 +252,15 @@ function createStyles(colors) {
       gap: spacing.sm,
     },
     pendingText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
     },
     smallButton: {
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
     },
     smallButtonText: {
-      fontSize: fontSizes.sm,
+      ...textStyles.buttonSmall,
     },
     centerRow: {
       alignItems: 'center',
@@ -279,8 +271,8 @@ function createStyles(colors) {
       marginTop: spacing.md,
     },
     emptyText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontWeight: '700',
     },
   });
 }

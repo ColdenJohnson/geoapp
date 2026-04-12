@@ -1,6 +1,7 @@
 // components/ui/FormStyles.js
 import { StyleSheet } from 'react-native';
-import { spacing, radii, fontSizes, shadows } from '@/theme/tokens';
+import { spacing, radii, shadows } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 export function createFormStyles(colors) {
   return StyleSheet.create({
@@ -11,8 +12,7 @@ export function createFormStyles(colors) {
       borderRadius: radii.md,
       backgroundColor: colors.bg,
       paddingHorizontal: spacing.md,
-      fontSize: fontSizes.md,
-      fontWeight: '600',
+      ...textStyles.input,
       color: colors.text,
     },
     inputDense: {
@@ -27,8 +27,8 @@ export function createFormStyles(colors) {
       ...shadows.chip,
     },
     helperText: {
+      ...textStyles.bodySmall,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
       lineHeight: 18,
     },
   });

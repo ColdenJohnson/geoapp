@@ -1,8 +1,9 @@
 // components/ui/Toast.jsx
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Text, StyleSheet, Animated } from 'react-native';
-import { spacing, radii, shadows, fontSizes } from '../../theme/tokens';
+import { spacing, radii, shadows } from '../../theme/tokens';
 import { usePalette } from '@/hooks/usePalette';
+import { textStyles } from '@/theme/typography';
 
 export function Toast({ message, bottomOffset = 96 }) {
   const colors = usePalette();
@@ -88,8 +89,7 @@ const styles = StyleSheet.create({
     ...shadows.chip,
   },
   toastText: {
-    fontSize: fontSizes.sm,
-    fontWeight: '700',
+    ...textStyles.bodySmallStrong,
     letterSpacing: 0.4,
     textAlign: 'center',
   },

@@ -3,7 +3,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
-import { spacing, fontSizes } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 export const PROFILE_BADGES = [
   { id: 'photos_10', label: '10 Photos', icon: 'photo-camera' },
@@ -223,38 +224,35 @@ export function createProfileStyles(colors) {
       height: '100%',
     },
     displayName: {
-      fontSize: fontSizes['2xl'],
-      fontWeight: '900',
+      ...textStyles.pageTitle,
       color: colors.primary,
-      fontFamily: 'SpaceMono',
       letterSpacing: 0.3,
       textAlign: 'center',
     },
     handleText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
       marginTop: spacing.xs,
       textAlign: 'center',
-      fontWeight: '700',
     },
     handlePlaceholder: {
+      ...textStyles.italic,
       color: colors.textMuted,
       marginTop: spacing.xs,
       textAlign: 'center',
-      fontStyle: 'italic',
     },
     contactText: {
+      ...textStyles.bodyXsStrong,
       color: colors.textMuted,
       marginTop: spacing.xs,
       textAlign: 'center',
-      fontWeight: '600',
     },
     bioText: {
       marginTop: spacing.sm,
       textAlign: 'center',
       color: colors.textMuted,
-      fontSize: fontSizes.md,
+      ...textStyles.body,
       lineHeight: 20,
-      fontWeight: '600',
       maxWidth: 320,
       alignSelf: 'center',
     },
@@ -292,9 +290,8 @@ export function createProfileStyles(colors) {
       opacity: 0.9,
     },
     sharePressableText: {
+      ...textStyles.buttonSmall,
       color: colors.primary,
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
       letterSpacing: 0.4,
     },
     profileActionRow: {
@@ -323,16 +320,14 @@ export function createProfileStyles(colors) {
       paddingVertical: spacing.sm,
     },
     sectionTitle: {
-      fontSize: fontSizes.lg,
-      fontWeight: '900',
-      letterSpacing: 0.4,
+      ...textStyles.title,
       color: colors.primary,
       marginBottom: spacing.sm,
     },
     statsText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
       lineHeight: 24,
-      fontWeight: '700',
     },
     badgesHeaderRow: {
       flexDirection: 'row',
@@ -351,11 +346,9 @@ export function createProfileStyles(colors) {
       paddingVertical: 4,
     },
     badgesCountText: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '900',
       letterSpacing: 0.8,
-      textTransform: 'uppercase',
     },
     badgesGrid: {
       flexDirection: 'row',
@@ -379,13 +372,11 @@ export function createProfileStyles(colors) {
       borderColor: colors.border,
     },
     badgeLabel: {
+      ...textStyles.eyebrow,
       marginTop: spacing.xs,
       color: colors.textMuted,
       textAlign: 'center',
-      fontSize: 10,
-      fontWeight: '800',
       letterSpacing: 0.7,
-      textTransform: 'uppercase',
       lineHeight: 13,
     },
     topPhotosGrid: {
@@ -415,9 +406,8 @@ export function createProfileStyles(colors) {
       paddingVertical: 4,
     },
     topPhotoRankText: {
+      ...textStyles.chip,
       color: colors.primary,
-      fontSize: fontSizes.sm,
-      fontWeight: '900',
     },
     topPhotoMeta: {
       position: 'absolute',
@@ -429,9 +419,8 @@ export function createProfileStyles(colors) {
       paddingVertical: spacing.xs,
     },
     topPhotoElo: {
+      ...textStyles.buttonSmall,
       color: '#FFFFFF',
-      fontSize: fontSizes.sm,
-      fontWeight: '800',
       letterSpacing: 0.4,
       textAlign: 'center',
     },
@@ -441,9 +430,8 @@ export function createProfileStyles(colors) {
       borderStyle: 'dashed',
     },
     topPhotoPlaceholderText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       textAlign: 'center',
       paddingHorizontal: spacing.md,
     },

@@ -49,7 +49,8 @@ import BottomBar from '@/components/ui/BottomBar';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { AuthContext } from '@/hooks/AuthContext';
 import { usePalette } from '@/hooks/usePalette';
-import { fontSizes, radii, shadows, spacing } from '@/theme/tokens';
+import { radii, shadows, spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 const COMMENT_MAX_LENGTH = 200;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1328,16 +1329,13 @@ function createStyles(colors) {
       gap: 2,
     },
     detailHeaderTitle: {
+      ...textStyles.titleStrong,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontWeight: '900',
     },
     detailHeaderSubtitle: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: '800',
       letterSpacing: 0.4,
-      textTransform: 'uppercase',
     },
     detailHeaderBadge: {
       flexDirection: 'row',
@@ -1351,9 +1349,8 @@ function createStyles(colors) {
       borderColor: colors.border,
     },
     detailHeaderBadgeText: {
+      ...textStyles.chip,
       color: colors.text,
-      fontSize: 12,
-      fontWeight: '900',
     },
     detailDeleteButton: {
       position: 'absolute',
@@ -1435,17 +1432,14 @@ function createStyles(colors) {
       gap: 4,
     },
     detailMetricLabel: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: 10,
-      fontWeight: '900',
       letterSpacing: 0.8,
-      textTransform: 'uppercase',
       textAlign: 'center',
     },
     detailMetricValue: {
+      ...textStyles.chip,
       color: colors.text,
-      fontSize: 12,
-      fontWeight: '900',
       textAlign: 'center',
     },
     uploadStateCard: {
@@ -1457,21 +1451,17 @@ function createStyles(colors) {
       gap: spacing.xs,
     },
     uploadStateEyebrow: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: '900',
       letterSpacing: 0.8,
-      textTransform: 'uppercase',
     },
     uploadStateTitle: {
+      ...textStyles.titleStrong,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontWeight: '900',
     },
     uploadStateText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       lineHeight: 20,
     },
     uploadStateActions: {
@@ -1486,11 +1476,9 @@ function createStyles(colors) {
       backgroundColor: colors.primary,
     },
     uploadStateActionText: {
+      ...textStyles.buttonCaps,
       color: colors.primaryTextOn,
-      fontSize: 12,
-      fontWeight: '900',
       letterSpacing: 0.4,
-      textTransform: 'uppercase',
     },
     uploadStateSecondaryButton: {
       paddingHorizontal: spacing.md,
@@ -1501,11 +1489,9 @@ function createStyles(colors) {
       backgroundColor: colors.surface,
     },
     uploadStateSecondaryText: {
+      ...textStyles.buttonCaps,
       color: colors.text,
-      fontSize: 12,
-      fontWeight: '900',
       letterSpacing: 0.4,
-      textTransform: 'uppercase',
     },
     commentsSectionHeader: {
       flexDirection: 'row',
@@ -1514,16 +1500,13 @@ function createStyles(colors) {
       gap: spacing.sm,
     },
     commentsSectionTitle: {
+      ...textStyles.title,
       color: colors.text,
-      fontSize: fontSizes.lg,
-      fontWeight: '900',
     },
     commentsSectionSubtitle: {
+      ...textStyles.sectionTitleSm,
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: '900',
       letterSpacing: 0.8,
-      textTransform: 'uppercase',
     },
     pendingCommentNotice: {
       paddingHorizontal: spacing.md,
@@ -1534,9 +1517,8 @@ function createStyles(colors) {
       backgroundColor: colors.bg,
     },
     pendingCommentText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       lineHeight: 20,
     },
     commentsEmptyState: {
@@ -1547,14 +1529,12 @@ function createStyles(colors) {
       gap: spacing.xs,
     },
     commentsEmptyTitle: {
+      ...textStyles.titleStrong,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontWeight: '900',
     },
     commentsEmptyText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       textAlign: 'center',
     },
     commentRow: {
@@ -1573,9 +1553,8 @@ function createStyles(colors) {
       backgroundColor: colors.primary,
     },
     avatarFallbackText: {
+      ...textStyles.bodyStrong,
       color: colors.primaryTextOn,
-      fontSize: 14,
-      fontWeight: '900',
     },
     commentBody: {
       flex: 1,
@@ -1588,28 +1567,23 @@ function createStyles(colors) {
       gap: spacing.sm,
     },
     commentHandle: {
+      ...textStyles.bodyXsBold,
       color: colors.text,
-      fontSize: 12,
-      fontWeight: '900',
       flex: 1,
     },
     commentTimestamp: {
+      ...textStyles.eyebrow,
       color: colors.textMuted,
-      fontSize: 10,
-      fontWeight: '800',
       letterSpacing: 0.5,
-      textTransform: 'uppercase',
     },
     commentText: {
+      ...textStyles.bodyXs,
       color: colors.text,
-      fontSize: fontSizes.sm,
       lineHeight: 20,
-      fontWeight: '500',
     },
     commentReplyText: {
+      ...textStyles.bodyXsStrong,
       color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: '700',
     },
     commentLikeButton: {
       minWidth: 52,
@@ -1628,9 +1602,8 @@ function createStyles(colors) {
       backgroundColor: colors.bg,
     },
     commentLikeCount: {
+      ...textStyles.chipSmall,
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: '900',
     },
     commentLikeCountActive: {
       color: colors.primary,
@@ -1657,9 +1630,8 @@ function createStyles(colors) {
       gap: spacing.xs,
     },
     commentComposerInput: {
+      ...textStyles.input,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontWeight: '400',
       minHeight: 22,
       maxHeight: 57,
       padding: 0,
@@ -1682,9 +1654,8 @@ function createStyles(colors) {
       paddingVertical: spacing.sm,
     },
     commentComposerDisabledText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       textAlign: 'center',
     },
   });

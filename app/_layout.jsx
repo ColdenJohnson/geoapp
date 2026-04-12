@@ -1,5 +1,4 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useEffect, useMemo } from 'react';
@@ -13,7 +12,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeUploadQueue } from '@/lib/uploadQueue';
 
-function RootLayoutContent({ loaded }) {
+function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const colors = usePalette();
   const { user, loadingAuth } = useContext(AuthContext);
@@ -43,7 +42,7 @@ function RootLayoutContent({ loaded }) {
   }, [user?.uid]);
 
   // Show splash screen while loading / not authorized
-  if (!loaded || loadingAuth) {
+  if (loadingAuth) {
     return (
       <>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg }}>
@@ -85,14 +84,10 @@ function RootLayoutContent({ loaded }) {
 }
 
 export default function RootLayout() {
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <RootLayoutContent loaded={loaded} />
+        <RootLayoutContent />
       </AuthProvider>
     </GestureHandlerRootView>
   );

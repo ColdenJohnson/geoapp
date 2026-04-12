@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { usePalette } from '@/hooks/usePalette';
-import { fontSizes, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { textStyles } from '@/theme/typography';
 
 export function PreferenceToggleRow({
   label,
@@ -47,15 +48,13 @@ function createStyles(colors) {
       gap: 2,
     },
     label: {
+      ...textStyles.bodyStrong,
       color: colors.text,
-      fontSize: fontSizes.md,
-      fontWeight: '800',
       letterSpacing: 0.2,
     },
     description: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      fontSize: fontSizes.sm,
-      fontWeight: '700',
       lineHeight: 18,
     },
   });
