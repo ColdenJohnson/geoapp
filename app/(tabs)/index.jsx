@@ -1,4 +1,4 @@
-import { StyleSheet, View, Pressable, Text, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, View, Pressable, Text, useWindowDimensions } from 'react-native';
 import MapView from 'react-native-maps';
 import { Marker, Callout, CalloutSubview } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -27,8 +27,10 @@ import {
 } from '@/lib/mapPinClustering';
 import QuestMapPin from '@/components/map/QuestMapPin';
 import { resolveMapPinTheme } from '@/theme/mapPins';
+import { darkMapStyle } from '@/theme/mapStyle';
 
 import { Toast, useToast } from '../../components/ui/Toast';
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePalette } from '@/hooks/usePalette';
 import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
@@ -53,6 +55,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const { user, friends, invalidateStats } = useContext(AuthContext);
+  const colorScheme = useColorScheme();
   const colors = usePalette();
 
   function getPinDisplayHandle(pin) {
@@ -450,6 +453,9 @@ export default function HomeScreen() {
         key={`map-${pins.length} > 0`} // This line fixes map loading in without pins. It forces a remount of the map when pins.length changes to greater than 0.
         style={styles.map}
         showsUserLocation={true}
+        userInterfaceStyle={colorScheme}
+        customMapStyle={colorScheme === 'dark' ? darkMapStyle : undefined}
+        mapType={Platform.OS === 'ios' && colorScheme === 'light' ? 'mutedStandard' : 'standard'}
         ref={mapRef}
         onLayout={handleMapLayout}
         onRegionChangeComplete={handleRegionChangeComplete}

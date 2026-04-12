@@ -3,8 +3,8 @@
 // TODO: currently, no dark mode is set up. Need to enable. May entail creating an index.js in theme that somehow exports these vals..
 export const light = {
   // brand
-  primary: '#FF6B35',
-  primary_darkened: '#e2460e',
+  primary: '#EB0A46',
+  primary_darkened: '#C4083A',
   primaryTextOn: '#FFFFFF',
 
   // map pins
@@ -31,38 +31,39 @@ export const light = {
   danger:  '#DC2626',
 
   // profile badges
-  badgeEarnedBg: '#FF6B35',
+  badgeEarnedBg: '#EB0A46',
   badgeEarnedIcon: '#FFFFFF',
   badgeLockedBg: '#B8B2AC',
   badgeLockedIcon: '#FDFCFB',
 };
 
 export const dark = {
-  primary: '#FF8A5C',
-  primaryTextOn: '#1A100A',
+  primary: '#EB0A46',
+  primary_darkened: '#C4083A',
+  primaryTextOn: '#FFFFFF',
 
   // map pins
   pinOutline: '#F6EFE8',
-  pinLocation: '#FF6B35',
+  pinLocation: '#EB0A46',
   pinRestrictedOutline: '#575A4B',
   pinOpen: '#FFE1D6',
 
   text: '#F6EFE8',
   textMuted: '#B7A89A',
 
-  bg: '#15110E',
-  surface: '#211A15',
+  bg: '#1E1E1E',
+  surface: '#121212',
 
-  border: '#3A2F26',
-  barBorder: '#2D241D',
+  border: '#2C2C2C',
+  barBorder: '#262626',
 
   success: '#34D399',
   warning: '#FBBF24',
   danger:  '#F87171',
 
   // profile badges
-  badgeEarnedBg: '#FF8A5C',
-  badgeEarnedIcon: '#1A100A',
+  badgeEarnedBg: '#EB0A46',
+  badgeEarnedIcon: '#FFFFFF',
   badgeLockedBg: '#6D6258',
   badgeLockedIcon: '#F6EFE8',
 };
