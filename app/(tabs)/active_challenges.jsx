@@ -41,7 +41,8 @@ import {
 } from '@/components/ui/PressHoldActionMenu';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { createFormStyles } from '@/components/ui/FormStyles';
-import { AuthContext } from '@/hooks/AuthContext';
+import { TutorialCallout } from '@/components/ui/TutorialCallout';
+import { APP_TUTORIAL_STEPS, AuthContext } from '@/hooks/AuthContext';
 import { usePalette } from '@/hooks/usePalette';
 import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 import { filterChallengesByPrompt, isQuestSearchReady, normalizeQuestSearchText } from '@/lib/questSearch';
@@ -335,7 +336,7 @@ export default function ActiveChallengesScreen() {
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const { user } = useContext(AuthContext);
+  const { user, isAppTutorialStepVisible, advanceAppTutorial } = useContext(AuthContext);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
@@ -445,7 +446,9 @@ export default function ActiveChallengesScreen() {
   const showRefreshingBanner = queueMode === 'all' && refreshing && challenges.length > 0 && !loading && !isOffline;
   const stack = filteredChallenges.slice(0, STACK_DEPTH);
   const activeChallenge = stack[0] ?? null;
+  const showQuestTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB);
   const panTargetPinId = swipeAnimatingPinId.current ?? activeChallenge?.pinId ?? null;
+  const questTutorialWidth = Math.min(360, Math.max(300, windowWidth - 40));
   const challengeOptionsPosition = useMemo(() => {
     if (!challengeOptions) return null;
 
@@ -517,6 +520,11 @@ export default function ActiveChallengesScreen() {
       longPressTimerRef.current = null;
     }
   }, []);
+
+  const dismissQuestTutorial = useCallback(() => {
+    if (!showQuestTutorial) return;
+    advanceAppTutorial(APP_TUTORIAL_STEPS.QUESTS_TAB);
+  }, [advanceAppTutorial, showQuestTutorial]);
 
   const setHighlightedChallengeOption = useCallback((optionId) => {
     setActiveChallengeOptionId((prev) => (prev === optionId ? prev : optionId));
@@ -799,6 +807,7 @@ export default function ActiveChallengesScreen() {
 
   const beginUploadForChallenge = useCallback((challenge) => {
     if (!challenge?.pinId) return;
+    dismissQuestTutorial();
     const uploadRequestId = `quest-upload-${challenge.pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setUploadingPinId(challenge.pinId);
     setUploadSubmitResolver((submitResult) => {
@@ -820,7 +829,7 @@ export default function ActiveChallengesScreen() {
     // Only lock while handing off into the upload flow. Once the user is back on quests,
     // let the upload finish in the background without freezing the deck.
     setUploadingPinId(null);
-  }, [advanceChallengeQueue, router]);
+  }, [advanceChallengeQueue, dismissQuestTutorial, router]);
 
   const handleUpSwipeAction = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
@@ -848,6 +857,8 @@ export default function ActiveChallengesScreen() {
 
   const handleShareChallenge = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
+    dismissQuestTutorial();
+    Haptics.selectionAsync().catch(() => {});
     const shareUrl = `${PUBLIC_BASE_URL}/view_photochallenge/${encodeURIComponent(challenge.pinId)}`;
     const message = challenge?.prompt
       ? `Check out this SideQuest quest: "${challenge.prompt}"`
@@ -863,10 +874,12 @@ export default function ActiveChallengesScreen() {
       console.warn('Failed to share challenge', error);
       showToast('Unable to open share menu', 2500);
     }
-  }, [showToast]);
+  }, [dismissQuestTutorial, showToast]);
 
   const handleSaveChallenge = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
+    dismissQuestTutorial();
+    Haptics.selectionAsync().catch(() => {});
     const result = await saveQuest(challenge.pinId);
     if (!result?.success) {
       showToast('Save failed', 2500);
@@ -879,10 +892,12 @@ export default function ActiveChallengesScreen() {
       return;
     }
     showToast('Saved for later', 2200);
-  }, [queueMode, showToast, syncChallengeSavedState]);
+  }, [dismissQuestTutorial, queueMode, showToast, syncChallengeSavedState]);
 
   const toggleChallengeSavedState = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
+    dismissQuestTutorial();
+    Haptics.selectionAsync().catch(() => {});
 
     if (challenge.isSaved) {
       const result = await unsaveQuest(challenge.pinId);
@@ -907,16 +922,17 @@ export default function ActiveChallengesScreen() {
       return;
     }
     showToast('Saved for later', 2200);
-  }, [showToast, syncChallengeSavedState]);
+  }, [dismissQuestTutorial, showToast, syncChallengeSavedState]);
 
   const handleViewPhotos = useCallback((challenge) => {
     if (!challenge?.pinId) return;
+    dismissQuestTutorial();
     router.push(buildViewPhotoChallengeRoute({
       pinId: challenge.pinId,
       message: challenge.prompt,
       createdByHandle: challenge.creatorHandleRaw || '',
     }));
-  }, [router]);
+  }, [dismissQuestTutorial, router]);
 
   const handleChallengeMenuSelection = useCallback(async (option, challengeOverride = null) => {
     const challenge = challengeOverride || challengeOptions?.challenge;
@@ -956,6 +972,7 @@ export default function ActiveChallengesScreen() {
 
   const openChallengeOptions = useCallback((challenge, x, y) => {
     if (!challenge?.pinId) return;
+    dismissQuestTutorial();
     challengeOptionLayoutsRef.current = {};
     lastMenuTouchPointRef.current = null;
     setActiveChallengeOptionId(null);
@@ -964,10 +981,11 @@ export default function ActiveChallengesScreen() {
     cardPan.setValue({ x: 0, y: 0 });
     setChallengeOptions({ challenge, x, y });
     triggerMenuOpenHaptic();
-  }, [cardPan, triggerMenuOpenHaptic]);
+  }, [cardPan, dismissQuestTutorial, triggerMenuOpenHaptic]);
 
   const commitSwipe = useCallback((direction) => {
     if (swipeLocked || !activeChallenge) return;
+    dismissQuestTutorial();
     closeChallengeOptions();
     const topChallenge = activeChallenge;
     swipeAnimatingPinId.current = topChallenge.pinId;
@@ -1007,6 +1025,7 @@ export default function ActiveChallengesScreen() {
     cardWidth,
     closeChallengeOptions,
     beginUploadForChallenge,
+    dismissQuestTutorial,
     handleUpSwipeAction,
     swipeLocked,
   ]);
@@ -1404,6 +1423,17 @@ export default function ActiveChallengesScreen() {
           </View>
 
           <View style={styles.stackStage} onLayout={handleStageLayout}>
+            {showQuestTutorial && stack.length > 0 ? (
+              <TutorialCallout
+                title="Quests"
+                body="Swipe to choose a quest, then tap or swipe to join!"
+                testID="quests-tab-tutorial"
+                style={[styles.questTutorialWrap, { width: questTutorialWidth }]}
+                bubbleStyle={styles.questTutorialBubble}
+                arrowPlacement="top"
+                arrowSide="center"
+              />
+            ) : null}
             {loading ? (
               <View style={styles.centeredState}>
                 <ActivityIndicator size="large" color={colors.primary} />
@@ -1605,6 +1635,15 @@ function createStyles(colors) {
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
+    },
+    questTutorialWrap: {
+      position: 'absolute',
+      bottom: spacing.lg,
+      alignItems: 'center',
+      zIndex: 25,
+    },
+    questTutorialBubble: {
+      alignSelf: 'center',
     },
     centeredState: {
       alignItems: 'center',

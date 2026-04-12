@@ -9,8 +9,8 @@ export const light = {
 
   // map pins
   pinOutline: '#FFFFFF',
-  pinLocation: '#e2460e',
-  pinRestrictedOutline: '#661A00',
+  pinLocation: '#EB0A46',
+  pinRestrictedOutline: '#C4083A',
   pinOpen: '#FFE1D6',
 
   // text

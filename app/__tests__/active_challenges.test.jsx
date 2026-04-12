@@ -1,4 +1,5 @@
 import React from 'react';
+import { Share } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -61,7 +62,12 @@ jest.mock('@/components/ui/Toast', () => ({
 jest.mock('@/hooks/AuthContext', () => {
   const React = require('react');
   return {
-    AuthContext: React.createContext({ user: { uid: 'user-1' } }),
+    APP_TUTORIAL_STEPS: { QUESTS_TAB: 'quests-tab' },
+    AuthContext: React.createContext({
+      user: { uid: 'user-1' },
+      isAppTutorialStepVisible: () => false,
+      advanceAppTutorial: jest.fn(),
+    }),
   };
 });
 
@@ -78,6 +84,7 @@ const { saveQuest } = require('@/lib/api');
 const { unsaveQuest } = require('@/lib/api');
 const AsyncStorage = require('@react-native-async-storage/async-storage');
 const NetInfo = require('@react-native-community/netinfo');
+const Haptics = require('expo-haptics');
 const { AuthContext } = require('@/hooks/AuthContext');
 const {
   default: ActiveChallengesScreen,
@@ -87,6 +94,8 @@ const {
 function renderScreen(contextOverrides = {}) {
   const defaultValue = {
     user: { uid: 'user-1' },
+    isAppTutorialStepVisible: () => false,
+    advanceAppTutorial: jest.fn(),
   };
 
   return render(
@@ -193,6 +202,22 @@ describe('ActiveChallengesScreen search', () => {
     fireEvent.press(getByTestId('quest-saved-queue-button'));
 
     await waitFor(() => expect(queryByTestId('quest-saved-queue-dot')).toBeNull());
+  });
+
+  it('triggers haptics for the card share and save buttons', async () => {
+    jest.spyOn(Share, 'share').mockResolvedValue({});
+
+    const { getByTestId, queryByText } = renderScreen();
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+
+    Haptics.selectionAsync.mockClear();
+
+    fireEvent.press(getByTestId('quest-card-share-button-quest-1'));
+    await waitFor(() => expect(Haptics.selectionAsync).toHaveBeenCalledTimes(1));
+
+    fireEvent.press(getByTestId('quest-card-save-button-quest-1'));
+    await waitFor(() => expect(Haptics.selectionAsync).toHaveBeenCalledTimes(2));
   });
 
   it('renders cached quests before the fresh network response resolves', async () => {

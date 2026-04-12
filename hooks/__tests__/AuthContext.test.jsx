@@ -1,14 +1,19 @@
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { AuthContext, AuthProvider } from '../AuthContext';
+import { APP_TUTORIAL_STEPS, AuthContext, AuthProvider } from '../AuthContext';
 
-jest.mock('@react-native-firebase/auth', () => () => ({
-  onAuthStateChanged: (callback) => {
+const mockAuthState = {
+  currentUser: null,
+  onAuthStateChanged: jest.fn((callback) => {
     callback(null);
     return jest.fn();
-  },
-  onIdTokenChanged: () => jest.fn(),
-}));
+  }),
+  onIdTokenChanged: jest.fn(() => jest.fn()),
+};
+
+jest.mock('@react-native-firebase/auth', () => {
+  return jest.fn(() => mockAuthState);
+});
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(() => Promise.resolve(null)),
@@ -26,10 +31,15 @@ jest.mock('@/lib/api', () => ({
 }));
 
 const { fetchUsersByUID } = require('@/lib/api');
-
+const AsyncStorage = require('@react-native-async-storage/async-storage');
 describe('AuthProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthState.currentUser = null;
+    delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL;
+    delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL_STEP;
+    delete global.__DEV_FORCE_APP_TUTORIAL__;
+    delete global.__DEV_FORCE_APP_TUTORIAL_STEP__;
   });
 
   it('loads profile when user with uid is set and clears when unset', async () => {
@@ -66,6 +76,7 @@ describe('AuthProvider', () => {
     expect(result.current.hasUnseenFriendActivity).toBe(false);
 
     await act(async () => {
+      mockAuthState.currentUser = { uid: 'abc', metadata: {} };
       result.current.setUser({ uid: 'abc' });
     });
 
@@ -76,5 +87,160 @@ describe('AuthProvider', () => {
     });
 
     expect(result.current.hasUnseenFriendActivity).toBe(false);
+  });
+
+  it('does not show the tutorial for a returning account by default', async () => {
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+    mockAuthState.currentUser = {
+      uid: 'abc',
+      metadata: {
+        creationTime: '2026-04-10T00:00:00.000Z',
+        lastSignInTime: '2026-04-12T00:00:00.000Z',
+      },
+    };
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
+  });
+
+  it('shows the tutorial for a newly created account and marks it seen when completed', async () => {
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+    mockAuthState.currentUser = {
+      uid: 'abc',
+      metadata: {
+        creationTime: '2026-04-12T00:00:00.000Z',
+        lastSignInTime: '2026-04-12T00:00:20.000Z',
+      },
+    };
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.QUESTS_TAB);
+    });
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+
+    await act(async () => {
+      await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
+    });
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+
+    await act(async () => {
+      await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.FRIENDS_ADD);
+    });
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+
+    await act(async () => {
+      await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.PROFILE_EDIT);
+    });
+
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('app_tutorial_seen_abc', 'true');
+  });
+
+  it('keeps map and profile tutorial dismissal untethered when reusing an older callback', async () => {
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+    mockAuthState.currentUser = {
+      uid: 'abc',
+      metadata: {
+        creationTime: '2026-04-12T00:00:00.000Z',
+        lastSignInTime: '2026-04-12T00:00:20.000Z',
+      },
+    };
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+    });
+
+    const initialAdvanceAppTutorial = result.current.advanceAppTutorial;
+
+    await act(async () => {
+      await initialAdvanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
+    });
+
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+
+    await act(async () => {
+      await initialAdvanceAppTutorial(APP_TUTORIAL_STEPS.PROFILE_EDIT);
+    });
+
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
+  });
+
+  it('forces the tutorial walkthrough when the dev flag is enabled', async () => {
+    global.__DEV_FORCE_APP_TUTORIAL__ = true;
+
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.QUESTS_TAB);
+    });
+
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('app_tutorial_seen_abc', 'true');
+  });
+
+  it('forces a specific app tutorial step from env', async () => {
+    global.__DEV_FORCE_APP_TUTORIAL_STEP__ = 'profile_edit';
+
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    });
   });
 });

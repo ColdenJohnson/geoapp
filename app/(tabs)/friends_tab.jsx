@@ -19,7 +19,7 @@ import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { AuthContext } from '@/hooks/AuthContext';
+import { APP_TUTORIAL_STEPS, AuthContext } from '@/hooks/AuthContext';
 import {
   acceptFriendRequest,
   cancelFriendRequest,
@@ -120,6 +120,8 @@ export default function FriendsTabScreen() {
     friendActivityFetchedAt,
     refreshFriendActivity,
     loadMoreFriendActivity,
+    isAppTutorialStepVisible,
+    advanceAppTutorial,
   } = useContext(AuthContext);
   const { handle: sharedHandleParam } = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState('activity');
@@ -211,6 +213,13 @@ export default function FriendsTabScreen() {
       });
     }, [activityItems.length, activitySuggestions.length, friendActivityFetchedAt, markFriendActivitySeen, refreshFriendActivity, refreshFriendRequests])
   );
+
+  useEffect(() => {
+    if (!isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)) {
+      return;
+    }
+    advanceAppTutorial(APP_TUTORIAL_STEPS.FRIENDS_ADD);
+  }, [advanceAppTutorial, isAppTutorialStepVisible]);
 
   const openUserProfile = useCallback((uid) => {
     if (!uid) return;
@@ -529,6 +538,7 @@ export default function FriendsTabScreen() {
         placeholderTextColor={colors.textMuted}
         selectionColor={colors.primary}
         cursorColor={colors.text}
+        testID="friends-search-input"
       />
       {searching ? (
         <View style={styles.centerRow}>
@@ -887,6 +897,8 @@ function createStyles(colors) {
     },
     sectionCard: {
       marginBottom: spacing.lg,
+      position: 'relative',
+      overflow: 'visible',
     },
     sectionHeader: {
       flexDirection: 'row',

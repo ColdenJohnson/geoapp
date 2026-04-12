@@ -31,9 +31,10 @@ import { resolveMapPinTheme } from '@/theme/mapPins';
 import { darkMapStyle } from '@/theme/mapStyle';
 
 import { Toast, useToast } from '../../components/ui/Toast';
+import { TutorialCallout } from '@/components/ui/TutorialCallout';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePalette } from '@/hooks/usePalette';
-import { AuthContext } from '@/hooks/AuthContext';
+import { APP_TUTORIAL_STEPS, AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import { textStyles } from '@/theme/typography';
 
@@ -56,9 +57,11 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
-  const { user, friends, invalidateStats } = useContext(AuthContext);
+  const { user, friends, invalidateStats, isAppTutorialStepVisible, advanceAppTutorial } = useContext(AuthContext);
   const colorScheme = useColorScheme();
   const colors = usePalette();
+  const showMapCreateTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE);
+  const mapTutorialVisitedRef = useRef(false);
 
   function getPinDisplayHandle(pin) {
     const topPhotoHandle = typeof pin?.top_global_photo?.created_by_handle === 'string'
@@ -289,6 +292,25 @@ export default function HomeScreen() {
     }, [])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!showMapCreateTutorial) {
+        mapTutorialVisitedRef.current = false;
+        return undefined;
+      }
+
+      mapTutorialVisitedRef.current = true;
+
+      return () => {
+        if (!mapTutorialVisitedRef.current) {
+          return;
+        }
+        mapTutorialVisitedRef.current = false;
+        advanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
+      };
+    }, [advanceAppTutorial, showMapCreateTutorial])
+  );
+
   useEffect(() => {
     ensurePreloadedGlobalDuels(DEFAULT_PRELOAD_COUNT).catch((error) =>
       console.error('Failed to warm global duel queue', error)
@@ -303,6 +325,11 @@ export default function HomeScreen() {
   }, [didCenter, handleCenterOnUser, userCoords]);
 
   function handleCreateChallengePress() {
+    if (showMapCreateTutorial) {
+      mapTutorialVisitedRef.current = false;
+      advanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
+    }
+
     if (!location) {
       showToast('Location unavailable. Try again once we have your position.');
       return;
@@ -601,17 +628,34 @@ export default function HomeScreen() {
 
       <View style={[styles.controlsOverlay, { bottom: controlsBottomOffset }]} pointerEvents="box-none">
         <View style={styles.controlGroup}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              styles.buttonCreate,
-              styles.buttonCreateLarge,
-              { opacity: pressed ? 0.5 : 1 },
-            ]}
-            onPress={handleCreateChallengePress}
-          >
-            <MaterialIcons name="add-location-alt" size={32} color={colors.primary} />
-          </Pressable>
+          <View style={styles.createButtonWrap}>
+            {showMapCreateTutorial ? (
+              <TutorialCallout
+                title="Map"
+                body="Create a Quest"
+                style={styles.inlineTutorialWrap}
+                bubbleStyle={{
+                  minWidth: 120,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                }}
+                arrowSide="right"
+                arrowOffset={26}
+              />
+            ) : null}
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                styles.buttonCreate,
+                styles.buttonCreateLarge,
+                { opacity: pressed ? 0.5 : 1 },
+              ]}
+              onPress={handleCreateChallengePress}
+              testID="map-create-quest-button"
+            >
+              <MaterialIcons name="add-location-alt" size={32} color={colors.primary} />
+            </Pressable>
+          </View>
         </View>
       </View>
       <Toast message={toastMessage} bottomOffset={toastBottomOffset} />
@@ -683,6 +727,17 @@ function createStyles(colors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+    },
+    createButtonWrap: {
+      position: 'relative',
+      alignItems: 'flex-end',
+    },
+    inlineTutorialWrap: {
+      position: 'absolute',
+      right: 0,
+      bottom: 78,
+      alignItems: 'flex-end',
+      zIndex: 5,
     },
     controlStackVertical: {
       alignItems: 'center',

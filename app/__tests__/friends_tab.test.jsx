@@ -7,6 +7,14 @@ jest.mock('@/hooks/AuthContext', () => {
   const React = require('react');
   return {
     AuthContext: React.createContext({}),
+    APP_TUTORIAL_STEPS: {
+      QUESTS_TAB: 'quests_tab',
+      MAP_CREATE: 'map_create',
+      FRIENDS_ADD: 'friends_add',
+      PROFILE_EDIT: 'profile_edit',
+      COMPLETED: 'completed',
+      NOT_ELIGIBLE: 'not_eligible',
+    },
   };
 });
 
@@ -63,6 +71,9 @@ function renderScreen(overrides = {}) {
     friendActivityFetchedAt: Date.now(),
     refreshFriendActivity: jest.fn(async () => ({ items: [], suggestions: [], nextCursor: null })),
     loadMoreFriendActivity: jest.fn(),
+    appTutorialStep: null,
+    isAppTutorialStepVisible: jest.fn(() => false),
+    advanceAppTutorial: jest.fn(),
     ...overrides,
   };
 

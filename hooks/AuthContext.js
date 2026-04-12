@@ -14,6 +14,73 @@ export const AuthContext = createContext();
 const TOP_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const FRIEND_ACTIVITY_TTL_MS = 10 * 60 * 1000;
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
+const NEW_ACCOUNT_TUTORIAL_WINDOW_MS = 60 * 1000;
+
+export const APP_TUTORIAL_STEPS = Object.freeze({
+  QUESTS_TAB: 'quests_tab',
+  MAP_CREATE: 'map_create',
+  FRIENDS_ADD: 'friends_add',
+  PROFILE_EDIT: 'profile_edit',
+});
+const APP_TUTORIAL_STEP_LIST = Object.values(APP_TUTORIAL_STEPS);
+
+function getAppTutorialSeenStorageKey(uid) {
+  return `app_tutorial_seen_${uid}`;
+}
+
+function createAppTutorialVisibilityState(visibleSteps = []) {
+  const visibleSet = new Set(Array.isArray(visibleSteps) ? visibleSteps : []);
+  return APP_TUTORIAL_STEP_LIST.reduce((accumulator, step) => {
+    accumulator[step] = visibleSet.has(step);
+    return accumulator;
+  }, {});
+}
+
+function parseMetadataTime(value) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function shouldShowNewAccountTutorial(metadata) {
+  const createdAt = parseMetadataTime(metadata?.creationTime);
+  const lastSignInAt = parseMetadataTime(metadata?.lastSignInTime);
+
+  if (!Number.isFinite(createdAt) || !Number.isFinite(lastSignInAt)) {
+    return false;
+  }
+
+  return Math.abs(lastSignInAt - createdAt) <= NEW_ACCOUNT_TUTORIAL_WINDOW_MS;
+}
+
+function isTruthyEnvFlag(value) {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function getForcedAppTutorialStep() {
+  const debugForcedStep = globalThis.__DEV_FORCE_APP_TUTORIAL_STEP__;
+  if (Object.values(APP_TUTORIAL_STEPS).includes(debugForcedStep)) {
+    return debugForcedStep;
+  }
+
+  const forcedStep = process.env['EXPO_PUBLIC_FORCE_APP_TUTORIAL_STEP'];
+  if (Object.values(APP_TUTORIAL_STEPS).includes(forcedStep)) {
+    return forcedStep;
+  }
+  return null;
+}
+
+function getForcedAppTutorialVisibility() {
+  const forcedStep = getForcedAppTutorialStep();
+  if (forcedStep) {
+    return createAppTutorialVisibilityState([forcedStep]);
+  }
+  if (globalThis.__DEV_FORCE_APP_TUTORIAL__ === true || isTruthyEnvFlag(process.env['EXPO_PUBLIC_FORCE_APP_TUTORIAL'])) {
+    return createAppTutorialVisibilityState(APP_TUTORIAL_STEP_LIST);
+  }
+  return null;
+}
 
 function mergeActivityItems(existingItems, incomingItems) {
   const seen = new Set();
@@ -51,6 +118,8 @@ export function AuthProvider({ children }) {
   const [friendActivityNextCursor, setFriendActivityNextCursor] = useState(null);
   const [friendActivityFetchedAt, setFriendActivityFetchedAt] = useState(null);
   const [hasUnseenFriendActivity, setHasUnseenFriendActivity] = useState(false);
+  const [appTutorialVisibility, setAppTutorialVisibility] = useState(createAppTutorialVisibilityState());
+  const appTutorialVisibilityRef = useRef(appTutorialVisibility);
   const preloadRef = useRef({ friends: false, stats: false, topPhotos: false, friendActivity: false });
   const pendingStatsRefreshRef = useRef(false);
   const latestFriendsRef = useRef([]);
@@ -216,6 +285,43 @@ export function AuthProvider({ children }) {
     setFriendActivityNextCursor(null);
     setFriendActivityFetchedAt(null);
     setHasUnseenFriendActivity(!!user?.uid);
+    setAppTutorialVisibility(createAppTutorialVisibilityState());
+  }, [user?.uid]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncTutorialState() {
+      if (!user?.uid) {
+        setAppTutorialVisibility(createAppTutorialVisibilityState());
+        return;
+      }
+
+      const forcedVisibility = getForcedAppTutorialVisibility();
+      if (forcedVisibility) {
+        setAppTutorialVisibility(forcedVisibility);
+        return;
+      }
+
+      try {
+        const hasSeenTutorial = await AsyncStorage.getItem(getAppTutorialSeenStorageKey(user.uid));
+        if (cancelled || hasSeenTutorial === 'true') {
+          return;
+        }
+
+        if (shouldShowNewAccountTutorial(auth().currentUser?.metadata)) {
+          setAppTutorialVisibility(createAppTutorialVisibilityState(APP_TUTORIAL_STEP_LIST));
+        }
+      } catch (error) {
+        console.warn('Failed to load app tutorial state', error);
+      }
+    }
+
+    syncTutorialState();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user?.uid]);
 
   useEffect(() => {
@@ -225,6 +331,10 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     latestFriendRequestsRef.current = friendRequests;
   }, [friendRequests]);
+
+  useEffect(() => {
+    appTutorialVisibilityRef.current = appTutorialVisibility;
+  }, [appTutorialVisibility]);
 
   useEffect(() => {
     async function loadFriendsCache() {
@@ -476,6 +586,34 @@ export function AuthProvider({ children }) {
     setHasUnseenFriendActivity(false);
   }, []);
 
+  const isAppTutorialStepVisible = useCallback((step) => {
+    return Boolean(appTutorialVisibility?.[step]);
+  }, [appTutorialVisibility]);
+
+  const advanceAppTutorial = useCallback(async (expectedStep) => {
+    const currentVisibility = appTutorialVisibilityRef.current;
+    if (!currentVisibility?.[expectedStep]) {
+      return;
+    }
+
+    const nextVisibility = {
+      ...currentVisibility,
+      [expectedStep]: false,
+    };
+    appTutorialVisibilityRef.current = nextVisibility;
+    setAppTutorialVisibility(nextVisibility);
+
+    if (Object.values(nextVisibility).some(Boolean) || getForcedAppTutorialVisibility() || !user?.uid) {
+      return;
+    }
+
+    try {
+      await AsyncStorage.setItem(getAppTutorialSeenStorageKey(user.uid), 'true');
+    } catch (error) {
+      console.warn('Failed to persist app tutorial completion', error);
+    }
+  }, [user?.uid]);
+
   useEffect(() => {
     if (!user?.uid) return;
     if (!preloadRef.current.friends) {
@@ -525,11 +663,13 @@ export function AuthProvider({ children }) {
       friendActivityLoadingMore,
       friendActivityFetchedAt,
       hasUnseenFriendActivity,
+      isAppTutorialStepVisible,
       refreshFriends,
       refreshFriendRequests,
       refreshFriendActivity,
       loadMoreFriendActivity,
       markFriendActivitySeen,
+      advanceAppTutorial,
       refreshStats,
       refreshTopPhotos,
       invalidateFriends,

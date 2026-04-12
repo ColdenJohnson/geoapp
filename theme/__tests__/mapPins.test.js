@@ -1,13 +1,13 @@
 import { resolveMapPinTheme, resolveMapPinThemeId } from '../mapPins';
 
 const colors = {
-  primary: '#FF6B35',
+  primary: '#EB0A46',
   primaryTextOn: '#FFFFFF',
   bg: '#FDFCFB',
   success: '#1F9D69',
   pinOutline: '#FFFFFF',
-  pinLocation: '#e2460e',
-  pinRestrictedOutline: '#661A00',
+  pinLocation: '#EB0A46',
+  pinRestrictedOutline: '#C4083A',
   pinOpen: '#FFE1D6',
 };
 

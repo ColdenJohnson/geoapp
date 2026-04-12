@@ -1,9 +1,9 @@
-import { SafeAreaView, View, Text, ScrollView, RefreshControl, Pressable, Alert, Share } from 'react-native';
+import { SafeAreaView, View, Text, ScrollView, RefreshControl, Pressable, Alert, Share, StyleSheet } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useCallback, useContext, useMemo, useState } from 'react';
-import { AuthContext } from '../../hooks/AuthContext';
+import { useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { APP_TUTORIAL_STEPS, AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -12,6 +12,7 @@ import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { createFormStyles } from '@/components/ui/FormStyles';
+import { TutorialCallout } from '@/components/ui/TutorialCallout';
 import {
   createProfileStyles,
   ProfileAchievementsCard,
@@ -33,7 +34,9 @@ export default function UserProfileScreen() {
     refreshStats,
     topPhotos,
     topPhotosLoading,
-    refreshTopPhotos
+    refreshTopPhotos,
+    isAppTutorialStepVisible,
+    advanceAppTutorial,
   } = useContext(AuthContext);
   const [refreshing, setRefreshing] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -42,7 +45,10 @@ export default function UserProfileScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createProfileStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
+  const tutorialStyles = useMemo(() => createTutorialStyles(), []);
   const authUser = auth().currentUser;
+  const showProfileEditTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT);
+  const profileTutorialVisitedRef = useRef(false);
   const contactValue =
     user?.email ||
     authUser?.phoneNumber ||
@@ -65,6 +71,25 @@ export default function UserProfileScreen() {
         console.warn('Failed to refresh top photos', error);
       });
     }, [refreshTopPhotos])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!showProfileEditTutorial) {
+        profileTutorialVisitedRef.current = false;
+        return undefined;
+      }
+
+      profileTutorialVisitedRef.current = true;
+
+      return () => {
+        if (!profileTutorialVisitedRef.current) {
+          return;
+        }
+        profileTutorialVisitedRef.current = false;
+        advanceAppTutorial(APP_TUTORIAL_STEPS.PROFILE_EDIT);
+      };
+    }, [advanceAppTutorial, showProfileEditTutorial])
   );
 
   const shareProfileUrl = useMemo(() => {
@@ -90,6 +115,14 @@ export default function UserProfileScreen() {
     }
   }, [shareProfileUrl]);
 
+  const onEditProfile = useCallback(() => {
+    if (showProfileEditTutorial) {
+      profileTutorialVisitedRef.current = false;
+      advanceAppTutorial(APP_TUTORIAL_STEPS.PROFILE_EDIT);
+    }
+    router.push('/edit_profile');
+  }, [advanceAppTutorial, router, showProfileEditTutorial]);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -101,25 +134,38 @@ export default function UserProfileScreen() {
         <ProfileHeaderCard
           profile={profile}
           subtitle={contactValue}
-          onPressAvatar={() => router.push('/edit_profile')}
+          onPressAvatar={onEditProfile}
           formStyles={formStyles}
           styles={styles}
         />
-        <View style={styles.shareRow}>
-          <Pressable
-            onPress={onShareProfile}
-            style={({ pressed }) => [styles.sharePressable, pressed && styles.sharePressablePressed]}
-          >
-            <Text style={styles.sharePressableText}>Share Profile</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push('/edit_profile')}
-            style={({ pressed }) => [styles.editIconPressable, pressed && styles.sharePressablePressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Edit Profile"
-          >
-            <MaterialIcons name="edit" size={20} color={colors.primary} />
-          </Pressable>
+        <View style={tutorialStyles.shareRowTutorialWrap}>
+          {showProfileEditTutorial ? (
+            <TutorialCallout
+              title="Profile"
+              body="Edit profile for your friends!"
+              style={tutorialStyles.profileTutorialWrap}
+              maxWidth={212}
+              arrowSide="right"
+              arrowOffset={16}
+            />
+          ) : null}
+          <View style={styles.shareRow}>
+            <Pressable
+              onPress={onShareProfile}
+              style={({ pressed }) => [styles.sharePressable, pressed && styles.sharePressablePressed]}
+            >
+              <Text style={styles.sharePressableText}>Share Profile</Text>
+            </Pressable>
+            <Pressable
+              onPress={onEditProfile}
+              style={({ pressed }) => [styles.editIconPressable, pressed && styles.sharePressablePressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Edit Profile"
+              testID="profile-edit-button"
+            >
+              <MaterialIcons name="edit" size={20} color={colors.primary} />
+            </Pressable>
+          </View>
         </View>
 
         <ProfileAchievementsCard
@@ -177,4 +223,21 @@ export default function UserProfileScreen() {
       />
     </SafeAreaView>
   );
+}
+
+function createTutorialStyles() {
+  return StyleSheet.create({
+    shareRowTutorialWrap: {
+      alignSelf: 'center',
+      position: 'relative',
+      overflow: 'visible',
+    },
+    profileTutorialWrap: {
+      position: 'absolute',
+      right: 0,
+      bottom: 50,
+      alignItems: 'flex-end',
+      zIndex: 5,
+    },
+  });
 }
