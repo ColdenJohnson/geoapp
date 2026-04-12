@@ -32,9 +32,10 @@ jest.mock('@react-native-firebase/storage', () => () => ({
 }));
 
 const { router } = require('expo-router');
-const { setUserHandle } = require('@/lib/api');
+const { setUserHandle, updateUserProfile } = require('@/lib/api');
 
 function renderScreen(overrides = {}) {
+  const themePreference = overrides.themePreference || overrides.profile?.theme_preference || 'dark';
   const value = {
     user: { uid: 'user-1' },
     profile: {
@@ -42,8 +43,10 @@ function renderScreen(overrides = {}) {
       display_name: 'Tester',
       bio: 'Hello',
       default_pin_private: false,
+      theme_preference: themePreference,
       ...overrides.profile,
     },
+    themePreference,
     setProfile: jest.fn(),
     setUser: jest.fn(),
   };
@@ -82,5 +85,13 @@ describe('EditProfileScreen', () => {
 
     expect(router.back).toHaveBeenCalled();
     await waitFor(() => expect(setUserHandle).toHaveBeenCalledWith('valid_name_2'));
+  });
+
+  it('persists theme preference changes immediately', async () => {
+    const { getByText } = renderScreen();
+
+    fireEvent.press(getByText('Light'));
+
+    await waitFor(() => expect(updateUserProfile).toHaveBeenCalledWith('user-1', { theme_preference: 'light' }));
   });
 });

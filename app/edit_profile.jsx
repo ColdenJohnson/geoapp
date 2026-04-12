@@ -16,6 +16,7 @@ import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
 import storage from '@react-native-firebase/storage';
 import { goBackOrHome } from '@/lib/navigation';
+import { normalizeThemePreference } from '@/theme/themePreference';
 
 const BIO_MAX_LENGTH = 100;
 const HANDLE_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
@@ -31,12 +32,16 @@ export default function EditProfileScreen() {
   const defaultPrivacySyncInFlightRef = useRef(false);
   const desiredDefaultPrivateRef = useRef(null);
   const acknowledgedDefaultPrivateRef = useRef(null);
+  const themePreferenceSyncInFlightRef = useRef(false);
+  const desiredThemePreferenceRef = useRef(null);
+  const acknowledgedThemePreferenceRef = useRef(null);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const isDefaultPinPrivate = profile?.default_pin_private === true;
+  const themePreference = normalizeThemePreference(profile?.theme_preference);
   const trimmedHandleInput = typeof handleInput === 'string' ? handleInput.trim().replace(/^@/, '') : '';
   const isHandleChanged = trimmedHandleInput !== '' && trimmedHandleInput !== (profile?.handle || '');
   const handleValidationMessage = isHandleChanged && !HANDLE_REGEX.test(trimmedHandleInput)
@@ -55,6 +60,12 @@ export default function EditProfileScreen() {
     acknowledgedDefaultPrivateRef.current = value;
     desiredDefaultPrivateRef.current = value;
   }, [profile?.default_pin_private]);
+
+  useEffect(() => {
+    const value = normalizeThemePreference(profile?.theme_preference);
+    acknowledgedThemePreferenceRef.current = value;
+    desiredThemePreferenceRef.current = value;
+  }, [profile?.theme_preference]);
 
   const flushDefaultPrivacyUpdates = useCallback(async () => {
     if (!user?.uid || defaultPrivacySyncInFlightRef.current) return;
@@ -96,6 +107,45 @@ export default function EditProfileScreen() {
     setProfile((prev) => ({ ...(prev || {}), default_pin_private: optimisticValue }));
     flushDefaultPrivacyUpdates();
   }, [flushDefaultPrivacyUpdates, setProfile, user?.uid]);
+
+  const flushThemePreferenceUpdates = useCallback(async () => {
+    if (!user?.uid || themePreferenceSyncInFlightRef.current) return;
+    themePreferenceSyncInFlightRef.current = true;
+    try {
+      while (
+        typeof desiredThemePreferenceRef.current === 'string' &&
+        desiredThemePreferenceRef.current !== acknowledgedThemePreferenceRef.current
+      ) {
+        const target = normalizeThemePreference(desiredThemePreferenceRef.current);
+        const updated = await updateUserProfile(user.uid, { theme_preference: target });
+        if (!updated) {
+          const fallback = normalizeThemePreference(acknowledgedThemePreferenceRef.current);
+          desiredThemePreferenceRef.current = fallback;
+          setProfile((prev) => ({ ...(prev || {}), theme_preference: fallback }));
+          break;
+        }
+        const persisted = normalizeThemePreference(updated.theme_preference);
+        acknowledgedThemePreferenceRef.current = persisted;
+        setProfile(updated);
+      }
+    } finally {
+      themePreferenceSyncInFlightRef.current = false;
+      if (
+        typeof desiredThemePreferenceRef.current === 'string' &&
+        desiredThemePreferenceRef.current !== acknowledgedThemePreferenceRef.current
+      ) {
+        flushThemePreferenceUpdates();
+      }
+    }
+  }, [setProfile, user?.uid]);
+
+  const onSelectThemePreference = useCallback((nextValue) => {
+    if (!user?.uid) return;
+    const optimisticValue = normalizeThemePreference(nextValue);
+    desiredThemePreferenceRef.current = optimisticValue;
+    setProfile((prev) => ({ ...(prev || {}), theme_preference: optimisticValue }));
+    flushThemePreferenceUpdates();
+  }, [flushThemePreferenceUpdates, setProfile, user?.uid]);
 
   async function uploadImageToStorage(uri) {
     // Minimal: no compression here; reuse your existing pattern from Upload tab
@@ -298,6 +348,41 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={[formStyles.card, styles.preferenceCard]}>
+            <Text style={styles.sectionTitle}>Appearance</Text>
+            <View style={styles.segmentedControl}>
+              <Pressable
+                onPress={() => onSelectThemePreference('dark')}
+                disabled={!user?.uid}
+                style={({ pressed }) => [
+                  styles.segmentButton,
+                  themePreference === 'dark' && styles.segmentButtonActive,
+                  pressed && user?.uid ? styles.pressed : null,
+                ]}
+              >
+                <Text style={[styles.segmentText, themePreference === 'dark' && styles.segmentTextActive]}>
+                  Dark
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onSelectThemePreference('light')}
+                disabled={!user?.uid}
+                style={({ pressed }) => [
+                  styles.segmentButton,
+                  themePreference === 'light' && styles.segmentButtonActive,
+                  pressed && user?.uid ? styles.pressed : null,
+                ]}
+              >
+                <Text style={[styles.segmentText, themePreference === 'light' && styles.segmentTextActive]}>
+                  Light
+                </Text>
+              </Pressable>
+            </View>
+            <Text style={styles.preferenceHelp}>
+              Theme is app-controlled and saved to your account for future devices.
+            </Text>
+          </View>
+
+          <View style={[formStyles.card, styles.preferenceCard]}>
             <Text style={styles.sectionTitle}>Upload Defaults</Text>
             <PreferenceToggleRow
               label="New pins private by default"
@@ -433,6 +518,45 @@ function createStyles(colors) {
     },
     preferenceCard: {
       marginTop: spacing.sm,
+    },
+    segmentedControl: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 4,
+      borderRadius: 16,
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    segmentButton: {
+      flex: 1,
+      minHeight: 44,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    segmentButtonActive: {
+      backgroundColor: colors.surface,
+    },
+    segmentText: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '900',
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    segmentTextActive: {
+      color: colors.primary,
+    },
+    preferenceHelp: {
+      color: colors.textMuted,
+      fontSize: fontSizes.sm,
+      fontWeight: '700',
+      lineHeight: 18,
+      marginTop: spacing.sm,
+    },
+    pressed: {
+      opacity: 0.92,
     },
     deletePressable: {
       marginTop: spacing.md,

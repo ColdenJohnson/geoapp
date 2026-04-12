@@ -2,20 +2,38 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useContext, useEffect } from 'react';
+import React, { useContext, useEffect, useMemo } from 'react';
 import { Image, View } from 'react-native';
 import { AuthContext, AuthProvider } from '../hooks/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import '../config/logging';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { usePalette } from '@/hooks/usePalette';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeUploadQueue } from '@/lib/uploadQueue';
 
 function RootLayoutContent({ loaded }) {
   const colorScheme = useColorScheme();
+  const colors = usePalette();
   const { user, loadingAuth } = useContext(AuthContext);
   usePushNotifications(user);
+
+  const navigationTheme = useMemo(() => {
+    const baseTheme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
+    return {
+      ...baseTheme,
+      colors: {
+        ...baseTheme.colors,
+        primary: colors.primary,
+        background: colors.bg,
+        card: colors.surface,
+        text: colors.text,
+        border: colors.border,
+        notification: colors.primary,
+      },
+    };
+  }, [colorScheme, colors]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -27,16 +45,19 @@ function RootLayoutContent({ loaded }) {
   // Show splash screen while loading / not authorized
   if (!loaded || loadingAuth) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Image source={require('../assets/images/icon.png')} style={{ width: 200, height: 200 }} />
-      </View>
+      <>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg }}>
+          <Image source={require('../assets/images/icon.png')} style={{ width: 200, height: 200 }} />
+        </View>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
+      </>
     );
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      {user ? (
-        <>
+    <ThemeProvider value={navigationTheme}>
+      <>
+        {user ? (
           <Stack
             screenOptions={{
               headerShown: false,
@@ -54,11 +75,11 @@ function RootLayoutContent({ loaded }) {
                 title: 'View Quest',
               }} />
           </Stack>
-          <StatusBar style="auto" />
-        </>
-      ) : (
-        <LoginScreen />
-      )}
+        ) : (
+          <LoginScreen />
+        )}
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} backgroundColor={colors.bg} />
+      </>
     </ThemeProvider>
   );
 }
@@ -69,7 +90,7 @@ export default function RootLayout() {
   });
 
   return (
-    <GestureHandlerRootView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <RootLayoutContent loaded={loaded} />
       </AuthProvider>

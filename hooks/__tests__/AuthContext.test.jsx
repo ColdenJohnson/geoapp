@@ -20,6 +20,7 @@ jest.mock('@/lib/api', () => ({
   fetchUsersByUID: jest.fn(),
   fetchFriends: jest.fn(() => Promise.resolve([])),
   fetchFriendRequests: jest.fn(() => Promise.resolve({ incoming: [], outgoing: [] })),
+  fetchFriendActivity: jest.fn(() => Promise.resolve({ items: [], suggestions: [], nextCursor: null })),
   fetchUserStats: jest.fn(() => Promise.resolve(null)),
   fetchUserTopPhotos: jest.fn(() => Promise.resolve([])),
 }));
@@ -33,23 +34,26 @@ describe('AuthProvider', () => {
 
   it('loads profile when user with uid is set and clears when unset', async () => {
     const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
-    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane' });
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
 
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
     expect(result.current.profile).toBeNull();
+    expect(result.current.themePreference).toBe('dark');
 
     await act(async () => {
       result.current.setUser({ uid: 'abc' });
     });
 
     expect(fetchUsersByUID).toHaveBeenCalledWith('abc');
-    expect(result.current.profile).toEqual({ uid: 'abc', name: 'Jane' });
+    expect(result.current.profile).toEqual({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+    expect(result.current.themePreference).toBe('light');
 
     await act(async () => {
       result.current.setUser(null);
     });
 
     expect(result.current.profile).toBeNull();
+    expect(result.current.themePreference).toBe('dark');
   });
 });

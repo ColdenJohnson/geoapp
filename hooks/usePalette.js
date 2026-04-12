@@ -1,6 +1,7 @@
-// Return the current color palette (light/dark) based on system color scheme.
-import { useColorScheme } from 'react-native';
+// Return the current color palette (light/dark) based on the app theme preference.
 import { useMemo } from 'react';
+
+import { useColorScheme } from '@/hooks/useColorScheme';
 import * as Palette from '@/theme/palette';
 
 export function useIsDarkMode() {

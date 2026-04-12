@@ -3,6 +3,12 @@ import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';  // TODO: for production prefer expo-secure-store for tokens, or similar -- asyncstorage is plain key-value
 import auth from '@react-native-firebase/auth';
 import { fetchUsersByUID, fetchFriends, fetchFriendRequests, fetchFriendActivity, fetchUserStats, fetchUserTopPhotos } from '@/lib/api';
+import {
+  DEFAULT_THEME_PREFERENCE,
+  getThemePreferenceStorageKey,
+  normalizeThemePreference,
+} from '@/theme/themePreference';
+import { ThemeContext } from '@/hooks/ThemeContext';
 
 export const AuthContext = createContext();
 const TOP_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -25,6 +31,7 @@ function mergeActivityItems(existingItems, incomingItems) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);           // Firebase user
   const [profile, setProfile] = useState(null);     // Mongo profile
+  const [themePreference, setThemePreference] = useState(DEFAULT_THEME_PREFERENCE);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [friends, setFriends] = useState([]);
   const [friendRequests, setFriendRequests] = useState({ incoming: [], outgoing: [] });
@@ -121,9 +128,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadProfile() {
       if (user?.uid) {
+        setProfile(null);
         const p = await fetchUsersByUID(user.uid);
+        if (cancelled) return;
         if (p?.photo_url) {
           Image.prefetch(p.photo_url).catch((error) => {
             console.warn('Failed to prefetch profile photo', error);
@@ -135,7 +146,57 @@ export function AuthProvider({ children }) {
       }
     }
     loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user?.uid]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadThemePreference() {
+      if (!user?.uid) {
+        setThemePreference(DEFAULT_THEME_PREFERENCE);
+        return;
+      }
+
+      setThemePreference(DEFAULT_THEME_PREFERENCE);
+
+      try {
+        const cached = await AsyncStorage.getItem(getThemePreferenceStorageKey(user.uid));
+        if (!cancelled) {
+          setThemePreference(normalizeThemePreference(cached));
+        }
+      } catch (error) {
+        console.warn('Failed to load cached theme preference', error);
+      }
+    }
+
+    loadThemePreference();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid || !profile) return;
+
+    const normalizedThemePreference = normalizeThemePreference(profile.theme_preference);
+    setThemePreference((prev) => (
+      prev === normalizedThemePreference ? prev : normalizedThemePreference
+    ));
+
+    Promise.resolve(
+      AsyncStorage.setItem(
+        getThemePreferenceStorageKey(user.uid),
+        normalizedThemePreference
+      )
+    ).catch((error) => {
+      console.warn('Failed to cache theme preference', error);
+    });
+  }, [profile, user?.uid]);
 
   useEffect(() => {
     preloadRef.current = { friends: false, stats: false, topPhotos: false, friendActivity: false };
@@ -443,6 +504,7 @@ export function AuthProvider({ children }) {
       setUser,
       profile,
       setProfile,
+      themePreference,
       loadingAuth,
       friends,
       friendRequests,
@@ -466,7 +528,9 @@ export function AuthProvider({ children }) {
       invalidateStats,
       invalidateTopPhotos
     }}>
-      {children}
+      <ThemeContext.Provider value={themePreference}>
+        {children}
+      </ThemeContext.Provider>
     </AuthContext.Provider>
   );
 }
