@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -14,6 +14,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { Image } from 'expo-image';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
@@ -39,6 +41,7 @@ import {
 } from '@/components/ui/PressHoldActionMenu';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { createFormStyles } from '@/components/ui/FormStyles';
+import { AuthContext } from '@/hooks/AuthContext';
 import { usePalette } from '@/hooks/usePalette';
 import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 import { filterChallengesByPrompt, isQuestSearchReady, normalizeQuestSearchText } from '@/lib/questSearch';
@@ -52,10 +55,161 @@ const LONG_PRESS_DELAY_MS = 380;
 const LONG_PRESS_CANCEL_DISTANCE = 8;
 const TAP_OPEN_MAX_DISTANCE = 8;
 const SESSION_CHALLENGE_CACHE = {
+  uid: null,
   all: null,
   saved: null,
 };
+const SESSION_CHALLENGE_CANONICAL_CACHE = {
+  uid: null,
+  all: null,
+};
 const SESSION_SAVED_PIN_IDS = new Set();
+const SESSION_DEFERRED_CHALLENGE_PIN_IDS = [];
+const rankedQuestCacheKey = (uid) => `ranked_quests_cache_${uid}`;
+const QUEST_IMAGE_PREFETCH_LIMIT = 6;
+
+function resetSessionChallengeCache(uid) {
+  const normalizedUid = uid || null;
+  if (SESSION_CHALLENGE_CACHE.uid === normalizedUid) {
+    return;
+  }
+
+  SESSION_CHALLENGE_CACHE.uid = normalizedUid;
+  SESSION_CHALLENGE_CACHE.all = null;
+  SESSION_CHALLENGE_CACHE.saved = null;
+  SESSION_CHALLENGE_CANONICAL_CACHE.uid = normalizedUid;
+  SESSION_CHALLENGE_CANONICAL_CACHE.all = null;
+  SESSION_SAVED_PIN_IDS.clear();
+  SESSION_DEFERRED_CHALLENGE_PIN_IDS.length = 0;
+}
+
+function isOfflineState(state) {
+  return state?.isConnected === false || state?.isInternetReachable === false;
+}
+
+function prefetchChallengeTeaserPhotos(challengeItems) {
+  if (!Array.isArray(challengeItems) || challengeItems.length === 0) {
+    return;
+  }
+
+  const teaserUrls = Array.from(new Set(
+    challengeItems
+      .map((challenge) => (typeof challenge?.teaserPhoto === 'string' ? challenge.teaserPhoto : null))
+      .filter(Boolean)
+  )).slice(0, QUEST_IMAGE_PREFETCH_LIMIT);
+
+  for (const url of teaserUrls) {
+    Image.prefetch(url).catch((error) => {
+      console.warn('Failed to prefetch quest teaser photo', error);
+    });
+  }
+}
+
+async function readRankedQuestCache(uid) {
+  if (!uid) {
+    return { challenges: null, hadCache: false };
+  }
+
+  try {
+    const raw = await AsyncStorage.getItem(rankedQuestCacheKey(uid));
+    if (!raw) {
+      return { challenges: null, hadCache: false };
+    }
+
+    const parsed = JSON.parse(raw);
+    const challenges = Array.isArray(parsed?.challenges) ? parsed.challenges : null;
+    if (!challenges) {
+      return { challenges: null, hadCache: false };
+    }
+
+    return { challenges, hadCache: true };
+  } catch (error) {
+    console.warn('Failed to read ranked quests cache', error);
+    return { challenges: null, hadCache: false };
+  }
+}
+
+async function writeRankedQuestCache(uid, challenges) {
+  if (!uid || !Array.isArray(challenges)) {
+    return;
+  }
+
+  try {
+    await AsyncStorage.setItem(
+      rankedQuestCacheKey(uid),
+      JSON.stringify({
+        challenges,
+        fetchedAt: Date.now(),
+      })
+    );
+  } catch (error) {
+    console.warn('Failed to write ranked quests cache', error);
+  }
+}
+
+function moveDeferredChallengeToBack(pinId) {
+  if (!pinId) return;
+  const existingIndex = SESSION_DEFERRED_CHALLENGE_PIN_IDS.indexOf(pinId);
+  if (existingIndex !== -1) {
+    SESSION_DEFERRED_CHALLENGE_PIN_IDS.splice(existingIndex, 1);
+  }
+  SESSION_DEFERRED_CHALLENGE_PIN_IDS.push(pinId);
+}
+
+export function mergeRefreshedChallengesWithSessionQueue(
+  currentChallenges,
+  freshChallenges,
+  deferredPinIds = []
+) {
+  if (!Array.isArray(freshChallenges) || freshChallenges.length === 0) {
+    return { challenges: [], deferredPinIds: [] };
+  }
+  if (!Array.isArray(currentChallenges) || currentChallenges.length === 0) {
+    return {
+      challenges: freshChallenges,
+      deferredPinIds: deferredPinIds.filter(Boolean),
+    };
+  }
+
+  const freshByPinId = new Map(
+    freshChallenges
+      .filter((challenge) => challenge?.pinId)
+      .map((challenge) => [challenge.pinId, challenge])
+  );
+  const preservedVisiblePinIds = [];
+  const preservedVisiblePinIdSet = new Set();
+
+  currentChallenges.slice(0, STACK_DEPTH).forEach((challenge) => {
+    const pinId = challenge?.pinId;
+    if (!pinId || preservedVisiblePinIdSet.has(pinId) || !freshByPinId.has(pinId)) {
+      return;
+    }
+    preservedVisiblePinIds.push(pinId);
+    preservedVisiblePinIdSet.add(pinId);
+  });
+
+  const nextDeferredPinIds = deferredPinIds.filter(
+    (pinId, index, array) => (
+      !!pinId &&
+      array.indexOf(pinId) === index &&
+      freshByPinId.has(pinId) &&
+      !preservedVisiblePinIdSet.has(pinId)
+    )
+  );
+  const excludedPinIds = new Set([...preservedVisiblePinIds, ...nextDeferredPinIds]);
+  const preservedVisibleChallenges = preservedVisiblePinIds.map((pinId) => (
+    currentChallenges.find((challenge) => challenge?.pinId === pinId) || freshByPinId.get(pinId)
+  )).filter(Boolean);
+  const upcomingChallenges = freshChallenges.filter((challenge) => !excludedPinIds.has(challenge?.pinId));
+  const deferredChallenges = nextDeferredPinIds
+    .map((pinId) => freshByPinId.get(pinId))
+    .filter(Boolean);
+
+  return {
+    challenges: [...preservedVisibleChallenges, ...upcomingChallenges, ...deferredChallenges],
+    deferredPinIds: nextDeferredPinIds,
+  };
+}
 
 function normalizeTeaserComment(comment) {
   const text = typeof comment?.text === 'string' ? comment.text.trim() : '';
@@ -180,6 +334,7 @@ export default function ActiveChallengesScreen() {
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { user } = useContext(AuthContext);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
@@ -187,6 +342,8 @@ export default function ActiveChallengesScreen() {
 
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [uploadingPinId, setUploadingPinId] = useState(null);
   const [queueMode, setQueueMode] = useState('all');
@@ -283,6 +440,8 @@ export default function ActiveChallengesScreen() {
       ? filterChallengesByPrompt(challenges, questSearchInput)
       : challenges
   ), [challenges, questSearchEnabled, questSearchInput]);
+  const showOfflineBanner = queueMode === 'all' && isOffline && challenges.length > 0 && !loading;
+  const showRefreshingBanner = queueMode === 'all' && refreshing && challenges.length > 0 && !loading && !isOffline;
   const stack = filteredChallenges.slice(0, STACK_DEPTH);
   const activeChallenge = stack[0] ?? null;
   const panTargetPinId = swipeAnimatingPinId.current ?? activeChallenge?.pinId ?? null;
@@ -410,16 +569,60 @@ export default function ActiveChallengesScreen() {
     };
   }, [clearLongPressTimer]);
 
+  useEffect(() => {
+    resetSessionChallengeCache(user?.uid);
+    setChallenges([]);
+    setLoading(true);
+    setRefreshing(false);
+  }, [user?.uid]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncNetworkState = (state) => {
+      if (cancelled) return;
+      setIsOffline(isOfflineState(state));
+    };
+
+    NetInfo.fetch()
+      .then(syncNetworkState)
+      .catch((error) => {
+        console.warn('Failed to inspect quest network state', error);
+      });
+
+    const unsubscribe = NetInfo.addEventListener(syncNetworkState);
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, []);
+
   const loadChallenges = useCallback(async ({ showSpinner = true, mode = 'all', force = false } = {}) => {
     const cachedRows = force ? null : SESSION_CHALLENGE_CACHE[mode];
     if (Array.isArray(cachedRows)) {
       setChallenges(cachedRows);
       setLoading(false);
+      setRefreshing(false);
       return true;
     }
-    if (showSpinner) {
+
+    let hydratedFromDiskCache = false;
+    if (!force && mode === 'all') {
+      const { challenges: cachedChallenges, hadCache } = await readRankedQuestCache(user?.uid);
+      if (hadCache) {
+        SESSION_CHALLENGE_CANONICAL_CACHE.all = cachedChallenges;
+        SESSION_CHALLENGE_CACHE.all = cachedChallenges;
+        setChallenges(cachedChallenges);
+        setLoading(false);
+        hydratedFromDiskCache = true;
+      }
+    }
+
+    if (showSpinner && !hydratedFromDiskCache) {
       setLoading(true);
     }
+
+    setRefreshing(true);
     try {
       const rows = mode === 'saved'
         ? await fetchSavedQuests()
@@ -453,7 +656,33 @@ export default function ActiveChallengesScreen() {
             ...challenge,
             isSaved: SESSION_SAVED_PIN_IDS.has(challenge?.pinId),
           }));
+          if (Array.isArray(SESSION_CHALLENGE_CANONICAL_CACHE.all)) {
+            SESSION_CHALLENGE_CANONICAL_CACHE.all = SESSION_CHALLENGE_CANONICAL_CACHE.all.map((challenge) => ({
+              ...challenge,
+              isSaved: SESSION_SAVED_PIN_IDS.has(challenge?.pinId),
+            }));
+          }
+          if (user?.uid && Array.isArray(SESSION_CHALLENGE_CANONICAL_CACHE.all)) {
+            await writeRankedQuestCache(user.uid, SESSION_CHALLENGE_CANONICAL_CACHE.all);
+          }
         }
+      }
+      if (mode === 'all') {
+        SESSION_CHALLENGE_CANONICAL_CACHE.all = hydratedChallenges;
+        const { challenges: mergedChallenges, deferredPinIds } = mergeRefreshedChallengesWithSessionQueue(
+          SESSION_CHALLENGE_CACHE.all,
+          hydratedChallenges,
+          SESSION_DEFERRED_CHALLENGE_PIN_IDS
+        );
+        SESSION_DEFERRED_CHALLENGE_PIN_IDS.length = 0;
+        SESSION_DEFERRED_CHALLENGE_PIN_IDS.push(...deferredPinIds);
+        SESSION_CHALLENGE_CACHE.all = mergedChallenges;
+        prefetchChallengeTeaserPhotos(mergedChallenges);
+        if (user?.uid) {
+          await writeRankedQuestCache(user.uid, hydratedChallenges);
+        }
+        setChallenges(mergedChallenges);
+        return true;
       }
       SESSION_CHALLENGE_CACHE[mode] = hydratedChallenges;
       setChallenges(hydratedChallenges);
@@ -462,11 +691,12 @@ export default function ActiveChallengesScreen() {
       console.error('Failed to fetch active challenges', error);
       return false;
     } finally {
-      if (showSpinner) {
+      setRefreshing(false);
+      if (showSpinner && !hydratedFromDiskCache) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [user?.uid]);
 
   useEffect(() => {
     loadChallenges({ showSpinner: true, mode: queueMode });
@@ -537,7 +767,11 @@ export default function ActiveChallengesScreen() {
       removeIfUnsaved: true,
       upsertIfSaved: true,
     });
-  }, [queueMode]);
+    SESSION_CHALLENGE_CANONICAL_CACHE.all = applySavedState(SESSION_CHALLENGE_CANONICAL_CACHE.all);
+    if (user?.uid && Array.isArray(SESSION_CHALLENGE_CANONICAL_CACHE.all)) {
+      Promise.resolve(writeRankedQuestCache(user.uid, SESSION_CHALLENGE_CANONICAL_CACHE.all)).catch(() => {});
+    }
+  }, [queueMode, user?.uid]);
 
   const advanceChallengeQueue = useCallback((direction, challengePinId) => {
     setChallenges((prev) => {
@@ -555,6 +789,9 @@ export default function ActiveChallengesScreen() {
       const [selectedChallenge] = next.splice(challengeIndex, 1);
       next.push(selectedChallenge);
       SESSION_CHALLENGE_CACHE[queueMode] = next;
+      if (queueMode === 'all') {
+        moveDeferredChallengeToBack(challengePinId);
+      }
       return next;
     });
   }, [queueMode]);
@@ -1075,6 +1312,27 @@ export default function ActiveChallengesScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.safe}>
         <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
+          {showOfflineBanner || showRefreshingBanner ? (
+            <View pointerEvents="none" style={styles.statusBannerOverlay}>
+              {showOfflineBanner ? (
+                <View style={[styles.statusBanner, styles.statusBannerOffline]}>
+                  <MaterialIcons name="cloud-off" size={16} color={colors.danger} />
+                  <Text style={styles.statusBannerText}>
+                    Offline mode. Quests may be outdated.
+                  </Text>
+                </View>
+              ) : null}
+              {showRefreshingBanner ? (
+                <View style={styles.statusBanner}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.statusBannerText}>
+                    Updating quests…
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.headerRow}>
             <Text style={styles.headerTitle}>Quests</Text>
             <View style={[styles.headerControlsRow, { width: cardWidth }]}>
@@ -1128,9 +1386,13 @@ export default function ActiveChallengesScreen() {
                   ) : null}
                 </Pressable>
                 <Pressable
-                  style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading ? 0.55 : 1 }]}
-                  onPress={() => loadChallenges({ showSpinner: true, mode: queueMode, force: true })}
-                  disabled={loading}
+                  style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading || refreshing ? 0.55 : 1 }]}
+                  onPress={() => loadChallenges({
+                    showSpinner: challenges.length === 0,
+                    mode: queueMode,
+                    force: true,
+                  })}
+                  disabled={loading || refreshing}
                   accessibilityLabel="Refresh quests"
                   testID="quest-refresh-button"
                 >
@@ -1288,6 +1550,36 @@ function createStyles(colors) {
       fontWeight: '900',
       color: colors.primary,
       letterSpacing: -0.3,
+    },
+    statusBannerOverlay: {
+      position: 'absolute',
+      top: spacing.sm,
+      left: spacing.md,
+      right: spacing.md,
+      zIndex: 30,
+    },
+    statusBanner: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+    },
+    statusBannerOffline: {
+      backgroundColor: 'rgba(220,38,38,0.08)',
+      borderColor: 'rgba(220,38,38,0.18)',
+    },
+    statusBannerText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+      textAlign: 'center',
     },
     headerSearchRow: {
       flexDirection: 'row',

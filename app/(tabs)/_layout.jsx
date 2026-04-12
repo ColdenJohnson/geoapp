@@ -9,12 +9,17 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePalette } from '@/hooks/usePalette';
 import { Colors } from '@/theme/Colors';
 
+export const unstable_settings = {
+  initialRouteName: 'active_challenges',
+};
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const colors = usePalette();
 
   return (
     <Tabs
+      initialRouteName="active_challenges"
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme].tint,
         tabBarInactiveTintColor: Colors[colorScheme].tabIconDefault,
@@ -55,6 +60,13 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen
         name="index"
+        options={{
+          href: null,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="map"
         options={{
           title: 'Map',
           tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "house" : "house.fill"} color={color} />,

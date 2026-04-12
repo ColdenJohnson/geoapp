@@ -23,6 +23,7 @@ jest.mock('expo-router', () => {
     useRootNavigationState: jest.fn(() => ({ key: 'mock-root' })),
     router: routerMock,
     useLocalSearchParams: jest.fn(() => ({})),
+    Redirect: () => null,
     Stack: ({ children }) => <>{children}</>,
     __mocks__: { routerMock },
   };
