@@ -122,4 +122,20 @@ describe('ActiveChallengesScreen search', () => {
 
     await waitFor(() => expect(unsaveQuest).toHaveBeenCalledWith('quest-1'));
   });
+
+  it('shows and clears the saved quests hint dot after a save', async () => {
+    const { getByTestId, queryByTestId, queryByText } = render(<ActiveChallengesScreen />);
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+    expect(queryByTestId('quest-saved-queue-dot')).toBeNull();
+
+    fireEvent.press(getByTestId('quest-card-save-button-quest-1'));
+
+    await waitFor(() => expect(saveQuest).toHaveBeenCalledWith('quest-1'));
+    expect(queryByTestId('quest-saved-queue-dot')).toBeTruthy();
+
+    fireEvent.press(getByTestId('quest-saved-queue-button'));
+
+    await waitFor(() => expect(queryByTestId('quest-saved-queue-dot')).toBeNull());
+  });
 });

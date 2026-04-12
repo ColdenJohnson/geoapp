@@ -196,6 +196,7 @@ export default function ActiveChallengesScreen() {
   const [activeChallengeOptionId, setActiveChallengeOptionId] = useState(null);
   const [questSearchInput, setQuestSearchInput] = useState('');
   const [forceQuestSearch, setForceQuestSearch] = useState(false);
+  const [showSavedQueueHint, setShowSavedQueueHint] = useState(false);
   const cardPan = useRef(new Animated.ValueXY()).current;
   const swipeAnimatingPinId = useRef(null);
   const longPressTimerRef = useRef(null);
@@ -488,6 +489,7 @@ export default function ActiveChallengesScreen() {
   }, [normalizedQuestSearchInput]);
 
   const handleQueueModeToggle = useCallback(() => {
+    setShowSavedQueueHint(false);
     setQueueMode((prev) => (prev === 'saved' ? 'all' : 'saved'));
   }, []);
 
@@ -600,6 +602,7 @@ export default function ActiveChallengesScreen() {
       return;
     }
     syncChallengeSavedState(challenge, true);
+    setShowSavedQueueHint(true);
     if (!result?.alreadySaved) {
       showToast('Saved for later', 2200);
     }
@@ -632,6 +635,7 @@ export default function ActiveChallengesScreen() {
       return;
     }
     syncChallengeSavedState(challenge, true);
+    setShowSavedQueueHint(true);
     if (result?.alreadySaved || queueMode === 'saved') {
       showToast('Already saved', 2200);
       return;
@@ -659,6 +663,7 @@ export default function ActiveChallengesScreen() {
       return;
     }
     syncChallengeSavedState(challenge, true);
+    setShowSavedQueueHint(true);
     if (result?.alreadySaved) {
       showToast('Already saved', 2200);
       return;
@@ -1114,6 +1119,13 @@ export default function ActiveChallengesScreen() {
                     size={22}
                     color={colors.text}
                   />
+                  {showSavedQueueHint ? (
+                    <View
+                      pointerEvents="none"
+                      style={styles.savedQueueHintDot}
+                      testID="quest-saved-queue-dot"
+                    />
+                  ) : null}
                 </Pressable>
                 <Pressable
                   style={({ pressed }) => [styles.iconButton, { opacity: pressed || loading ? 0.55 : 1 }]}
@@ -1242,6 +1254,17 @@ function createStyles(colors) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.bg,
+      position: 'relative',
+      overflow: 'visible',
+    },
+    savedQueueHintDot: {
+      position: 'absolute',
+      top: 9,
+      right: 9,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
     },
     headerTextBlock: {
       flex: 1,

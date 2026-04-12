@@ -49,7 +49,7 @@ export const dark = {
   pinOpen: '#FFE1D6',
 
   text: '#F6EFE8',
-  textMuted: '#B7A89A',
+  textMuted: '#F6EFE8',
 
   bg: '#1E1E1E',
   surface: '#121212',
