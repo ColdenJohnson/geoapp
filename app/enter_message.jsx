@@ -157,7 +157,8 @@ export default function EnterMessageScreen({ initialUri = null }) {
       inputRef.current?.focus();
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch(() => {});
     setUploading(true);
     try {
       const queuedItem = await enqueueNewChallengeUpload({

@@ -162,7 +162,8 @@ export default function Upload({ initialUri = null }) {
 
   const handleUpload = async () => {
     if (!uri || uploading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch(() => {});
     setUploading(true);
     try {
       const photoLocation = await getApproximatePhotoLocation();
