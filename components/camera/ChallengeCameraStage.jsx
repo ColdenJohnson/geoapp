@@ -129,7 +129,6 @@ export default function ChallengeCameraStage({
       return;
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsCapturing(true);
     setCameraError('');
 
