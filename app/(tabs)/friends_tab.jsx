@@ -111,6 +111,7 @@ export default function FriendsTabScreen() {
     friendsLoading,
     refreshFriends,
     refreshFriendRequests,
+    markFriendActivitySeen,
     friendActivityItems: activityItems,
     friendActivitySuggestions: activitySuggestions,
     friendActivityLoading: activityLoading,
@@ -198,12 +199,13 @@ export default function FriendsTabScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      markFriendActivitySeen();
       refreshFriendRequests({ force: false });
       refreshFriendActivity({
         force: false,
         showLoading: !friendActivityFetchedAt && !activityItems.length && !activitySuggestions.length,
       });
-    }, [activityItems.length, activitySuggestions.length, friendActivityFetchedAt, refreshFriendActivity, refreshFriendRequests])
+    }, [activityItems.length, activitySuggestions.length, friendActivityFetchedAt, markFriendActivitySeen, refreshFriendActivity, refreshFriendRequests])
   );
 
   const openUserProfile = useCallback((uid) => {

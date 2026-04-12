@@ -1,4 +1,4 @@
-import { createContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';  // TODO: for production prefer expo-secure-store for tokens, or similar -- asyncstorage is plain key-value
 import auth from '@react-native-firebase/auth';
@@ -50,6 +50,7 @@ export function AuthProvider({ children }) {
   const [friendActivityLoadingMore, setFriendActivityLoadingMore] = useState(false);
   const [friendActivityNextCursor, setFriendActivityNextCursor] = useState(null);
   const [friendActivityFetchedAt, setFriendActivityFetchedAt] = useState(null);
+  const [hasUnseenFriendActivity, setHasUnseenFriendActivity] = useState(false);
   const preloadRef = useRef({ friends: false, stats: false, topPhotos: false, friendActivity: false });
   const pendingStatsRefreshRef = useRef(false);
   const latestFriendsRef = useRef([]);
@@ -214,6 +215,7 @@ export function AuthProvider({ children }) {
     setFriendActivityLoadingMore(false);
     setFriendActivityNextCursor(null);
     setFriendActivityFetchedAt(null);
+    setHasUnseenFriendActivity(!!user?.uid);
   }, [user?.uid]);
 
   useEffect(() => {
@@ -470,6 +472,10 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const markFriendActivitySeen = useCallback(() => {
+    setHasUnseenFriendActivity(false);
+  }, []);
+
   useEffect(() => {
     if (!user?.uid) return;
     if (!preloadRef.current.friends) {
@@ -518,10 +524,12 @@ export function AuthProvider({ children }) {
       friendActivityLoading,
       friendActivityLoadingMore,
       friendActivityFetchedAt,
+      hasUnseenFriendActivity,
       refreshFriends,
       refreshFriendRequests,
       refreshFriendActivity,
       loadMoreFriendActivity,
+      markFriendActivitySeen,
       refreshStats,
       refreshTopPhotos,
       invalidateFriends,

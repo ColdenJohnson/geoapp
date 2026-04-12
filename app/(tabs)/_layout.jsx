@@ -1,10 +1,11 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform } from 'react-native';
+import React, { useContext, useMemo } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { HapticTab } from '@/components/HapticTab';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
+import { AuthContext } from '@/hooks/AuthContext';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePalette } from '@/hooks/usePalette';
 import { Colors } from '@/theme/Colors';
@@ -17,6 +18,8 @@ export const unstable_settings = {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const colors = usePalette();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { hasUnseenFriendActivity } = useContext(AuthContext);
 
   return (
     <Tabs
@@ -92,7 +95,14 @@ export default function TabLayout() {
         name="friends_tab"
         options={{
           title: 'Friends',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "person.2" : "person.2.fill"} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.tabIconWrap}>
+              <IconSymbol size={28} name={focused ? "person.2" : "person.2.fill"} color={color} />
+              {hasUnseenFriendActivity && !focused ? (
+                <View pointerEvents="none" style={styles.tabHintDot} testID="friends-tab-dot" />
+              ) : null}
+            </View>
+          ),
           headerShown: false,
         }}
       />
@@ -106,4 +116,25 @@ export default function TabLayout() {
       />
     </Tabs>
   );
+}
+
+function createStyles(colors) {
+  return StyleSheet.create({
+    tabIconWrap: {
+      position: 'relative',
+      width: 30,
+      height: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tabHintDot: {
+      position: 'absolute',
+      top: 2,
+      right: -1,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+  });
 }

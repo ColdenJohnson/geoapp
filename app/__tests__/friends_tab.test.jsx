@@ -52,6 +52,7 @@ function renderScreen(overrides = {}) {
     friends: [],
     friendRequests: { incoming: [], outgoing: [] },
     friendsLoading: false,
+    markFriendActivitySeen: jest.fn(),
     refreshFriends: jest.fn(async () => []),
     refreshFriendRequests: jest.fn(async () => ({ incoming: [], outgoing: [] })),
     friendActivityItems: [],
@@ -99,5 +100,15 @@ describe('FriendsTabScreen', () => {
       'Unable to open this activity because it is location locked.',
       2500
     );
+  });
+
+  it('clears the tab dot when the friends tab is focused', () => {
+    const markFriendActivitySeen = jest.fn();
+
+    renderScreen({
+      markFriendActivitySeen,
+    });
+
+    expect(markFriendActivitySeen).toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { renderHook, act } from '@testing-library/react-native';
+import { renderHook, act, waitFor } from '@testing-library/react-native';
 import { AuthContext, AuthProvider } from '../AuthContext';
 
 jest.mock('@react-native-firebase/auth', () => () => ({
@@ -55,5 +55,26 @@ describe('AuthProvider', () => {
 
     expect(result.current.profile).toBeNull();
     expect(result.current.themePreference).toBe('dark');
+  });
+
+  it('shows the friends tab dot on session start and clears it when marked seen', async () => {
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    expect(result.current.hasUnseenFriendActivity).toBe(false);
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    await waitFor(() => expect(result.current.hasUnseenFriendActivity).toBe(true));
+
+    act(() => {
+      result.current.markFriendActivitySeen();
+    });
+
+    expect(result.current.hasUnseenFriendActivity).toBe(false);
   });
 });
