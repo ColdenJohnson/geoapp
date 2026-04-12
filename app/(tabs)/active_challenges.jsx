@@ -368,9 +368,9 @@ export default function ActiveChallengesScreen() {
   const cardWidth = Math.max(
     180,
     Math.min(
-      stageWidth * 0.95,
-      stageHeight * CARD_ASPECT_RATIO * 0.9,
-      400,
+      stageWidth * 0.99,
+      stageHeight * CARD_ASPECT_RATIO * 0.99,
+      430,
     ),
   );
   const cardHeight = cardWidth / CARD_ASPECT_RATIO;
