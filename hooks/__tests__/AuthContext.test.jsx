@@ -36,6 +36,9 @@ describe('AuthProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuthState.currentUser = null;
+    AsyncStorage.getItem.mockResolvedValue(null);
+    AsyncStorage.setItem.mockResolvedValue();
+    AsyncStorage.removeItem.mockResolvedValue();
     delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL;
     delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL_STEP;
     delete global.__DEV_FORCE_APP_TUTORIAL__;
@@ -89,16 +92,29 @@ describe('AuthProvider', () => {
     expect(result.current.hasUnseenFriendActivity).toBe(false);
   });
 
-  it('does not show the tutorial for a returning account by default', async () => {
+  it('shows the tutorial by default when no seen flag exists', async () => {
     const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
     fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
-    mockAuthState.currentUser = {
-      uid: 'abc',
-      metadata: {
-        creationTime: '2026-04-10T00:00:00.000Z',
-        lastSignInTime: '2026-04-12T00:00:00.000Z',
-      },
-    };
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+    });
+  });
+
+  it('does not show the tutorial when the seen flag already exists', async () => {
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key === 'app_tutorial_seen_abc' ? 'true' : null
+    ));
 
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
@@ -111,16 +127,9 @@ describe('AuthProvider', () => {
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
   });
 
-  it('shows the tutorial for a newly created account and marks it seen when completed', async () => {
+  it('marks the tutorial seen when completed', async () => {
     const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
     fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
-    mockAuthState.currentUser = {
-      uid: 'abc',
-      metadata: {
-        creationTime: '2026-04-12T00:00:00.000Z',
-        lastSignInTime: '2026-04-12T00:00:20.000Z',
-      },
-    };
 
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
@@ -162,13 +171,6 @@ describe('AuthProvider', () => {
   it('keeps map and profile tutorial dismissal untethered when reusing an older callback', async () => {
     const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
     fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
-    mockAuthState.currentUser = {
-      uid: 'abc',
-      metadata: {
-        creationTime: '2026-04-12T00:00:00.000Z',
-        lastSignInTime: '2026-04-12T00:00:20.000Z',
-      },
-    };
 
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 

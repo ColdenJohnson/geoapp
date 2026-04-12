@@ -14,8 +14,6 @@ export const AuthContext = createContext();
 const TOP_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const FRIEND_ACTIVITY_TTL_MS = 10 * 60 * 1000;
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
-const NEW_ACCOUNT_TUTORIAL_WINDOW_MS = 60 * 1000;
-
 export const APP_TUTORIAL_STEPS = Object.freeze({
   QUESTS_TAB: 'quests_tab',
   MAP_CREATE: 'map_create',
@@ -34,22 +32,6 @@ function createAppTutorialVisibilityState(visibleSteps = []) {
     accumulator[step] = visibleSet.has(step);
     return accumulator;
   }, {});
-}
-
-function parseMetadataTime(value) {
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function shouldShowNewAccountTutorial(metadata) {
-  const createdAt = parseMetadataTime(metadata?.creationTime);
-  const lastSignInAt = parseMetadataTime(metadata?.lastSignInTime);
-
-  if (!Number.isFinite(createdAt) || !Number.isFinite(lastSignInAt)) {
-    return false;
-  }
-
-  return Math.abs(lastSignInAt - createdAt) <= NEW_ACCOUNT_TUTORIAL_WINDOW_MS;
 }
 
 function isTruthyEnvFlag(value) {
@@ -309,9 +291,7 @@ export function AuthProvider({ children }) {
           return;
         }
 
-        if (shouldShowNewAccountTutorial(auth().currentUser?.metadata)) {
-          setAppTutorialVisibility(createAppTutorialVisibilityState(APP_TUTORIAL_STEP_LIST));
-        }
+        setAppTutorialVisibility(createAppTutorialVisibilityState(APP_TUTORIAL_STEP_LIST));
       } catch (error) {
         console.warn('Failed to load app tutorial state', error);
       }
