@@ -92,7 +92,7 @@ describe('AuthProvider', () => {
     expect(result.current.hasUnseenFriendActivity).toBe(false);
   });
 
-  it('shows the tutorial by default when no seen flag exists', async () => {
+  it('does not show the tutorial by default when no seen flag exists for an existing account', async () => {
     const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
     fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
 
@@ -102,11 +102,40 @@ describe('AuthProvider', () => {
       result.current.setUser({ uid: 'abc' });
     });
 
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith(
+      'app_tutorial_seen_abc',
+      'true'
+    );
+  });
+
+  it('shows the tutorial for a new account session and seeds persisted progress', async () => {
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc', isNewAccountSession: true });
+    });
+
     await waitFor(() => {
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(true);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
     });
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'app_tutorial_progress_abc',
+      JSON.stringify([
+        APP_TUTORIAL_STEPS.QUESTS_TAB,
+        APP_TUTORIAL_STEPS.MAP_CREATE,
+        APP_TUTORIAL_STEPS.FRIENDS_ADD,
+        APP_TUTORIAL_STEPS.PROFILE_EDIT,
+      ])
+    );
   });
 
   it('does not show the tutorial when the seen flag already exists', async () => {
@@ -134,7 +163,7 @@ describe('AuthProvider', () => {
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
     await act(async () => {
-      result.current.setUser({ uid: 'abc' });
+      result.current.setUser({ uid: 'abc', isNewAccountSession: true });
     });
 
     await waitFor(() => {
@@ -148,6 +177,14 @@ describe('AuthProvider', () => {
     });
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'app_tutorial_progress_abc',
+      JSON.stringify([
+        APP_TUTORIAL_STEPS.MAP_CREATE,
+        APP_TUTORIAL_STEPS.FRIENDS_ADD,
+        APP_TUTORIAL_STEPS.PROFILE_EDIT,
+      ])
+    );
 
     await act(async () => {
       await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
@@ -166,6 +203,7 @@ describe('AuthProvider', () => {
 
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('app_tutorial_seen_abc', 'true');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('app_tutorial_progress_abc');
   });
 
   it('keeps map and profile tutorial dismissal untethered when reusing an older callback', async () => {
@@ -175,7 +213,7 @@ describe('AuthProvider', () => {
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
     await act(async () => {
-      result.current.setUser({ uid: 'abc' });
+      result.current.setUser({ uid: 'abc', isNewAccountSession: true });
     });
 
     await waitFor(() => {
@@ -209,7 +247,7 @@ describe('AuthProvider', () => {
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
     await act(async () => {
-      result.current.setUser({ uid: 'abc' });
+      result.current.setUser({ uid: 'abc', isNewAccountSession: true });
     });
 
     await waitFor(() => {
@@ -236,7 +274,7 @@ describe('AuthProvider', () => {
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
     await act(async () => {
-      result.current.setUser({ uid: 'abc' });
+      result.current.setUser({ uid: 'abc', isNewAccountSession: true });
     });
 
     await waitFor(() => {
@@ -244,5 +282,28 @@ describe('AuthProvider', () => {
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
     });
+  });
+
+  it('restores persisted per-step tutorial progress', async () => {
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key === 'app_tutorial_progress_abc'
+        ? JSON.stringify([APP_TUTORIAL_STEPS.PROFILE_EDIT])
+        : null
+    ));
+
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await act(async () => {
+      result.current.setUser({ uid: 'abc' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
+    });
+
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
   });
 });

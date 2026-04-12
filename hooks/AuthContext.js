@@ -21,9 +21,14 @@ export const APP_TUTORIAL_STEPS = Object.freeze({
   PROFILE_EDIT: 'profile_edit',
 });
 const APP_TUTORIAL_STEP_LIST = Object.values(APP_TUTORIAL_STEPS);
+const NEW_ACCOUNT_TUTORIAL_WINDOW_MS = 60 * 1000;
 
 function getAppTutorialSeenStorageKey(uid) {
   return `app_tutorial_seen_${uid}`;
+}
+
+function getAppTutorialProgressStorageKey(uid) {
+  return `app_tutorial_progress_${uid}`;
 }
 
 function createAppTutorialVisibilityState(visibleSteps = []) {
@@ -62,6 +67,38 @@ function getForcedAppTutorialVisibility() {
     return createAppTutorialVisibilityState(APP_TUTORIAL_STEP_LIST);
   }
   return null;
+}
+
+function getVisibleTutorialSteps(visibilityState) {
+  return APP_TUTORIAL_STEP_LIST.filter((step) => visibilityState?.[step]);
+}
+
+function parseTutorialProgress(rawValue) {
+  if (typeof rawValue !== 'string' || !rawValue.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    const validSteps = parsed.filter((step) => APP_TUTORIAL_STEP_LIST.includes(step));
+    return validSteps.length ? validSteps : [];
+  } catch (error) {
+    console.warn('Failed to parse app tutorial progress', error);
+    return null;
+  }
+}
+
+function isNewAccountSession(metadata) {
+  const createdAtMs = Date.parse(metadata?.creationTime || '');
+  const lastSignInAtMs = Date.parse(metadata?.lastSignInTime || '');
+  if (!Number.isFinite(createdAtMs) || !Number.isFinite(lastSignInAtMs)) {
+    return false;
+  }
+  return Math.abs(lastSignInAtMs - createdAtMs) <= NEW_ACCOUNT_TUTORIAL_WINDOW_MS;
 }
 
 function mergeActivityItems(existingItems, incomingItems) {
@@ -138,7 +175,7 @@ export function AuthProvider({ children }) {
           const base = prev && prev.uid
             ? prev
             : { uid: fbUser.uid, email: fbUser.email ?? null, phoneNumber: fbUser.phoneNumber ?? null }; // if prev (user) is null, then create new base from fbUser
-          return { ...base, idToken };
+          return { ...base, idToken, isNewAccountSession: isNewAccountSession(fbUser?.metadata) };
         });
         await AsyncStorage.setItem('user_token', idToken);
       } catch (error) {
@@ -161,6 +198,7 @@ export function AuthProvider({ children }) {
         email: fbUser.email ?? null,
         phoneNumber: fbUser.phoneNumber ?? null,
         idToken: null,
+        isNewAccountSession: isNewAccountSession(fbUser?.metadata),
       });
       setLoadingAuth(false);
       applyTokenForUser(fbUser);
@@ -286,12 +324,29 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const hasSeenTutorial = await AsyncStorage.getItem(getAppTutorialSeenStorageKey(user.uid));
+        const [hasSeenTutorial, storedProgress] = await Promise.all([
+          AsyncStorage.getItem(getAppTutorialSeenStorageKey(user.uid)),
+          AsyncStorage.getItem(getAppTutorialProgressStorageKey(user.uid)),
+        ]);
         if (cancelled || hasSeenTutorial === 'true') {
           return;
         }
 
+        const visibleSteps = parseTutorialProgress(storedProgress);
+        if (visibleSteps) {
+          setAppTutorialVisibility(createAppTutorialVisibilityState(visibleSteps));
+          return;
+        }
+
+        if (!user?.isNewAccountSession) {
+          return;
+        }
+
         setAppTutorialVisibility(createAppTutorialVisibilityState(APP_TUTORIAL_STEP_LIST));
+        await AsyncStorage.setItem(
+          getAppTutorialProgressStorageKey(user.uid),
+          JSON.stringify(APP_TUTORIAL_STEP_LIST)
+        );
       } catch (error) {
         console.warn('Failed to load app tutorial state', error);
       }
@@ -302,7 +357,7 @@ export function AuthProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.uid]);
+  }, [user?.isNewAccountSession, user?.uid]);
 
   useEffect(() => {
     latestFriendsRef.current = friends;
@@ -583,14 +638,25 @@ export function AuthProvider({ children }) {
     appTutorialVisibilityRef.current = nextVisibility;
     setAppTutorialVisibility(nextVisibility);
 
-    if (Object.values(nextVisibility).some(Boolean) || getForcedAppTutorialVisibility() || !user?.uid) {
+    if (getForcedAppTutorialVisibility() || !user?.uid) {
       return;
     }
 
+    const visibleSteps = getVisibleTutorialSteps(nextVisibility);
+
     try {
+      if (visibleSteps.length > 0) {
+        await AsyncStorage.setItem(
+          getAppTutorialProgressStorageKey(user.uid),
+          JSON.stringify(visibleSteps)
+        );
+        return;
+      }
+
       await AsyncStorage.setItem(getAppTutorialSeenStorageKey(user.uid), 'true');
+      await AsyncStorage.removeItem(getAppTutorialProgressStorageKey(user.uid));
     } catch (error) {
-      console.warn('Failed to persist app tutorial completion', error);
+      console.warn('Failed to persist app tutorial state', error);
     }
   }, [user?.uid]);
 
