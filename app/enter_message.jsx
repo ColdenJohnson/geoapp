@@ -13,6 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import { useCameraPermission } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -156,6 +157,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
       inputRef.current?.focus();
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setUploading(true);
     try {
       const queuedItem = await enqueueNewChallengeUpload({

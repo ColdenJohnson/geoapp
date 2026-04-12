@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -504,6 +505,7 @@ export default function ViewPhotoChallengeScreen() {
   ]);
 
   const onToggleSortMode = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
     setSortMode((currentMode) => (
       currentMode === SORT_MODE_ELO ? SORT_MODE_DATE : SORT_MODE_ELO
     ));

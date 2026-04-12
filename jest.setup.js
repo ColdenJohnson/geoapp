@@ -229,6 +229,31 @@ jest.mock('expo-constants', () => ({
   expoConfig: { extra: { eas: { projectId: 'mock-project-id' } } },
 }));
 
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(async () => {}),
+  notificationAsync: jest.fn(async () => {}),
+  selectionAsync: jest.fn(async () => {}),
+  ImpactFeedbackStyle: {
+    Light: 'light',
+    Medium: 'medium',
+    Heavy: 'heavy',
+    Rigid: 'rigid',
+    Soft: 'soft',
+  },
+  NotificationFeedbackType: {
+    Success: 'success',
+    Warning: 'warning',
+    Error: 'error',
+  },
+}));
+
+jest.mock('react-native-volume-manager', () => ({
+  VolumeManager: {
+    addVolumeListener: jest.fn(() => ({ remove: jest.fn() })),
+    showNativeVolumeUI: jest.fn(async () => {}),
+  },
+}));
+
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
   return {

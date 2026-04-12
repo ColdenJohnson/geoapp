@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { AuthContext } from '@/hooks/AuthContext';
@@ -298,6 +299,7 @@ export default function FriendsTabScreen() {
     setFriendActionBusy(true);
     const resp = await requestFriend({ handle, target_uid: targetUid });
     if (resp?.success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       if (targetUid) {
         setPendingSuggestionRequests((prev) => ({ ...prev, [targetUid]: true }));
       }

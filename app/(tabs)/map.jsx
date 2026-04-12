@@ -2,6 +2,7 @@ import { Platform, StyleSheet, View, Pressable, Text, useWindowDimensions } from
 import MapView from 'react-native-maps';
 import { Marker, Callout, CalloutSubview } from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import { useEffect, useState, useRef, useCallback, useMemo, useContext } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -74,6 +75,7 @@ export default function HomeScreen() {
 
   function uploadPhotoToChallenge(pin) {
     if (!pin?._id) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       showToast('No valid challenge selected.');
       return;
     }
@@ -82,9 +84,11 @@ export default function HomeScreen() {
       userLocation: userCoords,
     });
     if (uploadBlockedMessage) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       showToast(uploadBlockedMessage, 2500);
       return;
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const pinId = String(pin._id);
     const uploadRequestId = `map-upload-${pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     router.push({
@@ -538,6 +542,7 @@ export default function HomeScreen() {
             <CalloutSubview
               onPress={() => {
                 if (uploadBlockedMessage) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
                   showToast(uploadBlockedMessage);
                   return;
                 }

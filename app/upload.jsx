@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import * as Haptics from 'expo-haptics';
 import { useState, useRef, useMemo, useEffect, useContext } from 'react'
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useCameraPermission } from 'react-native-vision-camera';
@@ -161,6 +162,7 @@ export default function Upload({ initialUri = null }) {
 
   const handleUpload = async () => {
     if (!uri || uploading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setUploading(true);
     try {
       const photoLocation = await getApproximatePhotoLocation();

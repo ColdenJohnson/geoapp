@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, useCameraDevice, useCameraFormat } from 'react-native-vision-camera';
 import { FontAwesome6, MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { VolumeManager } from 'react-native-volume-manager';
 
 import { usePalette } from '@/hooks/usePalette';
@@ -128,6 +129,7 @@ export default function ChallengeCameraStage({
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setIsCapturing(true);
     setCameraError('');
 
@@ -172,6 +174,7 @@ export default function ChallengeCameraStage({
     }
 
     if (timerSeconds > 0) {
+      Haptics.selectionAsync().catch(() => {});
       setCountdownValue(timerSeconds);
       return;
     }
