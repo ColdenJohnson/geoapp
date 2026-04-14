@@ -142,10 +142,13 @@ export function ProfileTopPhotosCard({
               <View style={styles.topPhotoRankBadge}>
                 <Text style={styles.topPhotoRankText}>#{index + 1}</Text>
               </View>
-              <View style={styles.topPhotoMeta}>
-                <Text style={styles.topPhotoElo}>
-                  Score {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
-                </Text>
+              <View style={styles.topPhotoTileMeta}>
+                <View style={styles.topPhotoEloChip}>
+                  <MaterialIcons name="emoji-events" size={13} color={colors.primary} />
+                  <Text style={styles.topPhotoEloText}>
+                    {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
+                  </Text>
+                </View>
               </View>
             </Pressable>
           ))}
@@ -468,20 +471,25 @@ export function createProfileStyles(colors) {
       ...textStyles.chip,
       color: colors.primary,
     },
-    topPhotoMeta: {
+    topPhotoTileMeta: {
       position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(12, 7, 3, 0.55)',
+      right: spacing.sm,
+      bottom: spacing.sm,
+    },
+    topPhotoEloChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
+      borderRadius: 999,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    topPhotoElo: {
-      ...textStyles.buttonSmall,
-      color: '#FFFFFF',
-      letterSpacing: 0.4,
-      textAlign: 'center',
+    topPhotoEloText: {
+      ...textStyles.chipSmall,
+      color: colors.text,
     },
     topPhotoPlaceholder: {
       alignItems: 'center',

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
-import { createProfileStyles, ProfileHeaderCard } from '@/components/profile/ProfileShared';
+import { createProfileStyles, ProfileHeaderCard, ProfileTopPhotosCard } from '@/components/profile/ProfileShared';
 
 const colors = {
   surface: '#FFFFFF',
@@ -31,5 +31,25 @@ describe('ProfileHeaderCard', () => {
     expect(getByText('@tester')).toBeTruthy();
     expect(getByText('7')).toBeTruthy();
     expect(getByLabelText('7 day streak')).toBeTruthy();
+  });
+});
+
+describe('ProfileTopPhotosCard', () => {
+  it('renders top photo Elo in the bottom-right chip without the score banner label', () => {
+    const styles = createProfileStyles(colors);
+    const { getByText, queryByText } = render(
+      <ProfileTopPhotosCard
+        colors={colors}
+        onPressPhoto={() => {}}
+        styles={styles}
+        topPhotos={[
+          { _id: 'photo-1', file_url: 'https://example.com/photo-1.jpg', global_elo: 1137 },
+        ]}
+        topPhotosLoading={false}
+      />
+    );
+
+    expect(getByText('1137')).toBeTruthy();
+    expect(queryByText('Score 1137')).toBeNull();
   });
 });
