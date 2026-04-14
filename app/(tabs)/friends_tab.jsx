@@ -984,12 +984,10 @@ export default function FriendsTabScreen() {
     >
       <SafeAreaView style={styles.modalScreen}>
         <View style={styles.modalCard} testID="contacts-overlay">
-          <Text style={styles.modalEyebrow}>From Contacts</Text>
           <View style={styles.modalHeaderRow}>
             <Text style={styles.modalTitle}>Add friends from contacts</Text>
             <Text style={styles.sectionCount}>{contactMatches.length}</Text>
           </View>
-          <Text style={styles.modalBody}>Toggle anyone you do not want to add.</Text>
 
           <View style={styles.modalListWrap}>
             {contactMatchesLoading && !contactMatchesLoaded ? (
@@ -1020,7 +1018,7 @@ export default function FriendsTabScreen() {
               textStyle={styles.footerSkipButtonText}
             />
             <CTAButton
-              title={contactMatchActionBusy ? 'Sending...' : `Send Selected (${selectedContactMatchCount})`}
+              title={contactMatchActionBusy ? 'Adding...' : `Add (${selectedContactMatchCount})`}
               onPress={() => sendSelectedContactRequests({ closeOverlay: true })}
               variant="filled"
               style={styles.footerSendButton}
@@ -1575,6 +1573,7 @@ function createStyles(colors) {
     },
     footerSkipButtonText: {
       ...textStyles.buttonSmall,
+      color: colors.primaryTextOn,
     },
     footerSendButton: {
       flex: 1,
@@ -1595,20 +1594,10 @@ function createStyles(colors) {
       justifyContent: 'space-between',
       gap: spacing.sm,
     },
-    modalEyebrow: {
-      ...textStyles.sectionTitleSm,
-      color: colors.primary,
-      marginBottom: spacing.sm,
-    },
     modalTitle: {
       ...textStyles.title,
       color: colors.text,
       flex: 1,
-    },
-    modalBody: {
-      ...textStyles.body,
-      color: colors.textMuted,
-      marginTop: spacing.sm,
     },
     modalListWrap: {
       flex: 1,
