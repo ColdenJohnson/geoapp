@@ -14,7 +14,7 @@ import { spacing, radii } from '@/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { goBackOrHome, buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { AuthContext } from '@/hooks/AuthContext';
-import { enqueueAddPhotoUpload } from '@/lib/uploadQueue';
+import { enqueueAddPhotoUpload, waitForUploadQueueItem } from '@/lib/uploadQueue';
 import { textStyles } from '@/theme/typography';
 
 const PHOTO_ASPECT_RATIO = 3 / 4;
@@ -93,7 +93,7 @@ export default function Upload({ initialUri = null }) {
   const isMounted = useRef(true);
   const didSubmitUpload = useRef(false);
   const backButtonClearance = insets.top + spacing.sm + BACK_BUTTON_HEIGHT;
-  const { profile } = useContext(AuthContext);
+  const { profile, invalidateStats } = useContext(AuthContext);
 
   useEffect(() => () => {
     isMounted.current = false;
@@ -167,7 +167,7 @@ export default function Upload({ initialUri = null }) {
     setUploading(true);
     try {
       const photoLocation = await getApproximatePhotoLocation();
-      await enqueueAddPhotoUpload({
+      const queuedItem = await enqueueAddPhotoUpload({
         sourceUri: uri,
         pinId,
         createdByHandle:
@@ -177,6 +177,21 @@ export default function Upload({ initialUri = null }) {
         queueId: typeof uploadRequestId === 'string' && uploadRequestId ? uploadRequestId : null,
         photoLocation,
       });
+      const queueId = typeof queuedItem?.id === 'string' && queuedItem.id
+        ? queuedItem.id
+        : typeof uploadRequestId === 'string' && uploadRequestId
+          ? uploadRequestId
+          : null;
+
+      if (queueId) {
+        void waitForUploadQueueItem(queueId)
+          .then(() => {
+            invalidateStats?.();
+          })
+          .catch((queueError) => {
+            console.warn('Failed waiting for queued upload completion', queueError);
+          });
+      }
 
       didSubmitUpload.current = true;
       if (typeof uploadRequestId === 'string' && uploadRequestId) {

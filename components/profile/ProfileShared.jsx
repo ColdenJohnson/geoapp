@@ -15,12 +15,14 @@ export const PROFILE_BADGES = [
 
 export function ProfileHeaderCard({
   profile,
+  streak = null,
   onPressAvatar = null,
   styles,
 }) {
   const AvatarWrapper = onPressAvatar ? TouchableOpacity : View;
   const avatarProps = onPressAvatar ? { onPress: onPressAvatar, accessibilityRole: 'button' } : {};
   const bio = typeof profile?.bio === 'string' ? profile.bio.trim() : '';
+  const resolvedStreak = Number.isFinite(streak) ? Math.max(0, streak) : 0;
 
   return (
     <View style={styles.headerCard}>
@@ -38,6 +40,12 @@ export function ProfileHeaderCard({
           <Text style={profile?.handle ? styles.handleText : styles.handlePlaceholder}>
             {profile?.handle ? `@${profile.handle}` : 'No handle set'}
           </Text>
+          <View style={styles.streakRow} accessibilityLabel={`${resolvedStreak} day streak`}>
+            <Text style={styles.streakEmoji}>🔥</Text>
+            <Text style={styles.streakText}>
+              <Text style={styles.streakNumber}>{resolvedStreak}</Text>
+            </Text>
+          </View>
         </View>
       </View>
       {bio ? <Text style={styles.bioText}>{bio}</Text> : null}
@@ -247,16 +255,34 @@ export function createProfileStyles(colors) {
       textAlign: 'left',
     },
     handleText: {
-      ...textStyles.bodySmallStrong,
+      ...textStyles.bodyEmphasis,
       color: colors.textMuted,
       marginTop: spacing.xs,
       textAlign: 'left',
     },
     handlePlaceholder: {
-      ...textStyles.italic,
+      ...textStyles.bodyEmphasis,
+      fontStyle: 'italic',
       color: colors.textMuted,
       marginTop: spacing.xs,
       textAlign: 'left',
+    },
+    streakRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: spacing.xs,
+    },
+    streakEmoji: {
+      ...textStyles.bodyEmphasis,
+      marginRight: 6,
+    },
+    streakText: {
+      ...textStyles.bodyEmphasis,
+      color: colors.textMuted,
+    },
+    streakNumber: {
+      ...textStyles.bodyStrong,
+      color: colors.text,
     },
     bioText: {
       marginTop: spacing.lg,

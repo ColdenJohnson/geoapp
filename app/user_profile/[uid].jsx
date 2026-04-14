@@ -270,6 +270,7 @@ export default function PublicUserProfileScreen() {
           <>
             <ProfileHeaderCard
               profile={profileData}
+              streak={statsData?.current_streak}
               styles={styles}
             />
             <ProfileStatsCard

@@ -120,6 +120,7 @@ export default function UserProfileScreen() {
       >
         <ProfileHeaderCard
           profile={profile}
+          streak={stats?.current_streak}
           onPressAvatar={onEditProfile}
           styles={styles}
         />
