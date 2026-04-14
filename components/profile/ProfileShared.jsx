@@ -17,38 +17,32 @@ export function ProfileHeaderCard({
   profile,
   subtitle = null,
   onPressAvatar = null,
-  formStyles,
   styles,
 }) {
+  const AvatarWrapper = onPressAvatar ? TouchableOpacity : View;
+  const avatarProps = onPressAvatar ? { onPress: onPressAvatar, accessibilityRole: 'button' } : {};
+  const bio = typeof profile?.bio === 'string' ? profile.bio.trim() : '';
+
   return (
-    <View style={[formStyles.card, styles.headerCard]}>
-      {onPressAvatar ? (
-        <TouchableOpacity onPress={onPressAvatar} style={styles.profileImageWrap}>
+    <View style={styles.headerCard}>
+      <View style={styles.identityRow}>
+        <AvatarWrapper style={styles.profileImageWrap} {...avatarProps}>
           <Image
             source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
             style={styles.profileImage}
             contentFit="cover"
             cachePolicy="memory-disk"
           />
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.profileImageWrap}>
-          <Image
-            source={profile?.photo_url ? { uri: profile.photo_url } : emptyPfp}
-            style={styles.profileImage}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
+        </AvatarWrapper>
+        <View style={styles.profileMeta}>
+          <Text style={styles.displayName}>{profile?.display_name || 'No Display Name set'}</Text>
+          <Text style={profile?.handle ? styles.handleText : styles.handlePlaceholder}>
+            {profile?.handle ? `@${profile.handle}` : 'No handle set'}
+          </Text>
+          {subtitle ? <Text style={styles.contactText}>{subtitle}</Text> : null}
         </View>
-      )}
-      <Text style={styles.displayName}>{profile?.display_name || 'No Display Name set'}</Text>
-      <Text style={profile?.handle ? styles.handleText : styles.handlePlaceholder}>
-        {profile?.handle ? `@${profile.handle}` : 'No handle set'}
-      </Text>
-      {subtitle ? <Text style={styles.contactText}>{subtitle}</Text> : null}
-      {typeof profile?.bio === 'string' && profile.bio.trim() ? (
-        <Text style={styles.bioText}>{profile.bio.trim()}</Text>
-      ) : null}
+      </View>
+      {bio ? <Text style={styles.bioText}>{bio}</Text> : null}
     </View>
   );
 }
@@ -56,14 +50,13 @@ export function ProfileHeaderCard({
 export function ProfileAchievementsCard({
   earnedBadgeIds,
   colors,
-  formStyles,
   styles,
 }) {
   const earnedBadgeIdSet = new Set(Array.isArray(earnedBadgeIds) ? earnedBadgeIds : []);
   const earnedBadgeCount = PROFILE_BADGES.filter((badge) => earnedBadgeIdSet.has(badge.id)).length;
 
   return (
-    <View style={[formStyles.card, styles.badgesCard]}>
+    <View style={styles.badgesCard}>
       <View style={styles.badgesHeaderRow}>
         <Text style={styles.sectionTitle}>Achievements</Text>
         <View style={styles.badgesCountPill}>
@@ -103,8 +96,7 @@ export function ProfileAchievementsCard({
 
 export function ProfileTopPhotosCard({
   colors,
-  emptyLabel = 'No ranked photos yet.',
-  formStyles,
+  emptyLabel = 'No top voted photos yet.',
   onPressPhoto,
   styles,
   topPhotos,
@@ -113,8 +105,8 @@ export function ProfileTopPhotosCard({
   const displayedTopPhotos = Array.isArray(topPhotos) ? topPhotos.slice(0, 2) : [];
 
   return (
-    <View style={[formStyles.card, styles.topPhotosCard]}>
-      <Text style={styles.sectionTitle}>Top Elo Photos</Text>
+    <View style={styles.topPhotosCard}>
+      <Text style={styles.sectionTitle}>Top Voted Photos</Text>
       {topPhotosLoading && displayedTopPhotos.length === 0 ? (
         <View style={styles.centerRow}>
           <ActivityIndicator size="small" color={colors.text} />
@@ -146,14 +138,14 @@ export function ProfileTopPhotosCard({
               </View>
               <View style={styles.topPhotoMeta}>
                 <Text style={styles.topPhotoElo}>
-                  Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
+                  Score {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
                 </Text>
               </View>
             </Pressable>
           ))}
           {displayedTopPhotos.length < 2 ? (
             <View style={[styles.topPhotoTile, styles.topPhotoPlaceholder]}>
-              <Text style={styles.topPhotoPlaceholderText}>Waiting for more ranked photos</Text>
+              <Text style={styles.topPhotoPlaceholderText}>Waiting for more top photos</Text>
             </View>
           ) : null}
         </View>
@@ -164,7 +156,6 @@ export function ProfileTopPhotosCard({
 
 export function ProfileStatsCard({
   fallbackProfile = null,
-  formStyles,
   friendCount = null,
   styles,
   stats,
@@ -173,16 +164,37 @@ export function ProfileStatsCard({
     ? friendCount
     : Number.isFinite(stats?.friend_count)
       ? stats.friend_count
-      : null;
+      : 0;
+  const resolvedQuestCount = Number.isFinite(stats?.pin_count)
+    ? stats.pin_count
+    : Number.isFinite(fallbackProfile?.pin_count)
+      ? fallbackProfile.pin_count
+      : 0;
+  const resolvedPhotoCount = Number.isFinite(stats?.photo_count)
+    ? stats.photo_count
+    : Number.isFinite(fallbackProfile?.photo_count)
+      ? fallbackProfile.photo_count
+      : 0;
+  const statItems = [
+    { key: 'friends', label: 'Friends', icon: 'people', value: resolvedFriendCount },
+    { key: 'quests', label: 'Quests', icon: 'explore', value: resolvedQuestCount },
+    { key: 'photos', label: 'Photos', icon: 'photo-camera', value: resolvedPhotoCount },
+  ];
 
   return (
-    <View style={[formStyles.card, styles.statsCard]}>
-      <Text style={styles.sectionTitle}>Stats</Text>
-      {Number.isFinite(resolvedFriendCount) ? (
-        <Text style={styles.statsText}>Friends: {resolvedFriendCount}</Text>
-      ) : null}
-      <Text style={styles.statsText}>Pins posted: {stats?.pin_count ?? fallbackProfile?.pin_count ?? 0}</Text>
-      <Text style={styles.statsText}>Photos posted: {stats?.photo_count ?? fallbackProfile?.photo_count ?? 0}</Text>
+    <View style={styles.statsCard}>
+      <View style={styles.statsRow}>
+        {statItems.map((item, index) => (
+          <View key={item.key} style={styles.statCluster}>
+            {index > 0 ? <Text style={styles.statsSeparator}>•</Text> : null}
+            <View style={styles.statItem} accessibilityLabel={`${item.value} ${item.label}`}>
+              <MaterialIcons name={item.icon} size={14} style={styles.statIcon} />
+              <Text style={styles.statNumber}>{item.value}</Text>
+              <Text style={styles.statLabel}>{item.label}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -202,17 +214,24 @@ export function createProfileStyles(colors) {
       alignSelf: 'center',
     },
     headerCard: {
+      width: '100%',
+      marginBottom: spacing.sm,
+    },
+    identityRow: {
+      flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: spacing.lg,
-      paddingTop: spacing.xl,
-      paddingBottom: spacing.lg,
+    },
+    profileMeta: {
+      flex: 1,
+      minWidth: 0,
     },
     profileImageWrap: {
       width: 108,
       height: 108,
       borderRadius: 54,
-      marginBottom: spacing.md,
+      marginRight: spacing.lg,
       overflow: 'hidden',
+      backgroundColor: colors.bg,
       shadowColor: '#000000',
       shadowOffset: { width: 0, height: 8 },
       shadowRadius: 16,
@@ -227,42 +246,74 @@ export function createProfileStyles(colors) {
       ...textStyles.pageTitle,
       color: colors.primary,
       letterSpacing: 0.3,
-      textAlign: 'center',
+      textAlign: 'left',
     },
     handleText: {
       ...textStyles.bodySmallStrong,
       color: colors.textMuted,
       marginTop: spacing.xs,
-      textAlign: 'center',
+      textAlign: 'left',
     },
     handlePlaceholder: {
       ...textStyles.italic,
       color: colors.textMuted,
       marginTop: spacing.xs,
-      textAlign: 'center',
+      textAlign: 'left',
     },
     contactText: {
       ...textStyles.bodyXsStrong,
       color: colors.textMuted,
-      marginTop: spacing.xs,
-      textAlign: 'center',
+      marginTop: 4,
+      textAlign: 'left',
     },
     bioText: {
-      marginTop: spacing.sm,
-      textAlign: 'center',
+      marginTop: spacing.lg,
+      textAlign: 'left',
       color: colors.textMuted,
       ...textStyles.body,
-      lineHeight: 20,
-      maxWidth: 320,
-      alignSelf: 'center',
+      lineHeight: 22,
+    },
+    statsCard: {
+      marginBottom: spacing.md,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+    },
+    statCluster: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    statItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    statIcon: {
+      color: colors.textMuted,
+      marginRight: 6,
+    },
+    statNumber: {
+      ...textStyles.bodySmallStrong,
+      color: colors.text,
+      fontWeight: '700',
+    },
+    statLabel: {
+      ...textStyles.bodySmallStrong,
+      color: colors.textMuted,
+      marginLeft: 4,
+    },
+    statsSeparator: {
+      ...textStyles.bodySmallStrong,
+      color: colors.textMuted,
+      marginHorizontal: spacing.sm,
     },
     shareRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      alignSelf: 'center',
-      marginTop: -spacing.sm,
-      marginBottom: spacing.lg,
+      alignSelf: 'flex-start',
+      marginBottom: spacing.xl,
     },
     sharePressable: {
       minHeight: 40,
@@ -295,22 +346,17 @@ export function createProfileStyles(colors) {
       letterSpacing: 0.4,
     },
     profileActionRow: {
-      marginTop: -spacing.sm,
-      marginBottom: spacing.lg,
-      alignSelf: 'center',
       width: '100%',
-      maxWidth: 320,
-    },
-    statsCard: {
-      marginBottom: spacing.lg,
+      marginBottom: spacing.xl,
     },
     badgesCard: {
-      marginBottom: spacing.lg,
+      marginBottom: spacing.xl,
     },
     topPhotosCard: {
-      marginBottom: spacing.lg,
+      marginBottom: spacing.xl,
     },
     emptyText: {
+      ...textStyles.bodySmallStrong,
       color: colors.textMuted,
       marginTop: spacing.sm,
     },
@@ -322,12 +368,7 @@ export function createProfileStyles(colors) {
     sectionTitle: {
       ...textStyles.title,
       color: colors.primary,
-      marginBottom: spacing.sm,
-    },
-    statsText: {
-      ...textStyles.bodySmallStrong,
-      color: colors.textMuted,
-      lineHeight: 24,
+      marginBottom: spacing.md,
     },
     badgesHeaderRow: {
       flexDirection: 'row',
@@ -434,17 +475,6 @@ export function createProfileStyles(colors) {
       color: colors.textMuted,
       textAlign: 'center',
       paddingHorizontal: spacing.md,
-    },
-    actions: {
-      marginTop: spacing.md,
-    },
-    actionRow: {
-      flexDirection: 'row',
-      marginTop: spacing.md,
-    },
-    actionButtonLast: {
-      flex: 1,
-      marginRight: 0,
     },
   });
 }

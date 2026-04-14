@@ -270,7 +270,11 @@ export default function PublicUserProfileScreen() {
           <>
             <ProfileHeaderCard
               profile={profileData}
-              formStyles={formStyles}
+              styles={styles}
+            />
+            <ProfileStatsCard
+              fallbackProfile={profileData}
+              stats={statsData}
               styles={styles}
             />
             {profileAction ? (
@@ -286,12 +290,10 @@ export default function PublicUserProfileScreen() {
             <ProfileAchievementsCard
               earnedBadgeIds={statsData?.earned_badges}
               colors={colors}
-              formStyles={formStyles}
               styles={styles}
             />
             <ProfileTopPhotosCard
               colors={colors}
-              formStyles={formStyles}
               onPressPhoto={(photo) => {
                 setSelectedUrl(photo?.file_url || null);
                 setViewerVisible(true);
@@ -299,12 +301,6 @@ export default function PublicUserProfileScreen() {
               styles={styles}
               topPhotos={topPhotosData}
               topPhotosLoading={loading && topPhotosData.length === 0}
-            />
-            <ProfileStatsCard
-              fallbackProfile={profileData}
-              formStyles={formStyles}
-              stats={statsData}
-              styles={styles}
             />
           </>
         ) : null}

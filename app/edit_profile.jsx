@@ -14,6 +14,7 @@ import { PreferenceToggleRow } from '@/components/ui/PreferenceToggleRow';
 import { spacing } from '@/theme/tokens';
 import emptyPfp from '@/assets/images/empty_pfp.png';
 import * as ImagePicker from 'expo-image-picker';
+import auth from '@react-native-firebase/auth';
 import storage from '@react-native-firebase/storage';
 import { goBackOrHome } from '@/lib/navigation';
 import { normalizeThemePreference } from '@/theme/themePreference';
@@ -29,6 +30,7 @@ export default function EditProfileScreen() {
   const [handleInput, setHandleInput] = useState('');
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [handleStatus, setHandleStatus] = useState(null);
   const defaultPrivacySyncInFlightRef = useRef(false);
   const desiredDefaultPrivateRef = useRef(null);
@@ -265,6 +267,21 @@ export default function EditProfileScreen() {
     );
   };
 
+  const signOut = useCallback(async () => {
+    if (signingOut) return;
+    try {
+      setSigningOut(true);
+      await auth().signOut();
+      await AsyncStorage.removeItem('user_token');
+      setUser(null);
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      Alert.alert('Sign Out', 'Unable to sign out right now.');
+    } finally {
+      setSigningOut(false);
+    }
+  }, [setUser, signingOut]);
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -396,9 +413,17 @@ export default function EditProfileScreen() {
         </View>
 
         <Pressable
+          onPress={signOut}
+          style={styles.secondaryActionPressable}
+          disabled={signingOut}
+        >
+          <Text style={styles.deleteText}>{signingOut ? 'Signing Out...' : 'Sign Out'}</Text>
+        </Pressable>
+
+        <Pressable
           onPress={confirmDeleteAccount}
           style={styles.deletePressable}
-          disabled={deleting}
+          disabled={deleting || signingOut}
         >
           <Text style={styles.deleteText}>{deleting ? 'Deleting Account...' : 'Delete Account'}</Text>
         </Pressable>
@@ -553,6 +578,10 @@ function createStyles(colors) {
       opacity: 0.92,
     },
     deletePressable: {
+      marginTop: spacing.sm,
+      alignSelf: 'center',
+    },
+    secondaryActionPressable: {
       marginTop: spacing.md,
       alignSelf: 'center',
     },

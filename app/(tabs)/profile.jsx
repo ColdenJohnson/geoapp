@@ -1,7 +1,6 @@
 import { SafeAreaView, View, Text, ScrollView, RefreshControl, Pressable, Alert, Share, StyleSheet } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { APP_TUTORIAL_STEPS, AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
@@ -9,9 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 import auth from '@react-native-firebase/auth';
 import { usePalette } from '@/hooks/usePalette';
-import { CTAButton } from '@/components/ui/Buttons';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
-import { createFormStyles } from '@/components/ui/FormStyles';
 import { TutorialCallout } from '@/components/ui/TutorialCallout';
 import {
   createProfileStyles,
@@ -26,7 +23,6 @@ import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 export default function UserProfileScreen() {
   const {
     user,
-    setUser,
     profile,
     friends,
     stats,
@@ -44,17 +40,15 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createProfileStyles(colors), [colors]);
-  const formStyles = useMemo(() => createFormStyles(colors), [colors]);
   const tutorialStyles = useMemo(() => createTutorialStyles(), []);
   const authUser = auth().currentUser;
   const showProfileEditTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT);
   const profileTutorialVisitedRef = useRef(false);
   const contactValue =
-    user?.email ||
+    user?.phoneNumber ||
     authUser?.phoneNumber ||
-    profile?.email ||
     profile?.phone_number ||
-    'No contact info on file';
+    null;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -135,7 +129,12 @@ export default function UserProfileScreen() {
           profile={profile}
           subtitle={contactValue}
           onPressAvatar={onEditProfile}
-          formStyles={formStyles}
+          styles={styles}
+        />
+        <ProfileStatsCard
+          fallbackProfile={profile}
+          friendCount={friends?.length}
+          stats={stats}
           styles={styles}
         />
         <View style={tutorialStyles.shareRowTutorialWrap}>
@@ -171,12 +170,10 @@ export default function UserProfileScreen() {
         <ProfileAchievementsCard
           earnedBadgeIds={stats?.earned_badges}
           colors={colors}
-          formStyles={formStyles}
           styles={styles}
         />
         <ProfileTopPhotosCard
           colors={colors}
-          formStyles={formStyles}
           onPressPhoto={(photo) => {
             setSelectedUrl(photo?.file_url || null);
             setViewerVisible(true);
@@ -185,36 +182,6 @@ export default function UserProfileScreen() {
           topPhotos={topPhotos}
           topPhotosLoading={topPhotosLoading}
         />
-        <ProfileStatsCard
-          fallbackProfile={profile}
-          formStyles={formStyles}
-          friendCount={friends?.length}
-          stats={stats}
-          styles={styles}
-        />
-
-        {/* Actions */}
-        <View style={styles.actions}>
-          {/* Sign Out button, theoretically. */}
-          <View style={styles.actionRow}>
-            <CTAButton
-              title="Sign Out"
-              onPress={async () => {
-                try {
-                  await auth().signOut();
-                  await AsyncStorage.removeItem('user_token');
-                  setUser(null); // clear user state, automatically rerun RootLayout
-
-                  console.log('User signed out');
-                } catch (error) {
-                  console.error('Sign out failed:', error);
-                }
-              }}
-              style={styles.actionButtonLast}
-              variant="primary"
-            />
-          </View>
-        </View>
       </ScrollView>
       <FullscreenImageViewer
         visible={viewerVisible}
@@ -228,7 +195,7 @@ export default function UserProfileScreen() {
 function createTutorialStyles() {
   return StyleSheet.create({
     shareRowTutorialWrap: {
-      alignSelf: 'center',
+      width: '100%',
       position: 'relative',
       overflow: 'visible',
     },
