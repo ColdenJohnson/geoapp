@@ -1,15 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import * as Haptics from 'expo-haptics';
 
 import { voteGlobalDuel, isTokenFresh } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import DuelDeck from '@/components/vote/DuelDeck';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
-import { PressHoldActionMenu, getPressHoldActionMenuPosition } from '@/components/ui/PressHoldActionMenu';
 import { textStyles } from '@/theme/typography';
 import {
   advanceGlobalDuelQueue,
@@ -25,10 +22,6 @@ import {
 } from '@/lib/globalDuelQueue';
 
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
-const PHOTO_ACTION_MENU_SIZE = {
-  width: 214,
-  height: 206,
-};
 
 const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
@@ -93,7 +86,6 @@ export default function GlobalVoteScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [remainingVotes, setRemainingVotes] = useState(null);
-  const [photoActionMenu, setPhotoActionMenu] = useState(null);
   const isActiveRef = useRef(false);
   const renderCounterRef = useRef(0);
   const isDevEnv = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
@@ -101,58 +93,11 @@ export default function GlobalVoteScreen() {
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const voteBottomPadding = Math.max(0, insets.bottom + bottomTabOverflow);
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const photos = useMemo(() => (Array.isArray(duel?.photos) ? duel.photos : []), [duel]);
   const voteSessionTitle = useMemo(() => getVoteSessionTitle(duel, photos), [duel, photos]);
-  const photoActionSections = useMemo(() => ([
-    {
-      id: 'primary',
-      layout: 'row',
-      options: [
-        {
-          id: 'off_prompt',
-          label: 'Off Prompt',
-          iconName: 'alt-route',
-        },
-        {
-          id: 'view_quest',
-          label: 'View Quest',
-          iconName: 'explore',
-        },
-      ],
-    },
-    {
-      id: 'secondary',
-      layout: 'list',
-      options: [
-        {
-          id: 'report_photo',
-          label: 'Report Photo',
-          iconName: 'outlined-flag',
-          iconColor: colors.danger,
-          iconBackgroundColor: 'rgba(220,38,38,0.10)',
-          textColor: colors.danger,
-        },
-      ],
-    },
-  ]), [colors.danger]);
-  const photoActionMenuPosition = useMemo(() => {
-    if (!photoActionMenu) return null;
-
-    return getPressHoldActionMenuPosition({
-      anchorX: photoActionMenu.x,
-      anchorY: photoActionMenu.y,
-      menuSize: PHOTO_ACTION_MENU_SIZE,
-      windowWidth,
-      windowHeight,
-      topInset: insets.top,
-      bottomInset: voteBottomPadding,
-      margin: 16,
-    });
-  }, [insets.top, photoActionMenu, voteBottomPadding, windowHeight, windowWidth]);
   const duelReady = useCallback(
     (pkg) =>
       Array.isArray(pkg?.photos) &&
@@ -184,32 +129,6 @@ export default function GlobalVoteScreen() {
     },
     [setDuel, setRenderId]
   );
-
-  const closePhotoActionMenu = useCallback(() => {
-    setPhotoActionMenu(null);
-  }, []);
-
-  const openPhotoActionMenu = useCallback((photo, side, event) => {
-    if (!photo?._id) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const pageX = event?.nativeEvent?.pageX;
-    const pageY = event?.nativeEvent?.pageY;
-    setPhotoActionMenu({
-      photo,
-      side,
-      x: Number.isFinite(pageX) ? pageX : windowWidth / 2,
-      y: Number.isFinite(pageY) ? pageY : Math.max(insets.top + 48, windowHeight - voteBottomPadding - 72),
-    });
-  }, [insets.top, voteBottomPadding, windowHeight, windowWidth]);
-
-  const handlePhotoActionSelection = useCallback(() => {
-    Haptics.selectionAsync().catch(() => {});
-    closePhotoActionMenu();
-  }, [closePhotoActionMenu]);
-
-  useEffect(() => {
-    closePhotoActionMenu();
-  }, [closePhotoActionMenu, renderId]);
 
   const syncFromQueue = useCallback(async () => {
     await ensureFreshTokensForQueue('global');
@@ -319,7 +238,6 @@ export default function GlobalVoteScreen() {
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
       if (!winnerId || !loserId || submitting) return;
-      closePhotoActionMenu();
       if (remainingVotes === 0) {
         setLoading(false);
         return;
@@ -424,7 +342,6 @@ export default function GlobalVoteScreen() {
       isDevEnv,
       isTokenFresh,
       remainingVotes,
-      closePhotoActionMenu,
       submitting,
     ]
   );
@@ -477,33 +394,9 @@ export default function GlobalVoteScreen() {
                 pair={photos}
                 renderId={renderId}
                 voteToken={duel?.voteToken}
-                disabled={loading || submitting || photoActionMenu !== null}
+                disabled={loading || submitting}
                 onVote={chooseByIndex}
                 deckStyle={styles.deckArea}
-                renderAction={(photo, photoIndex) => {
-                  const isRightPhoto = photoIndex === 1;
-
-                  return (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.photoActionButton,
-                        isRightPhoto && styles.photoActionButtonRight,
-                        pressed && styles.photoActionButtonPressed,
-                      ]}
-                      hitSlop={10}
-                      accessibilityRole="button"
-                      accessibilityLabel={isRightPhoto ? 'Open right photo options' : 'Open left photo options'}
-                      onPress={(event) => openPhotoActionMenu(photo, isRightPhoto ? 'right' : 'left', event)}
-                    >
-                      <MaterialIcons
-                        name="more-horiz"
-                        size={28}
-                        color={colors.primaryTextOn}
-                        style={styles.photoActionIcon}
-                      />
-                    </Pressable>
-                  );
-                }}
                 renderMeta={(photo, photoIndex) => {
                   const isRightPhoto = photoIndex === 1;
 
@@ -541,17 +434,6 @@ export default function GlobalVoteScreen() {
                 </Text>
               ) : null}
             </View>
-
-            <PressHoldActionMenu
-              visible={photoActionMenu !== null}
-              position={photoActionMenuPosition}
-              menuSize={PHOTO_ACTION_MENU_SIZE}
-              titleLabel="Photo Options"
-              title={photoActionMenu?.side === 'right' ? 'Right photo' : 'Left photo'}
-              sections={photoActionSections}
-              onRequestClose={closePhotoActionMenu}
-              onOptionPress={handlePhotoActionSelection}
-            />
           </View>
         )}
       </View>
@@ -659,26 +541,6 @@ function createStyles(colors) {
       paddingTop: 12,
       paddingHorizontal: 16,
       gap: 2,
-    },
-    photoActionButton: {
-      minWidth: 40,
-      minHeight: 40,
-      alignSelf: 'flex-start',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'transparent',
-    },
-    photoActionButtonRight: {
-      alignSelf: 'flex-end',
-    },
-    photoActionButtonPressed: {
-      opacity: 0.62,
-    },
-    photoActionIcon: {
-      opacity: 0.78,
-      textShadowColor: 'rgba(0, 0, 0, 0.28)',
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 2,
     },
   });
 }
