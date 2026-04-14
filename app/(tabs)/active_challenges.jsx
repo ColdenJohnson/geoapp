@@ -1660,8 +1660,6 @@ function createStyles(colors) {
       position: 'absolute',
       borderRadius: 40,
       overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: 'rgba(0,0,0,0.07)',
       backgroundColor: '#D9D0C9',
       shadowColor: '#000000',
       shadowOffset: { width: 0, height: 16 },

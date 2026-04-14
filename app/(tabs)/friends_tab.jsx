@@ -87,10 +87,9 @@ function getAvatarInitial(item) {
 }
 
 function getActivityLabel(item) {
-  if (item?.type === 'challenge_created') return ' created a Quest';
-  if (item?.type === 'challenge_participated') return ' joined a Quest';
-  if (item?.type === 'your_photo_comment') return ' commented on your photo';
-  return ' commented';
+  if (item?.type === 'challenge_created') return 'Created Quest';
+  if (item?.type === 'challenge_participated') return 'Joined Quest';
+  return 'Commented';
 }
 
 function UserAvatar({ uri, label, size, styles }) {
@@ -759,6 +758,50 @@ export default function FriendsTabScreen() {
     );
   }, [openUserProfile, styles]);
 
+  const renderRequestRows = useCallback((title, items, type) => (
+    items.map((item) => renderUserRow(item, {
+      keyPrefix: title,
+      rowMuted: type === 'outgoing',
+      metaText: type === 'incoming' ? formatRelativeTime(item?.requested_at) : `Pending ${formatRelativeTime(item?.requested_at)}`,
+      rightAction: type === 'incoming'
+        ? (request) => (
+            <View style={styles.inlineActionRow}>
+              <CTAButton
+                title="Accept"
+                onPress={() => acceptRequest(request.uid)}
+                variant="filled"
+                style={styles.smallButton}
+                textStyle={styles.smallButtonText}
+                disabled={friendActionBusy}
+              />
+              <SecondaryButton
+                title="Delete"
+                onPress={() => rejectRequest(request.uid)}
+                style={styles.smallButton}
+                textStyle={styles.smallButtonText}
+                disabled={friendActionBusy}
+              />
+            </View>
+          )
+        : (request) => (
+            <SecondaryButton
+              title="Cancel"
+              onPress={() => cancelRequest(request.uid)}
+              style={styles.smallButton}
+              textStyle={styles.smallButtonText}
+              disabled={friendActionBusy}
+            />
+          ),
+    }))
+  ), [
+    acceptRequest,
+    cancelRequest,
+    friendActionBusy,
+    rejectRequest,
+    renderUserRow,
+    styles,
+  ]);
+
   const renderRequestSection = useCallback((title, items, type) => (
     <View style={[formStyles.card, styles.sectionCard]}>
       <View style={styles.sectionHeader}>
@@ -774,51 +817,14 @@ export default function FriendsTabScreen() {
           {type === 'incoming' ? 'No incoming requests.' : 'No outgoing requests.'}
         </Text>
       ) : (
-        items.map((item) => renderUserRow(item, {
-          keyPrefix: title,
-          rowMuted: type === 'outgoing',
-          metaText: type === 'incoming' ? formatRelativeTime(item?.requested_at) : `Pending ${formatRelativeTime(item?.requested_at)}`,
-          rightAction: type === 'incoming'
-            ? (request) => (
-                <View style={styles.inlineActionRow}>
-                  <CTAButton
-                    title="Accept"
-                    onPress={() => acceptRequest(request.uid)}
-                    variant="filled"
-                    style={styles.smallButton}
-                    textStyle={styles.smallButtonText}
-                    disabled={friendActionBusy}
-                  />
-                  <SecondaryButton
-                    title="Delete"
-                    onPress={() => rejectRequest(request.uid)}
-                    style={styles.smallButton}
-                    textStyle={styles.smallButtonText}
-                    disabled={friendActionBusy}
-                  />
-                </View>
-              )
-            : (request) => (
-                <SecondaryButton
-                  title="Cancel"
-                  onPress={() => cancelRequest(request.uid)}
-                  style={styles.smallButton}
-                  textStyle={styles.smallButtonText}
-                  disabled={friendActionBusy}
-                />
-              ),
-        }))
+        renderRequestRows(title, items, type)
       )}
     </View>
   ), [
-    acceptRequest,
-    cancelRequest,
     colors.text,
     formStyles.card,
-    friendActionBusy,
     friendsLoading,
-    rejectRequest,
-    renderUserRow,
+    renderRequestRows,
     styles,
   ]);
 
@@ -852,14 +858,16 @@ export default function FriendsTabScreen() {
     </>
   ), [activeTab, pendingIncoming.length, styles]);
 
-  const renderSearchSection = useCallback(() => (
-    <View style={[formStyles.card, styles.sectionCard]}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Search</Text>
-      </View>
+  const renderSearchSection = useCallback(({ compact = false } = {}) => (
+    <View style={compact ? styles.searchSectionCompact : [formStyles.card, styles.sectionCard]}>
+      {compact ? null : (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Search</Text>
+        </View>
+      )}
       <TextInput
-        style={[formStyles.input, styles.searchInput]}
-        placeholder="Search by handle"
+        style={[formStyles.input, compact ? styles.searchInputCompact : styles.searchInput]}
+        placeholder="Add friends by handle"
         value={friendSearchInput}
         onChangeText={setFriendSearchInput}
         autoCapitalize="none"
@@ -960,12 +968,19 @@ export default function FriendsTabScreen() {
 
   const renderContactsSection = useCallback(() => (
     <View style={styles.contactsSection}>
-      <CTAButton
-        title={contactsPermissionLoading || contactMatchesLoading ? 'Loading Contacts...' : 'Add From Contacts'}
+      <Pressable
         onPress={handleContactsButtonPress}
-        style={styles.contactsEntryButton}
+        style={({ pressed }) => [
+          styles.contactsEntryPressable,
+          (contactsPermissionLoading || contactMatchesLoading || contactMatchActionBusy) && styles.contactsEntryPressableDisabled,
+          pressed && styles.sharePressablePressed,
+        ]}
         disabled={contactsPermissionLoading || contactMatchesLoading || contactMatchActionBusy}
-      />
+      >
+        <Text style={styles.contactsEntryButtonText}>
+          {contactsPermissionLoading || contactMatchesLoading ? 'Loading Contacts...' : 'Add From Contacts'}
+        </Text>
+      </Pressable>
     </View>
   ), [
     contactMatchActionBusy,
@@ -1045,19 +1060,29 @@ export default function FriendsTabScreen() {
   const activityListHeader = useMemo(() => (
     <View>
       {renderTopChrome()}
-      {renderSearchSection()}
+      {renderSearchSection({ compact: true })}
 
-      {renderRequestSection('Pending Requests', pendingIncoming, 'incoming')}
+      {pendingIncoming.length ? (
+        <View style={styles.sectionBlock}>
+          <View style={styles.sectionHeaderStandalone}>
+            <Text style={[styles.sectionTitle, styles.sectionTitlePrimary]}>Pending Requests</Text>
+            <Text style={styles.sectionCount}>{pendingIncoming.length}</Text>
+          </View>
+          <View style={styles.sectionRows}>
+            {renderRequestRows('Pending Requests', pendingIncoming, 'incoming')}
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.sectionHeaderStandalone}>
-        <Text style={styles.sectionTitle}>Friend Activity</Text>
+        <Text style={[styles.sectionTitle, styles.sectionTitlePrimary]}>Friend Activity</Text>
         <Text style={styles.sectionCount}>{activityItems.length}</Text>
       </View>
     </View>
   ), [
     activityItems.length,
     pendingIncoming,
-    renderRequestSection,
+    renderRequestRows,
     renderSearchSection,
     renderTopChrome,
     styles,
@@ -1117,39 +1142,36 @@ export default function FriendsTabScreen() {
     const showQuestPhoto = !item?.comment_text && !!item?.challenge_photo_url;
 
     return (
-      <View style={styles.activityCard}>
-        <View style={styles.activityHeader}>
-          <Pressable
-            onPress={() => openUserProfile(item?.actor_uid)}
-            style={({ pressed }) => [styles.activityUserPressable, pressed && styles.pressed]}
-          >
-            <UserAvatar
-              uri={item?.actor_photo_url || null}
-              label={getAvatarInitial({ display_name: item?.actor_display_name, handle: item?.actor_handle })}
-              size={42}
-              styles={styles}
-            />
-            <View style={styles.activityHeaderText}>
-              <Text style={styles.activityHeadline}>
-                <Text style={styles.activityHeadlineName}>{item?.actor_display_name || handleLabel || 'Someone'}</Text>
-                {getActivityLabel(item)}
-              </Text>
+      <View style={styles.activityEntry}>
+        <Pressable
+          onPress={() => openUserProfile(item?.actor_uid)}
+          style={({ pressed }) => [styles.activityUserPressable, pressed && styles.pressed]}
+        >
+          <UserAvatar
+            uri={item?.actor_photo_url || null}
+            label={getAvatarInitial({ display_name: item?.actor_display_name, handle: item?.actor_handle })}
+            size={42}
+            styles={styles}
+          />
+          <View style={styles.activityHeaderText}>
+            <View style={styles.activityMetaRow}>
+              <Text style={styles.activityHeadlineName}>{handleLabel || item?.actor_display_name || 'Someone'}</Text>
+              <Text style={styles.activityMetaDot}>•</Text>
               <Text style={styles.activityTimestamp}>{formatRelativeTime(item?.created_at)}</Text>
             </View>
-          </Pressable>
-        </View>
+            <Text style={styles.activityHeadline}>{getActivityLabel(item)}</Text>
+          </View>
+        </Pressable>
 
         <Pressable
           disabled={!item?.pin_id}
           onPress={() => openChallenge(item)}
           style={({ pressed }) => [
-            styles.activityBody,
+            styles.activityContent,
             !item?.can_open && styles.activityBodyStatic,
             item?.pin_id && pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.activityPrompt}>{item?.challenge_prompt}</Text>
-          {item?.comment_text ? <Text style={styles.activityComment}>"{item.comment_text}"</Text> : null}
           {showQuestPhoto ? (
             <Image
               source={{ uri: item.challenge_photo_url }}
@@ -1158,6 +1180,8 @@ export default function FriendsTabScreen() {
               cachePolicy="memory-disk"
             />
           ) : null}
+          <Text style={styles.activityPrompt}>{item?.challenge_prompt}</Text>
+          {item?.comment_text ? <Text style={styles.activityComment}>"{item.comment_text}"</Text> : null}
         </Pressable>
       </View>
     );
@@ -1184,11 +1208,11 @@ export default function FriendsTabScreen() {
     }
 
     return (
-      <View style={[formStyles.card, styles.sectionCard]}>
+      <View style={styles.emptyStateWrap}>
         <Text style={styles.emptyText}>No recent activity yet.</Text>
       </View>
     );
-  }, [activityLoading, colors.text, formStyles.card, styles]);
+  }, [activityLoading, colors.text, styles]);
 
   const renderActivityListFooter = useCallback(() => (
     <View style={styles.activityFooter}>
@@ -1207,14 +1231,12 @@ export default function FriendsTabScreen() {
 
   const renderRequestsContent = () => (
     <>
-      {renderSearchSection()}
       {renderContactsSection()}
-      {renderRequestSection('Incoming Requests', pendingIncoming, 'incoming')}
-      {renderRequestSection('Outgoing Requests', pendingOutgoing, 'outgoing')}
+      {renderSearchSection({ compact: true })}
 
-      <View style={[formStyles.card, styles.sectionCard]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recently Added</Text>
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderStandalone}>
+          <Text style={[styles.sectionTitle, styles.sectionTitlePrimary]}>Recently Added</Text>
           <Text style={styles.sectionCount}>{recentFriends.length}</Text>
         </View>
         {friendsLoading && !recentFriends.length ? (
@@ -1224,16 +1246,54 @@ export default function FriendsTabScreen() {
         ) : !recentFriends.length ? (
           <Text style={styles.emptyText}>No friends yet.</Text>
         ) : (
-          recentFriends.map((item) => renderUserRow(item, {
-            keyPrefix: 'recent',
-            metaText: formatRelativeTime(item?.accepted_at),
-          }))
+          <View style={styles.sectionRows}>
+            {recentFriends.map((item) => renderUserRow(item, {
+              keyPrefix: 'recent',
+              metaText: formatRelativeTime(item?.accepted_at),
+            }))}
+          </View>
         )}
       </View>
 
-      <View style={[formStyles.card, styles.sectionCard]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Current Friends</Text>
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderStandalone}>
+          <Text style={[styles.sectionTitle, styles.sectionTitlePrimary]}>Incoming Requests</Text>
+          <Text style={styles.sectionCount}>{pendingIncoming.length}</Text>
+        </View>
+        {friendsLoading && !pendingIncoming.length ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : !pendingIncoming.length ? (
+          <Text style={styles.emptyText}>No incoming requests.</Text>
+        ) : (
+          <View style={styles.sectionRows}>
+            {renderRequestRows('Incoming Requests', pendingIncoming, 'incoming')}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderStandalone}>
+          <Text style={[styles.sectionTitle, styles.sectionTitlePrimary]}>Outgoing Requests</Text>
+          <Text style={styles.sectionCount}>{pendingOutgoing.length}</Text>
+        </View>
+        {friendsLoading && !pendingOutgoing.length ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : !pendingOutgoing.length ? (
+          <Text style={styles.emptyText}>No outgoing requests.</Text>
+        ) : (
+          <View style={styles.sectionRows}>
+            {renderRequestRows('Outgoing Requests', pendingOutgoing, 'outgoing')}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderStandalone}>
+          <Text style={[styles.sectionTitle, styles.sectionTitlePrimary]}>Current Friends</Text>
           <Text style={styles.sectionCount}>{currentFriends.length}</Text>
         </View>
         {friendsLoading && !currentFriends.length ? (
@@ -1243,7 +1303,9 @@ export default function FriendsTabScreen() {
         ) : !currentFriends.length ? (
           <Text style={styles.emptyText}>No friends yet.</Text>
         ) : (
-          currentFriends.map((item) => renderUserRow(item, { keyPrefix: 'friend' }))
+          <View style={styles.sectionRows}>
+            {currentFriends.map((item) => renderUserRow(item, { keyPrefix: 'friend' }))}
+          </View>
         )}
       </View>
     </>
@@ -1376,26 +1438,58 @@ function createStyles(colors) {
       marginBottom: spacing.sm,
       paddingHorizontal: 2,
     },
+    sectionBlock: {
+      marginBottom: spacing.lg,
+    },
+    sectionRows: {
+      paddingHorizontal: 2,
+    },
     sectionTitle: {
       ...textStyles.sectionTitle,
       color: colors.text,
+    },
+    sectionTitlePrimary: {
+      color: colors.primary,
     },
     sectionCount: {
       ...textStyles.sectionTitleSm,
       color: colors.textMuted,
       letterSpacing: 0.8,
     },
+    searchSectionCompact: {
+      marginBottom: spacing.lg,
+    },
     searchInput: {
       marginTop: 2,
+    },
+    searchInputCompact: {
+      marginTop: 0,
     },
     stackSection: {
       marginTop: spacing.sm,
     },
     contactsSection: {
-      marginBottom: spacing.xl,
+      marginBottom: spacing.lg,
     },
-    contactsEntryButton: {
-      width: '100%',
+    contactsEntryPressable: {
+      alignSelf: 'stretch',
+      minHeight: 40,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.round,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    contactsEntryPressableDisabled: {
+      opacity: 0.55,
+    },
+    contactsEntryButtonText: {
+      ...textStyles.buttonSmall,
+      color: colors.primary,
+      letterSpacing: 0.4,
     },
     contactMatchRow: {
       flexDirection: 'row',
@@ -1466,15 +1560,7 @@ function createStyles(colors) {
     smallButtonText: {
       ...textStyles.buttonSmall,
     },
-    activityCard: {
-      backgroundColor: colors.bg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radii.lg,
-      padding: spacing.lg,
-      marginBottom: spacing.md,
-    },
-    activityHeader: {
+    activityEntry: {
       marginBottom: spacing.md,
     },
     activityUserPressable: {
@@ -1486,24 +1572,33 @@ function createStyles(colors) {
       flex: 1,
       minWidth: 0,
     },
+    activityMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+    },
     activityHeadline: {
-      ...textStyles.bodyStrong,
+      ...textStyles.bodySmallStrong,
       color: colors.text,
-      lineHeight: 21,
+      lineHeight: 20,
+      marginTop: 2,
     },
     activityHeadlineName: {
       ...textStyles.bodyStrong,
       color: colors.primary,
     },
-    activityTimestamp: {
+    activityMetaDot: {
       ...textStyles.bodySmallStrong,
       color: colors.textMuted,
-      marginTop: 4,
+      marginHorizontal: 6,
     },
-    activityBody: {
-      borderRadius: radii.md,
-      backgroundColor: colors.surface,
-      padding: spacing.md,
+    activityTimestamp: {
+      ...textStyles.bodySmall,
+      color: colors.textMuted,
+    },
+    activityContent: {
+      marginTop: spacing.md,
+      alignItems: 'center',
     },
     activityBodyStatic: {
       opacity: 0.92,
@@ -1512,25 +1607,24 @@ function createStyles(colors) {
       ...textStyles.bodyStrong,
       color: colors.text,
       lineHeight: 22,
+      marginTop: spacing.md,
+      width: '100%',
+      maxWidth: 320,
     },
     activityComment: {
       ...textStyles.italicStrong,
       color: colors.text,
       lineHeight: 22,
-      marginTop: spacing.sm,
+      marginTop: spacing.md - 2,
+      width: '100%',
+      maxWidth: 320,
     },
     activityImage: {
       width: '100%',
+      maxWidth: 320,
       aspectRatio: 3 / 4,
       borderRadius: radii.md,
-      marginTop: spacing.md,
-      backgroundColor: colors.border,
-    },
-    activityLink: {
-      marginTop: spacing.sm,
-      color: colors.primary,
-      ...textStyles.buttonSmall,
-      letterSpacing: 0.5,
+      backgroundColor: colors.bg,
     },
     activityFooter: {
       marginTop: spacing.xs,
@@ -1565,6 +1659,10 @@ function createStyles(colors) {
       color: colors.textMuted,
       marginTop: spacing.xs,
       lineHeight: 20,
+      paddingHorizontal: 2,
+    },
+    emptyStateWrap: {
+      paddingHorizontal: 2,
     },
     footerSkipButton: {
       minHeight: 54,

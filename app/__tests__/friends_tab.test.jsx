@@ -135,6 +135,43 @@ describe('FriendsTabScreen', () => {
     );
   });
 
+  it('shows only the handle search input on the activity tab', () => {
+    const { getByPlaceholderText, queryByText } = renderScreen();
+
+    expect(getByPlaceholderText('Add friends by handle')).toBeTruthy();
+    expect(queryByText('Pending Requests')).toBeNull();
+  });
+
+  it('renders pending requests on the activity tab only when incoming requests exist', () => {
+    const { getByText } = renderScreen({
+      friendRequests: {
+        incoming: [{
+          uid: 'incoming-1',
+          display_name: 'Pending Friend',
+          handle: 'pending_friend',
+          requested_at: '2026-04-07T00:00:00.000Z',
+        }],
+        outgoing: [],
+      },
+    });
+
+    expect(getByText('Pending Requests')).toBeTruthy();
+    expect(getByText('Pending Friend')).toBeTruthy();
+  });
+
+  it('shows the flatter requests layout with contacts first and handle search below it', () => {
+    const { getAllByText, getByPlaceholderText, getByText } = renderScreen();
+
+    fireEvent.press(getAllByText('Friends')[1]);
+
+    expect(getByText('Add From Contacts')).toBeTruthy();
+    expect(getByPlaceholderText('Add friends by handle')).toBeTruthy();
+    expect(getByText('Recently Added')).toBeTruthy();
+    expect(getByText('Incoming Requests')).toBeTruthy();
+    expect(getByText('Outgoing Requests')).toBeTruthy();
+    expect(getByText('Current Friends')).toBeTruthy();
+  });
+
   it('clears the tab dot when the friends tab is focused', () => {
     const markFriendActivitySeen = jest.fn();
 
