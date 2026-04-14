@@ -10,6 +10,7 @@ import {
   RefreshControl,
   SafeAreaView,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -17,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -47,6 +49,11 @@ import { textStyles } from '@/theme/typography';
 
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
 const CONTACTS_INTRO_SEEN_KEY_PREFIX = 'friends_contacts_intro_seen';
+const PUBLIC_SHARE_BASE_URL =
+  process.env.EXPO_PUBLIC_BASE_URL ||
+  (Constants?.expoConfig?.extra &&
+    (Constants.expoConfig.extra.EXPO_PUBLIC_BASE_URL || Constants.expoConfig.extra.apiBaseUrl)) ||
+  'https://geode-backend-834952308922.us-central1.run.app';
 
 function getContactsIntroSeenStorageKey(uid) {
   return `${CONTACTS_INTRO_SEEN_KEY_PREFIX}_${uid}`;
@@ -170,6 +177,10 @@ export default function FriendsTabScreen() {
     () => (Array.isArray(sharedHandleParam) ? sharedHandleParam[0] : sharedHandleParam),
     [sharedHandleParam]
   );
+  const shareProfileUrl = useMemo(() => {
+    if (!user?.uid) return null;
+    return `${PUBLIC_SHARE_BASE_URL}/user_profile/${encodeURIComponent(user.uid)}`;
+  }, [user?.uid]);
   const defaultContactCountry = useMemo(
     () => inferDefaultCountryFromPhone(user?.phoneNumber),
     [user?.phoneNumber]
@@ -421,6 +432,24 @@ export default function FriendsTabScreen() {
   const handleContactsButtonPress = useCallback(async () => {
     await openContactsOverlay({ allowDeniedPrompt: true });
   }, [openContactsOverlay]);
+
+  const handleShareProfile = useCallback(async () => {
+    if (!shareProfileUrl) {
+      Alert.alert('Share Profile', 'Unable to build your profile link right now.');
+      return;
+    }
+
+    try {
+      await Share.share({
+        title: 'Add me on SideQuest',
+        message: `Let's Quest together. Join me on SideQuest!`,
+        url: shareProfileUrl,
+      });
+    } catch (error) {
+      console.warn('Failed to share profile', error);
+      Alert.alert('Share Profile', 'Unable to open the share menu right now.');
+    }
+  }, [shareProfileUrl]);
 
   const toggleContactMatchSelection = useCallback((uid) => {
     if (!uid) return;
@@ -1025,6 +1054,16 @@ export default function FriendsTabScreen() {
             )}
           </View>
 
+          <Pressable
+            onPress={handleShareProfile}
+            style={({ pressed }) => [
+              styles.modalSharePressable,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.modalSharePressableText}>Invite</Text>
+          </Pressable>
+
           <View style={styles.modalFooter}>
             <CTAButton
               title="Skip"
@@ -1050,6 +1089,7 @@ export default function FriendsTabScreen() {
     contactMatchesLoading,
     contactMatchesLoaded,
     contactsIntroVisible,
+    handleShareProfile,
     renderContactMatchRow,
     selectedContactMatchCount,
     sendSelectedContactRequests,
@@ -1168,6 +1208,7 @@ export default function FriendsTabScreen() {
           onPress={() => openChallenge(item)}
           style={({ pressed }) => [
             styles.activityContent,
+            item?.comment_text && styles.activityContentComment,
             !item?.can_open && styles.activityBodyStatic,
             item?.pin_id && pressed && styles.pressed,
           ]}
@@ -1561,6 +1602,7 @@ function createStyles(colors) {
       ...textStyles.buttonSmall,
     },
     activityEntry: {
+      marginTop: spacing.md,
       marginBottom: spacing.md,
     },
     activityUserPressable: {
@@ -1599,6 +1641,9 @@ function createStyles(colors) {
     activityContent: {
       marginTop: spacing.md,
       alignItems: 'center',
+    },
+    activityContentComment: {
+      marginTop: spacing.xs,
     },
     activityBodyStatic: {
       opacity: 0.92,
@@ -1716,6 +1761,24 @@ function createStyles(colors) {
       paddingTop: spacing.md,
       borderTopWidth: 1,
       borderTopColor: colors.border,
+    },
+    modalSharePressable: {
+      alignSelf: 'stretch',
+      minHeight: 40,
+      marginTop: spacing.sm,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.round,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalSharePressableText: {
+      ...textStyles.buttonSmall,
+      color: colors.primary,
+      letterSpacing: 0.4,
     },
     pressed: {
       opacity: 0.78,

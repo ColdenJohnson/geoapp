@@ -71,7 +71,7 @@ export default function TabLayout() {
         name="map"
         options={{
           title: 'Map',
-          tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "house" : "house.fill"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "globe.americas" : "globe.americas.fill"} color={color} />,
           headerShown: false,
         }}
       />
