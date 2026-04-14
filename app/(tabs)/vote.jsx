@@ -1,12 +1,15 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as Haptics from 'expo-haptics';
 
 import { voteGlobalDuel, isTokenFresh } from '@/lib/api';
 import { usePalette } from '@/hooks/usePalette';
 import DuelDeck from '@/components/vote/DuelDeck';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import { PressHoldActionMenu, getPressHoldActionMenuPosition } from '@/components/ui/PressHoldActionMenu';
 import { textStyles } from '@/theme/typography';
 import {
   advanceGlobalDuelQueue,
@@ -22,6 +25,10 @@ import {
 } from '@/lib/globalDuelQueue';
 
 const PRELOADED_PAIR_COUNT = DEFAULT_PRELOAD_COUNT;
+const PHOTO_ACTION_MENU_SIZE = {
+  width: 214,
+  height: 206,
+};
 
 const IS_DEV_LOG = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 
@@ -36,12 +43,57 @@ function extractPhotoIds(item) {
   return [];
 }
 
+function pickFirstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+function getVoteSessionTitle(duel, photos) {
+  const photoPrompts = Array.from(
+    new Set(
+      (Array.isArray(photos) ? photos : [])
+        .map((photo) => pickFirstNonEmpty(photo?.challenge_prompt, photo?.prompt))
+        .filter(Boolean)
+    )
+  );
+  if (photoPrompts.length === 1) {
+    return {
+      top: photoPrompts[0],
+      middle: null,
+      bottom: null,
+    };
+  }
+  if (photoPrompts.length >= 2) {
+    return {
+      top: photoPrompts[0],
+      middle: 'vs',
+      bottom: photoPrompts[1],
+    };
+  }
+
+  return {
+    top: pickFirstNonEmpty(
+      duel?.promptTitle,
+      duel?.questPrompt,
+      duel?.prompt,
+      duel?.title,
+    ) || 'Global Matchup',
+    middle: null,
+    bottom: null,
+  };
+}
+
 export default function GlobalVoteScreen() {
   const [duel, setDuel] = useState(null);
   const [renderId, setRenderId] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [remainingVotes, setRemainingVotes] = useState(null);
+  const [photoActionMenu, setPhotoActionMenu] = useState(null);
   const isActiveRef = useRef(false);
   const renderCounterRef = useRef(0);
   const isDevEnv = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
@@ -49,10 +101,58 @@ export default function GlobalVoteScreen() {
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const voteBottomPadding = Math.max(0, insets.bottom + bottomTabOverflow);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const photos = useMemo(() => (Array.isArray(duel?.photos) ? duel.photos : []), [duel]);
+  const voteSessionTitle = useMemo(() => getVoteSessionTitle(duel, photos), [duel, photos]);
+  const photoActionSections = useMemo(() => ([
+    {
+      id: 'primary',
+      layout: 'row',
+      options: [
+        {
+          id: 'off_prompt',
+          label: 'Off Prompt',
+          iconName: 'alt-route',
+        },
+        {
+          id: 'view_quest',
+          label: 'View Quest',
+          iconName: 'explore',
+        },
+      ],
+    },
+    {
+      id: 'secondary',
+      layout: 'list',
+      options: [
+        {
+          id: 'report_photo',
+          label: 'Report Photo',
+          iconName: 'outlined-flag',
+          iconColor: colors.danger,
+          iconBackgroundColor: 'rgba(220,38,38,0.10)',
+          textColor: colors.danger,
+        },
+      ],
+    },
+  ]), [colors.danger]);
+  const photoActionMenuPosition = useMemo(() => {
+    if (!photoActionMenu) return null;
+
+    return getPressHoldActionMenuPosition({
+      anchorX: photoActionMenu.x,
+      anchorY: photoActionMenu.y,
+      menuSize: PHOTO_ACTION_MENU_SIZE,
+      windowWidth,
+      windowHeight,
+      topInset: insets.top,
+      bottomInset: voteBottomPadding,
+      margin: 16,
+    });
+  }, [insets.top, photoActionMenu, voteBottomPadding, windowHeight, windowWidth]);
   const duelReady = useCallback(
     (pkg) =>
       Array.isArray(pkg?.photos) &&
@@ -84,6 +184,32 @@ export default function GlobalVoteScreen() {
     },
     [setDuel, setRenderId]
   );
+
+  const closePhotoActionMenu = useCallback(() => {
+    setPhotoActionMenu(null);
+  }, []);
+
+  const openPhotoActionMenu = useCallback((photo, side, event) => {
+    if (!photo?._id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const pageX = event?.nativeEvent?.pageX;
+    const pageY = event?.nativeEvent?.pageY;
+    setPhotoActionMenu({
+      photo,
+      side,
+      x: Number.isFinite(pageX) ? pageX : windowWidth / 2,
+      y: Number.isFinite(pageY) ? pageY : Math.max(insets.top + 48, windowHeight - voteBottomPadding - 72),
+    });
+  }, [insets.top, voteBottomPadding, windowHeight, windowWidth]);
+
+  const handlePhotoActionSelection = useCallback(() => {
+    Haptics.selectionAsync().catch(() => {});
+    closePhotoActionMenu();
+  }, [closePhotoActionMenu]);
+
+  useEffect(() => {
+    closePhotoActionMenu();
+  }, [closePhotoActionMenu, renderId]);
 
   const syncFromQueue = useCallback(async () => {
     await ensureFreshTokensForQueue('global');
@@ -193,6 +319,7 @@ export default function GlobalVoteScreen() {
   const choose = useCallback(
     async (winnerId, loserId, { advanceImmediately = false } = {}) => {
       if (!winnerId || !loserId || submitting) return;
+      closePhotoActionMenu();
       if (remainingVotes === 0) {
         setLoading(false);
         return;
@@ -297,6 +424,7 @@ export default function GlobalVoteScreen() {
       isDevEnv,
       isTokenFresh,
       remainingVotes,
+      closePhotoActionMenu,
       submitting,
     ]
   );
@@ -312,8 +440,6 @@ export default function GlobalVoteScreen() {
     },
     [choose, photos]
   );
-
-  const voteSessionTitle = 'Global Matchup';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -340,45 +466,87 @@ export default function GlobalVoteScreen() {
         ) : !isScreenFocused ? null : (
           <View style={styles.voteStage}>
             <View style={styles.topChrome} pointerEvents="none">
-              <Text style={styles.kicker}>Voting Session</Text>
-              <Text style={styles.sessionTitle}>{voteSessionTitle}</Text>
+              <Text style={styles.kicker}>Voting</Text>
               {Number.isFinite(remainingVotes) ? (
                 <Text style={styles.remainingVotes}>{remainingVotes} votes left this hour</Text>
               ) : null}
             </View>
 
-            <View style={[styles.deckStage, { paddingBottom: voteBottomPadding }]}>
+            <View style={styles.deckStage}>
               <DuelDeck
                 pair={photos}
                 renderId={renderId}
                 voteToken={duel?.voteToken}
-                disabled={loading || submitting}
+                disabled={loading || submitting || photoActionMenu !== null}
                 onVote={chooseByIndex}
                 deckStyle={styles.deckArea}
+                renderAction={(photo, photoIndex) => {
+                  const isRightPhoto = photoIndex === 1;
+
+                  return (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.photoActionButton,
+                        isRightPhoto && styles.photoActionButtonRight,
+                        pressed && styles.photoActionButtonPressed,
+                      ]}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={isRightPhoto ? 'Open right photo options' : 'Open left photo options'}
+                      onPress={(event) => openPhotoActionMenu(photo, isRightPhoto ? 'right' : 'left', event)}
+                    >
+                      <MaterialIcons name="more-vert" size={18} color={colors.text} />
+                    </Pressable>
+                  );
+                }}
                 renderMeta={(photo, photoIndex) => {
                   const isRightPhoto = photoIndex === 1;
 
                   return (
-                    <View style={[styles.meta, isRightPhoto && styles.metaRight]}>
-                      <Text style={[styles.metaLabel, isRightPhoto && styles.metaTextRight]}>
-                        Global Elo
-                      </Text>
-                      <Text style={[styles.metaHandle, isRightPhoto && styles.metaTextRight]}>
-                        {Number.isFinite(photo?.global_elo)
-                          ? photo.global_elo
-                          : 1000}
-                      </Text>
-                      <Text style={[styles.metaDetail, isRightPhoto && styles.metaTextRight]}>
-                        W {photo?.global_wins ?? 0} · L {photo?.global_losses ?? 0}
-                      </Text>
+                    <View style={[styles.metaStack, isRightPhoto && styles.metaStackRight]}>
+                      <View style={[styles.meta, isRightPhoto && styles.metaRight]}>
+                        <Text style={[styles.metaLabel, isRightPhoto && styles.metaTextRight]}>
+                          Global Elo
+                        </Text>
+                        <Text style={[styles.metaHandle, isRightPhoto && styles.metaTextRight]}>
+                          {Number.isFinite(photo?.global_elo)
+                            ? photo.global_elo
+                            : 1000}
+                        </Text>
+                        <Text style={[styles.metaDetail, isRightPhoto && styles.metaTextRight]}>
+                          W {photo?.global_wins ?? 0} · L {photo?.global_losses ?? 0}
+                        </Text>
+                      </View>
                     </View>
                   );
                 }}
               />
-              <View style={styles.helperRow} pointerEvents="none">
-                <Text style={styles.helperText}>Slide to reveal the winner</Text>
-              </View>
             </View>
+
+            <View style={[styles.bottomChrome, { paddingBottom: voteBottomPadding + 16 }]}>
+              <Text style={styles.sessionTitle} numberOfLines={1}>
+                {voteSessionTitle?.top}
+              </Text>
+              {voteSessionTitle?.middle ? (
+                <Text style={styles.sessionVs}>{voteSessionTitle.middle}</Text>
+              ) : null}
+              {voteSessionTitle?.bottom ? (
+                <Text style={styles.sessionTitle} numberOfLines={1}>
+                  {voteSessionTitle.bottom}
+                </Text>
+              ) : null}
+            </View>
+
+            <PressHoldActionMenu
+              visible={photoActionMenu !== null}
+              position={photoActionMenuPosition}
+              menuSize={PHOTO_ACTION_MENU_SIZE}
+              titleLabel="Photo Options"
+              title={photoActionMenu?.side === 'right' ? 'Right photo' : 'Left photo'}
+              sections={photoActionSections}
+              onRequestClose={closePhotoActionMenu}
+              onOptionPress={handlePhotoActionSelection}
+            />
           </View>
         )}
       </View>
@@ -393,9 +561,10 @@ function createStyles(colors) {
       flex: 1,
       backgroundColor: colors.surface,
     },
-    voteStage: { flex: 1, backgroundColor: colors.surface, justifyContent: 'flex-end' },
+    voteStage: { flex: 1, backgroundColor: colors.surface },
     topChrome: {
-      paddingTop: 8,
+      paddingTop: 18,
+      paddingBottom: 16,
       paddingHorizontal: 14,
       alignItems: 'center',
       backgroundColor: colors.surface,
@@ -404,7 +573,7 @@ function createStyles(colors) {
       flex: 1,
       width: '100%',
       backgroundColor: colors.surface,
-      justifyContent: 'flex-end',
+      justifyContent: 'center',
     },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
     emptyText: {
@@ -420,10 +589,16 @@ function createStyles(colors) {
       width: '100%',
       backgroundColor: colors.surface,
     },
+    metaStack: {
+      maxWidth: 280,
+    },
+    metaStackRight: {
+      alignSelf: 'flex-end',
+      alignItems: 'flex-end',
+    },
     meta: {
       gap: 2,
       paddingVertical: 6,
-      maxWidth: 280,
     },
     metaRight: {
       alignSelf: 'flex-end',
@@ -451,34 +626,56 @@ function createStyles(colors) {
     kicker: {
       ...textStyles.kicker,
       color: colors.primary,
+      marginBottom: 8,
     },
     sessionTitle: {
-      marginTop: 4,
-      ...textStyles.heading,
+      ...textStyles.title,
       color: colors.text,
       textAlign: 'center',
-      paddingHorizontal: 20,
-      letterSpacing: 0.3,
+      width: '100%',
+      paddingHorizontal: 28,
+      letterSpacing: 0.2,
+    },
+    sessionVs: {
+      ...textStyles.bodySmall,
+      color: colors.primary,
+      textAlign: 'center',
+      textTransform: 'lowercase',
+      fontWeight: '400',
+      letterSpacing: 0.2,
     },
     remainingVotes: {
-      marginTop: 8,
-      ...textStyles.eyebrow,
-      color: colors.textMuted,
-      letterSpacing: 1.4,
-    },
-    helperRow: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 14,
-      alignItems: 'center',
-      zIndex: 20,
-    },
-    helperText: {
       ...textStyles.buttonCapsSmall,
-      color: 'rgba(255, 255, 255, 0.62)',
-      textAlign: 'center',
+      color: colors.textMuted,
       letterSpacing: 1.2,
+    },
+    bottomChrome: {
+      alignItems: 'center',
+      paddingTop: 12,
+      paddingHorizontal: 16,
+      gap: 2,
+    },
+    photoActionButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(253, 252, 251, 0.92)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.52)',
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    photoActionButtonRight: {
+      alignSelf: 'flex-end',
+    },
+    photoActionButtonPressed: {
+      transform: [{ scale: 0.96 }],
+      opacity: 0.92,
     },
   });
 }

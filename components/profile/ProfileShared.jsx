@@ -41,7 +41,7 @@ export function ProfileHeaderCard({
             {profile?.handle ? `@${profile.handle}` : 'No handle set'}
           </Text>
           <View style={styles.streakRow} accessibilityLabel={`${resolvedStreak} day streak`}>
-            <Text style={styles.streakEmoji}>🔥</Text>
+            <MaterialIcons name="local-fire-department" size={18} style={styles.streakIcon} />
             <Text style={styles.streakText}>
               <Text style={styles.streakNumber}>{resolvedStreak}</Text>
             </Text>
@@ -272,8 +272,8 @@ export function createProfileStyles(colors) {
       alignItems: 'center',
       marginTop: spacing.xs,
     },
-    streakEmoji: {
-      ...textStyles.bodyEmphasis,
+    streakIcon: {
+      color: colors.primary,
       marginRight: 6,
     },
     streakText: {

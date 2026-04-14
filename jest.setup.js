@@ -199,6 +199,13 @@ jest.mock('expo-location', () => {
   };
 });
 
+jest.mock('expo-contacts', () => ({
+  Fields: { PhoneNumbers: 'phoneNumbers' },
+  getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  getContactsAsync: jest.fn(async () => ({ data: [] })),
+}));
+
 // Notifications mock: prevent native calls while exposing listeners for assertions
 jest.mock('expo-notifications', () => {
   const receivedListeners = [];

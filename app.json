@@ -18,6 +18,7 @@
         "NSPhotoLibraryUsageDescription": "SideQuest needs access to your photos so you can select and upload challenge submissions and update your profile photo.",
         "NSPhotoLibraryAddUsageDescription": "SideQuest can save photos you capture back to your library if you choose.",
         "NSLocationWhenInUseUsageDescription": "SideQuest uses your location to show nearby photo challenges and enable on‑site submissions.",
+        "NSContactsUsageDescription": "SideQuest uses your contacts to find friends already on the app. Your phone number is never shown to other users.",
         "ITSAppUsesNonExemptEncryption": false,
         "NSHumanReadableCopyright": "Copyright © 2025 Colden Johnson. All rights reserved."
       }
@@ -33,7 +34,8 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.ACCESS_MEDIA_LOCATION"
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_CONTACTS"
       ]
     },
     "web": {
@@ -77,6 +79,12 @@
           "photosPermission": "SideQuest needs access to your photos so you can select and upload submissions.",
           "savePhotosPermission": "SideQuest can save photos you capture back to your library if you choose.",
           "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "SideQuest uses your contacts to help you find friends already on the app."
         }
       ],
       "react-native-vision-camera",

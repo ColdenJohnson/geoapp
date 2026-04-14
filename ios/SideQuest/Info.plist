@@ -61,6 +61,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>SideQuest needs camera access to take challenge photos.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>SideQuest uses your contacts to find friends already on the app. Your phone number is never shown to other users.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
 	<key>NSHumanReadableCopyright</key>

@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -17,16 +18,24 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { APP_TUTORIAL_STEPS, AuthContext } from '@/hooks/AuthContext';
 import {
   acceptFriendRequest,
   cancelFriendRequest,
+  fetchContactMatches,
   rejectFriendRequest,
   requestFriend,
   searchUserByHandle,
 } from '@/lib/api';
+import {
+  getContactsPermissionStatus,
+  inferDefaultCountryFromPhone,
+  loadNormalizedContactPhoneNumbers,
+  requestContactsPermission,
+} from '@/lib/contactDiscovery';
 import { buildViewPhotoChallengePhotoRoute, buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton, SecondaryButton } from '@/components/ui/Buttons';
@@ -107,6 +116,7 @@ function UserAvatar({ uri, label, size, styles }) {
 
 export default function FriendsTabScreen() {
   const {
+    user,
     friends,
     friendRequests,
     friendsLoading,
@@ -133,6 +143,13 @@ export default function FriendsTabScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingSuggestionRequests, setPendingSuggestionRequests] = useState({});
   const [optimisticCanceledOutgoingRequests, setOptimisticCanceledOutgoingRequests] = useState({});
+  const [contactsPermissionStatus, setContactsPermissionStatus] = useState('undetermined');
+  const [contactsPermissionLoading, setContactsPermissionLoading] = useState(false);
+  const [contactMatches, setContactMatches] = useState([]);
+  const [contactMatchesLoading, setContactMatchesLoading] = useState(false);
+  const [contactMatchesLoaded, setContactMatchesLoaded] = useState(false);
+  const [contactMatchSelection, setContactMatchSelection] = useState({});
+  const [contactMatchActionBusy, setContactMatchActionBusy] = useState(false);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -140,9 +157,19 @@ export default function FriendsTabScreen() {
   const { message: toastMessage, show: showToast } = useToast(2500);
   const prefilledHandleRef = useRef('');
   const activityHasScrolledRef = useRef(false);
+  const contactsPromptAttemptedRef = useRef(false);
+  const contactsAutoOpenedTabRef = useRef(false);
   const sharedHandle = useMemo(
     () => (Array.isArray(sharedHandleParam) ? sharedHandleParam[0] : sharedHandleParam),
     [sharedHandleParam]
+  );
+  const defaultContactCountry = useMemo(
+    () => inferDefaultCountryFromPhone(user?.phoneNumber),
+    [user?.phoneNumber]
+  );
+  const selectedContactMatchCount = useMemo(
+    () => contactMatches.reduce((count, item) => (contactMatchSelection[item?.uid] ? count + 1 : count), 0),
+    [contactMatchSelection, contactMatches]
   );
 
   const pendingIncoming = useMemo(() => (
@@ -191,27 +218,239 @@ export default function FriendsTabScreen() {
     ];
   }, [activityItems, activityLoading, activitySuggestions]);
 
+  useEffect(() => {
+    contactsPromptAttemptedRef.current = false;
+    contactsAutoOpenedTabRef.current = false;
+    setContactsPermissionStatus('undetermined');
+    setContactsPermissionLoading(false);
+    setContactMatches([]);
+    setContactMatchesLoading(false);
+    setContactMatchesLoaded(false);
+    setContactMatchSelection({});
+    setContactMatchActionBusy(false);
+  }, [user?.uid]);
+
+  const loadContactMatches = useCallback(async ({ showLoading = true } = {}) => {
+    if (!user?.uid) {
+      setContactMatches([]);
+      setContactMatchesLoaded(false);
+      setContactMatchSelection({});
+      return [];
+    }
+
+    if (showLoading) {
+      setContactMatchesLoading(true);
+    }
+
+    try {
+      console.log('[FriendsTab] Loading contact matches');
+      const phoneNumbers = await loadNormalizedContactPhoneNumbers({
+        defaultCountry: defaultContactCountry,
+      });
+      if (!phoneNumbers.length) {
+        setContactMatches([]);
+        setContactMatchesLoaded(true);
+        setContactMatchSelection({});
+        return [];
+      }
+
+      const matches = await fetchContactMatches({
+        phoneNumbers,
+        defaultCountry: defaultContactCountry,
+      });
+      const nextMatches = Array.isArray(matches) ? matches : [];
+      setContactMatches(nextMatches);
+      setContactMatchesLoaded(true);
+      setContactMatchSelection(
+        nextMatches.reduce((accumulator, item) => {
+          if (item?.uid) {
+            accumulator[item.uid] = true;
+          }
+          return accumulator;
+        }, {})
+      );
+      return nextMatches;
+    } catch (error) {
+      console.error('Failed to load contact matches', error);
+      showToast('Unable to load contact matches right now.', 2500);
+      setContactMatches([]);
+      setContactMatchesLoaded(true);
+      setContactMatchSelection({});
+      return [];
+    } finally {
+      if (showLoading) {
+        setContactMatchesLoading(false);
+      }
+    }
+  }, [defaultContactCountry, showToast, user?.uid]);
+
+  const syncContactDiscovery = useCallback(async ({
+    autoPrompt = false,
+    forceReload = false,
+  } = {}) => {
+    try {
+      const currentStatus = await getContactsPermissionStatus();
+      setContactsPermissionStatus(currentStatus);
+
+      let nextStatus = currentStatus;
+      if (currentStatus === 'undetermined' && autoPrompt && !contactsPromptAttemptedRef.current) {
+        contactsPromptAttemptedRef.current = true;
+        setContactsPermissionLoading(true);
+        try {
+          console.log('[FriendsTab] Requesting contacts permission');
+          nextStatus = await requestContactsPermission();
+          console.log('[FriendsTab] Contacts permission request result', nextStatus);
+          setContactsPermissionStatus(nextStatus);
+        } finally {
+          setContactsPermissionLoading(false);
+        }
+      }
+
+      if (autoPrompt && !contactsAutoOpenedTabRef.current && nextStatus !== 'undetermined') {
+        contactsAutoOpenedTabRef.current = true;
+        setActiveTab('requests');
+      }
+
+      if (nextStatus !== 'granted') {
+        setContactMatches([]);
+        setContactMatchSelection({});
+        setContactMatchesLoaded(false);
+        return [];
+      }
+
+      const matches = forceReload || !contactMatchesLoaded
+        ? await loadContactMatches({ showLoading: true })
+        : contactMatches;
+
+      if (!contactsAutoOpenedTabRef.current && Array.isArray(matches) && matches.length) {
+        contactsAutoOpenedTabRef.current = true;
+        setActiveTab('requests');
+      }
+
+      return matches;
+    } catch (error) {
+      console.error('[FriendsTab] Contact discovery failed', error);
+      setContactsPermissionLoading(false);
+      setContactMatches([]);
+      setContactMatchSelection({});
+      setContactMatchesLoaded(false);
+      return [];
+    }
+  }, [contactMatches, contactMatchesLoaded, loadContactMatches]);
+
+  const handleContactsButtonPress = useCallback(async () => {
+    if (contactsPermissionStatus === 'denied') {
+      try {
+        await Linking.openSettings();
+      } catch (error) {
+        Alert.alert('Contacts', 'Unable to open device settings.');
+      }
+      return;
+    }
+
+    await syncContactDiscovery({ autoPrompt: true, forceReload: true });
+  }, [contactsPermissionStatus, syncContactDiscovery]);
+
+  const toggleContactMatchSelection = useCallback((uid) => {
+    if (!uid) return;
+    setContactMatchSelection((prev) => ({ ...prev, [uid]: !prev[uid] }));
+  }, []);
+
+  const sendSelectedContactRequests = useCallback(async () => {
+    const selectedUids = contactMatches
+      .map((item) => item?.uid)
+      .filter((uid) => uid && contactMatchSelection[uid]);
+
+    if (!selectedUids.length) {
+      showToast('Select at least one contact match first.', 2500);
+      return;
+    }
+
+    setContactMatchActionBusy(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedUids.map((uid) => requestFriend({ target_uid: uid }))
+      );
+      const successful = results.filter(
+        (result) => result.status === 'fulfilled' && result.value?.success
+      ).length;
+      const failed = results.length - successful;
+
+      if (successful > 0) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        await Promise.all([
+          refreshFriends({ force: true }),
+          refreshFriendRequests({ force: true }),
+        ]);
+        await loadContactMatches({ showLoading: false });
+        showToast(
+          successful === 1 ? 'Sent 1 friend request.' : `Sent ${successful} friend requests.`,
+          2500
+        );
+      }
+
+      if (failed > 0 && successful === 0) {
+        Alert.alert('Friend Requests', 'Failed to send friend requests.');
+      } else if (failed > 0) {
+        Alert.alert('Friend Requests', `${failed} request${failed === 1 ? '' : 's'} could not be sent.`);
+      }
+    } finally {
+      setContactMatchActionBusy(false);
+    }
+  }, [
+    contactMatchSelection,
+    contactMatches,
+    loadContactMatches,
+    refreshFriendRequests,
+    refreshFriends,
+    showToast,
+  ]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     activityHasScrolledRef.current = false;
-    await Promise.all([
+    const refreshTasks = [
       refreshFriends({ force: true }),
       refreshFriendRequests({ force: true }),
       refreshFriendActivity({ force: true, showLoading: false }),
-    ]);
+    ];
+    if (contactsPermissionStatus === 'granted') {
+      refreshTasks.push(syncContactDiscovery({ forceReload: true }));
+    }
+    await Promise.all(refreshTasks);
     setPendingSuggestionRequests({});
     setRefreshing(false);
-  }, [refreshFriendActivity, refreshFriendRequests, refreshFriends]);
+  }, [
+    contactsPermissionStatus,
+    refreshFriendActivity,
+    refreshFriendRequests,
+    refreshFriends,
+    syncContactDiscovery,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
       markFriendActivitySeen();
       refreshFriendRequests({ force: false });
+      syncContactDiscovery({
+        autoPrompt: true,
+        forceReload: false,
+      }).catch((error) => {
+        console.error('Failed to sync contact discovery', error);
+      });
       refreshFriendActivity({
         force: false,
         showLoading: !friendActivityFetchedAt && !activityItems.length && !activitySuggestions.length,
       });
-    }, [activityItems.length, activitySuggestions.length, friendActivityFetchedAt, markFriendActivitySeen, refreshFriendActivity, refreshFriendRequests])
+    }, [
+      activityItems.length,
+      activitySuggestions.length,
+      friendActivityFetchedAt,
+      markFriendActivitySeen,
+      refreshFriendActivity,
+      refreshFriendRequests,
+      syncContactDiscovery,
+    ])
   );
 
   useEffect(() => {
@@ -581,6 +820,165 @@ export default function FriendsTabScreen() {
     styles,
   ]);
 
+  const renderContactMatchRow = useCallback((item) => {
+    if (!item?.uid) return null;
+    const isSelected = !!contactMatchSelection[item.uid];
+    const handleLabel = getHandleLabel(item);
+
+    return (
+      <View key={`contact-match-${item.uid}`} style={styles.contactMatchRow}>
+        <Pressable
+          onPress={() => toggleContactMatchSelection(item.uid)}
+          style={({ pressed }) => [styles.contactCheckboxButton, pressed && styles.pressed]}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isSelected }}
+        >
+          <MaterialIcons
+            name={isSelected ? 'check-box' : 'check-box-outline-blank'}
+            size={24}
+            color={isSelected ? colors.primary : colors.textMuted}
+          />
+        </Pressable>
+
+        <Pressable
+          onPress={() => openUserProfile(item.uid)}
+          style={({ pressed }) => [styles.contactMatchPressable, pressed && styles.pressed]}
+        >
+          <View style={styles.personContent}>
+            <UserAvatar
+              uri={item.photo_url || null}
+              label={getAvatarInitial(item)}
+              size={46}
+              styles={styles}
+            />
+            <View style={styles.personTextWrap}>
+              <Text style={styles.personName}>{getDisplayLabel(item)}</Text>
+              {handleLabel ? <Text style={styles.personMeta}>{handleLabel}</Text> : null}
+            </View>
+          </View>
+        </Pressable>
+      </View>
+    );
+  }, [
+    colors.primary,
+    colors.textMuted,
+    contactMatchSelection,
+    openUserProfile,
+    styles,
+    toggleContactMatchSelection,
+  ]);
+
+  const renderContactsSection = useCallback(() => {
+    const toggleAllSelected = selectedContactMatchCount > 0 && selectedContactMatchCount === contactMatches.length;
+
+    return (
+      <View style={[formStyles.card, styles.sectionCard]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>From Contacts</Text>
+          <Text style={styles.sectionCount}>{contactMatches.length}</Text>
+        </View>
+
+        {contactsPermissionLoading ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : contactsPermissionStatus === 'denied' ? (
+          <>
+            <Text style={styles.emptyText}>
+              Contacts access is off. Open settings to find SideQuest profiles already in your address book.
+            </Text>
+            <View style={styles.contactActionBar}>
+              <SecondaryButton
+                title="Open Settings"
+                onPress={handleContactsButtonPress}
+                style={styles.contactCtaButton}
+              />
+            </View>
+          </>
+        ) : contactsPermissionStatus !== 'granted' ? (
+          <>
+            <Text style={styles.emptyText}>
+              Find friends already on SideQuest by matching verified phone numbers from your contacts. Phone numbers are never shown to other users.
+            </Text>
+            <View style={styles.contactActionBar}>
+              <CTAButton
+                title="Find Friends From Contacts"
+                onPress={handleContactsButtonPress}
+                variant="filled"
+                style={styles.contactCtaButton}
+              />
+            </View>
+          </>
+        ) : contactMatchesLoading && !contactMatchesLoaded ? (
+          <View style={styles.centerRow}>
+            <ActivityIndicator size="small" color={colors.text} />
+          </View>
+        ) : !contactMatches.length ? (
+          <>
+            <Text style={styles.emptyText}>No SideQuest profiles from your contacts were found yet.</Text>
+            <View style={styles.contactActionBar}>
+              <SecondaryButton
+                title="Refresh Contacts"
+                onPress={handleContactsButtonPress}
+                style={styles.contactCtaButton}
+                disabled={contactMatchActionBusy}
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.contactsHelperText}>
+              Matches start checked. Uncheck anyone you do not want to add, then send requests to the rest.
+            </Text>
+
+            <View style={styles.contactBulkActionRow}>
+              <SecondaryButton
+                title={toggleAllSelected ? 'Clear All' : 'Select All'}
+                onPress={() => {
+                  setContactMatchSelection(
+                    contactMatches.reduce((accumulator, item) => {
+                      if (item?.uid) {
+                        accumulator[item.uid] = !toggleAllSelected;
+                      }
+                      return accumulator;
+                    }, {})
+                  );
+                }}
+                style={styles.contactBulkButton}
+                disabled={contactMatchActionBusy}
+              />
+              <CTAButton
+                title={contactMatchActionBusy ? 'Sending...' : `Send Selected (${selectedContactMatchCount})`}
+                onPress={sendSelectedContactRequests}
+                variant="filled"
+                style={styles.contactBulkButton}
+                disabled={contactMatchActionBusy || selectedContactMatchCount === 0}
+              />
+            </View>
+
+            <View style={styles.stackSection}>
+              {contactMatches.map((item) => renderContactMatchRow(item))}
+            </View>
+          </>
+        )}
+      </View>
+    );
+  }, [
+    colors.text,
+    contactMatchActionBusy,
+    contactMatches,
+    contactMatchesLoading,
+    contactMatchesLoaded,
+    contactsPermissionLoading,
+    contactsPermissionStatus,
+    formStyles.card,
+    handleContactsButtonPress,
+    renderContactMatchRow,
+    selectedContactMatchCount,
+    sendSelectedContactRequests,
+    styles,
+  ]);
+
   const activityListHeader = useMemo(() => (
     <View>
       {renderTopChrome()}
@@ -747,6 +1145,7 @@ export default function FriendsTabScreen() {
   const renderRequestsContent = () => (
     <>
       {renderSearchSection()}
+      {renderContactsSection()}
       {renderRequestSection('Incoming Requests', pendingIncoming, 'incoming')}
       {renderRequestSection('Outgoing Requests', pendingOutgoing, 'outgoing')}
 
@@ -927,6 +1326,42 @@ function createStyles(colors) {
     },
     stackSection: {
       marginTop: spacing.sm,
+    },
+    contactActionBar: {
+      marginTop: spacing.md,
+    },
+    contactCtaButton: {
+      width: '100%',
+    },
+    contactBulkActionRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    contactBulkButton: {
+      flex: 1,
+      minHeight: 46,
+    },
+    contactMatchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    contactCheckboxButton: {
+      width: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    contactMatchPressable: {
+      flex: 1,
+    },
+    contactsHelperText: {
+      color: colors.textMuted,
+      lineHeight: 20,
     },
     personRow: {
       flexDirection: 'row',

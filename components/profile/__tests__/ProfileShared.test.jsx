@@ -29,7 +29,6 @@ describe('ProfileHeaderCard', () => {
 
     expect(getByText('Test User')).toBeTruthy();
     expect(getByText('@tester')).toBeTruthy();
-    expect(getByText('🔥')).toBeTruthy();
     expect(getByText('7')).toBeTruthy();
     expect(getByLabelText('7 day streak')).toBeTruthy();
   });

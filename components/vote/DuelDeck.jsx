@@ -36,6 +36,7 @@ export default function DuelDeck({
   voteToken,
   deckStyle,
   renderMeta,
+  renderAction,
   cardStyle,
   imageStyle,
   overlayStyle,
@@ -258,7 +259,10 @@ export default function DuelDeck({
                 </View>
               </View>
               <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
-              <Animated.View style={[styles.metaSlot, leftMetaStyle]} pointerEvents="none">
+              <View style={styles.actionSlot} pointerEvents="box-none">
+                {typeof renderAction === 'function' ? renderAction(photos[0], 0) : null}
+              </View>
+              <Animated.View style={[styles.metaSlot, leftMetaStyle]} pointerEvents="box-none">
                 {typeof renderMeta === 'function' ? renderMeta(photos[0], 0) : null}
               </Animated.View>
               <Animated.View style={[styles.winnerOverlay, leftWinnerStyle]} pointerEvents="none">
@@ -284,7 +288,10 @@ export default function DuelDeck({
                 </View>
               </View>
               <View style={[StyleSheet.absoluteFill, styles.photoShade, overlayStyle]} pointerEvents="none" />
-              <Animated.View style={[styles.metaSlot, rightMetaStyle]} pointerEvents="none">
+              <View style={styles.actionSlot} pointerEvents="box-none">
+                {typeof renderAction === 'function' ? renderAction(photos[1], 1) : null}
+              </View>
+              <Animated.View style={[styles.metaSlot, rightMetaStyle]} pointerEvents="box-none">
                 {typeof renderMeta === 'function' ? renderMeta(photos[1], 1) : null}
               </Animated.View>
               <Animated.View style={[styles.winnerOverlay, rightWinnerStyle]} pointerEvents="none">
@@ -367,11 +374,18 @@ function createStyles(colors) {
     photoShade: {
       backgroundColor: 'rgba(0, 0, 0, 0.24)',
     },
+    actionSlot: {
+      position: 'absolute',
+      top: 18,
+      left: 18,
+      right: 18,
+      zIndex: 10,
+    },
     metaSlot: {
       position: 'absolute',
-      left: 20,
-      right: 20,
-      bottom: 34,
+      left: 16,
+      right: 16,
+      bottom: 12,
     },
     winnerOverlay: {
       ...StyleSheet.absoluteFillObject,
