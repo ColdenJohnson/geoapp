@@ -53,7 +53,6 @@ export default function GlobalVoteScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const photos = useMemo(() => (Array.isArray(duel?.photos) ? duel.photos : []), [duel]);
-  const isPinRandom = duel?.bucketType === 'pin_random';
   const duelReady = useCallback(
     (pkg) =>
       Array.isArray(pkg?.photos) &&
@@ -246,8 +245,6 @@ export default function GlobalVoteScreen() {
           loserPhotoId: loserId,
           voteToken: activeDuel.voteToken,
           expiresAt: activeDuel.expiresAt,
-          bucketType: activeDuel.bucketType,
-          pinId: activeDuel.pinId,
         });
         if (Number.isFinite(result?.remainingVotes)) {
           setRemainingVotes(result.remainingVotes);
@@ -316,11 +313,7 @@ export default function GlobalVoteScreen() {
     [choose, photos]
   );
 
-  const voteSessionTitle = !loading && photos.length >= 2 && isPinRandom && duel?.pinPrompt
-    ? duel.pinPrompt
-    : isPinRandom
-      ? 'Local Challenge'
-      : 'Global Matchup';
+  const voteSessionTitle = 'Global Matchup';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -368,18 +361,15 @@ export default function GlobalVoteScreen() {
                   return (
                     <View style={[styles.meta, isRightPhoto && styles.metaRight]}>
                       <Text style={[styles.metaLabel, isRightPhoto && styles.metaTextRight]}>
-                        {isPinRandom ? 'Local' : 'Global'} Elo
+                        Global Elo
                       </Text>
                       <Text style={[styles.metaHandle, isRightPhoto && styles.metaTextRight]}>
-                        {Number.isFinite(isPinRandom ? photo?.local_elo : photo?.global_elo)
-                          ? isPinRandom
-                            ? photo.local_elo
-                            : photo.global_elo
+                        {Number.isFinite(photo?.global_elo)
+                          ? photo.global_elo
                           : 1000}
                       </Text>
                       <Text style={[styles.metaDetail, isRightPhoto && styles.metaTextRight]}>
-                        W {isPinRandom ? photo?.local_wins ?? 0 : photo?.global_wins ?? 0} · L{' '}
-                        {isPinRandom ? photo?.local_losses ?? 0 : photo?.global_losses ?? 0}
+                        W {photo?.global_wins ?? 0} · L {photo?.global_losses ?? 0}
                       </Text>
                     </View>
                   );

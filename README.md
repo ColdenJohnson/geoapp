@@ -9,7 +9,7 @@ SideQuest is a **location-based photo challenge app**. Users create challenges a
 ### Core product loop
 1. **Discover** challenges on the map
 2. **Create/Contribute** a photo + prompt at a location
-3. **View/Compete** through local and global duels (Elo-style ranking)
+3. **View/Compete** through global duels (Elo-style ranking)
 4. **Social + retention** via profiles, friends, and push notifications
 
 ---
@@ -96,11 +96,10 @@ SideQuest is a **location-based photo challenge app**. Users create challenges a
 | Bottom CTA bar (upload) | Shared UI | `geoapp/components/ui/BottomBar.jsx`, `geoapp/components/ui/Buttons.jsx` |
 | Top bars / navigation polish | Shared UI | `geoapp/components/ui/TopBar.jsx` |
 
-### Voting & competition (local + global)
+### Voting & competition
 
 | Feature | Where | Key files |
 |---|---|---|
-| Local duels inside a challenge | Challenge view | `geoapp/app/view_photochallenge.jsx` |
 | Global duel feed (across system) | Vote tab | `geoapp/app/(tabs)/vote.jsx` |
 | Swipeable duel deck UX | Duel deck | `geoapp/components/vote/DuelDeck.jsx` |
 | Vote prefetch + queue (reduce latency) | Queue | `geoapp/lib/globalDuelQueue.js` |
@@ -161,7 +160,7 @@ Routes live in `geoapp/app/`.
 | `/` | `geoapp/app/(tabs)/index.jsx` | Map + challenge discovery/creation |
 | `/(tabs)/vote` | `geoapp/app/(tabs)/vote.jsx` | Global duel voting |
 | `/(tabs)/profile` | `geoapp/app/(tabs)/profile.jsx` | Profile + stats + friends summary |
-| `/view_photochallenge` | `geoapp/app/view_photochallenge.jsx` | Challenge detail + local duel + uploads |
+| `/view_photochallenge` | `geoapp/app/view_photochallenge.jsx` | Challenge detail + uploads |
 | `/enter_message` | `geoapp/app/enter_message.jsx` | Capture + prompt for new challenge |
 | `/upload` | `geoapp/app/upload.jsx` | Camera + upload for challenge photo |
 | `/friends` | `geoapp/app/friends.jsx` | Friends list + requests |

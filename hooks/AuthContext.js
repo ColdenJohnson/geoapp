@@ -569,7 +569,7 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function refreshTopPhotos({ force = false, limit = 2, metric = 'global' } = {}) {
+  async function refreshTopPhotos({ force = false, limit = 2 } = {}) {
     if (!user?.uid) return null;
     if (topPhotosLoading) return null;
     const isStale =
@@ -578,7 +578,7 @@ export function AuthProvider({ children }) {
     if (!force && !topPhotosDirty && !isStale) return topPhotos;
     setTopPhotosLoading(true);
     try {
-      const rows = await fetchUserTopPhotos(user.uid, { limit, metric });
+      const rows = await fetchUserTopPhotos(user.uid, { limit });
       const nextPhotos = Array.isArray(rows) ? rows : [];
       const fetchedAt = Date.now();
       setTopPhotos(nextPhotos);
@@ -590,7 +590,6 @@ export function AuthProvider({ children }) {
         JSON.stringify({
           photos: nextPhotos,
           fetchedAt,
-          metric: metric === 'local' ? 'local' : 'global',
           limit: Number.isFinite(limit) ? limit : 2,
         })
       );

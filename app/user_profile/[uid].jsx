@@ -94,7 +94,7 @@ export default function PublicUserProfileScreen() {
       const [nextProfile, nextStats, nextTopPhotos] = await Promise.all([
         fetchUsersByUID(targetUid),
         fetchUserStats(targetUid),
-        fetchUserTopPhotos(targetUid, { limit: 2, metric: 'global' }),
+        fetchUserTopPhotos(targetUid, { limit: 2 }),
       ]);
       setProfileData(nextProfile);
       setStatsData(nextStats);
