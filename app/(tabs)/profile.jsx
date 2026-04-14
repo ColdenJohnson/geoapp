@@ -6,7 +6,6 @@ import { APP_TUTORIAL_STEPS, AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
-import auth from '@react-native-firebase/auth';
 import { usePalette } from '@/hooks/usePalette';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { TutorialCallout } from '@/components/ui/TutorialCallout';
@@ -41,14 +40,8 @@ export default function UserProfileScreen() {
   const colors = usePalette();
   const styles = useMemo(() => createProfileStyles(colors), [colors]);
   const tutorialStyles = useMemo(() => createTutorialStyles(), []);
-  const authUser = auth().currentUser;
   const showProfileEditTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT);
   const profileTutorialVisitedRef = useRef(false);
-  const contactValue =
-    user?.phoneNumber ||
-    authUser?.phoneNumber ||
-    profile?.phone_number ||
-    null;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -127,7 +120,6 @@ export default function UserProfileScreen() {
       >
         <ProfileHeaderCard
           profile={profile}
-          subtitle={contactValue}
           onPressAvatar={onEditProfile}
           styles={styles}
         />

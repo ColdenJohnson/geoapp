@@ -15,7 +15,6 @@ export const PROFILE_BADGES = [
 
 export function ProfileHeaderCard({
   profile,
-  subtitle = null,
   onPressAvatar = null,
   styles,
 }) {
@@ -39,7 +38,6 @@ export function ProfileHeaderCard({
           <Text style={profile?.handle ? styles.handleText : styles.handlePlaceholder}>
             {profile?.handle ? `@${profile.handle}` : 'No handle set'}
           </Text>
-          {subtitle ? <Text style={styles.contactText}>{subtitle}</Text> : null}
         </View>
       </View>
       {bio ? <Text style={styles.bioText}>{bio}</Text> : null}
@@ -258,12 +256,6 @@ export function createProfileStyles(colors) {
       ...textStyles.italic,
       color: colors.textMuted,
       marginTop: spacing.xs,
-      textAlign: 'left',
-    },
-    contactText: {
-      ...textStyles.bodyXsStrong,
-      color: colors.textMuted,
-      marginTop: 4,
       textAlign: 'left',
     },
     bioText: {
