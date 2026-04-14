@@ -495,7 +495,12 @@ export default function GlobalVoteScreen() {
                       accessibilityLabel={isRightPhoto ? 'Open right photo options' : 'Open left photo options'}
                       onPress={(event) => openPhotoActionMenu(photo, isRightPhoto ? 'right' : 'left', event)}
                     >
-                      <MaterialIcons name="more-vert" size={18} color={colors.text} />
+                      <MaterialIcons
+                        name="more-horiz"
+                        size={28}
+                        color={colors.primaryTextOn}
+                        style={styles.photoActionIcon}
+                      />
                     </Pressable>
                   );
                 }}
@@ -656,26 +661,24 @@ function createStyles(colors) {
       gap: 2,
     },
     photoActionButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      minWidth: 40,
+      minHeight: 40,
+      alignSelf: 'flex-start',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(253, 252, 251, 0.92)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.52)',
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.18,
-      shadowRadius: 12,
-      elevation: 8,
+      backgroundColor: 'transparent',
     },
     photoActionButtonRight: {
       alignSelf: 'flex-end',
     },
     photoActionButtonPressed: {
-      transform: [{ scale: 0.96 }],
-      opacity: 0.92,
+      opacity: 0.62,
+    },
+    photoActionIcon: {
+      opacity: 0.78,
+      textShadowColor: 'rgba(0, 0, 0, 0.28)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
     },
   });
 }

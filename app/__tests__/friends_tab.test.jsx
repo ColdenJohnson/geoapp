@@ -3,6 +3,12 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockShowToast = jest.fn();
 
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+}));
+
 jest.mock('@/hooks/AuthContext', () => {
   const React = require('react');
   return {
@@ -27,6 +33,10 @@ jest.mock('@react-navigation/native', () => {
   };
 });
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
 jest.mock('@/hooks/usePalette', () => ({
   usePalette: () => ({
     surface: '#f5f5f5',
@@ -37,6 +47,13 @@ jest.mock('@/hooks/usePalette', () => ({
     primary: '#ff6b35',
     primaryTextOn: '#ffffff',
   }),
+}));
+
+jest.mock('@/lib/contactDiscovery', () => ({
+  getContactsPermissionStatus: jest.fn(async () => 'undetermined'),
+  inferDefaultCountryFromPhone: jest.fn(() => 'US'),
+  loadNormalizedContactPhoneNumbers: jest.fn(async () => []),
+  requestContactsPermission: jest.fn(async () => 'granted'),
 }));
 
 jest.mock('@/lib/api', () => ({
@@ -52,6 +69,7 @@ jest.mock('@/components/ui/Toast', () => ({
   useToast: () => ({ message: null, show: mockShowToast }),
 }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { cancelFriendRequest } from '@/lib/api';
 import FriendsTabScreen from '@/app/(tabs)/friends_tab';
 import { AuthContext } from '@/hooks/AuthContext';
@@ -87,6 +105,9 @@ function renderScreen(overrides = {}) {
 describe('FriendsTabScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    AsyncStorage.getItem.mockResolvedValue('true');
+    AsyncStorage.setItem.mockResolvedValue();
+    AsyncStorage.removeItem.mockResolvedValue();
   });
 
   it('shows a toast when a geo-locked activity card is tapped', () => {
@@ -160,5 +181,15 @@ describe('FriendsTabScreen', () => {
     await waitFor(() => {
       expect(refreshFriendRequests).toHaveBeenCalledWith({ force: true });
     });
+  });
+
+  it('shows the contacts overlay the first time the tab is opened', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+
+    const { findByTestId } = renderScreen({
+      user: { uid: 'user-1', phoneNumber: '+15551234567' },
+    });
+
+    expect(await findByTestId('contacts-overlay')).toBeTruthy();
   });
 });

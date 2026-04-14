@@ -4,13 +4,14 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
-  Linking,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -18,8 +19,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { APP_TUTORIAL_STEPS, AuthContext } from '@/hooks/AuthContext';
 import {
@@ -45,6 +46,11 @@ import { radii, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
+const CONTACTS_INTRO_SEEN_KEY_PREFIX = 'friends_contacts_intro_seen';
+
+function getContactsIntroSeenStorageKey(uid) {
+  return `${CONTACTS_INTRO_SEEN_KEY_PREFIX}_${uid}`;
+}
 
 function normalizeHandleQuery(value) {
   let trimmed = typeof value === 'string' ? value.trim() : '';
@@ -150,6 +156,9 @@ export default function FriendsTabScreen() {
   const [contactMatchesLoaded, setContactMatchesLoaded] = useState(false);
   const [contactMatchSelection, setContactMatchSelection] = useState({});
   const [contactMatchActionBusy, setContactMatchActionBusy] = useState(false);
+  const [contactsIntroVisible, setContactsIntroVisible] = useState(false);
+  const [contactsIntroSeen, setContactsIntroSeen] = useState(false);
+  const [contactsIntroHydrated, setContactsIntroHydrated] = useState(false);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -157,8 +166,7 @@ export default function FriendsTabScreen() {
   const { message: toastMessage, show: showToast } = useToast(2500);
   const prefilledHandleRef = useRef('');
   const activityHasScrolledRef = useRef(false);
-  const contactsPromptAttemptedRef = useRef(false);
-  const contactsAutoOpenedTabRef = useRef(false);
+  const contactsAutoOpenAttemptedRef = useRef(false);
   const sharedHandle = useMemo(
     () => (Array.isArray(sharedHandleParam) ? sharedHandleParam[0] : sharedHandleParam),
     [sharedHandleParam]
@@ -219,8 +227,6 @@ export default function FriendsTabScreen() {
   }, [activityItems, activityLoading, activitySuggestions]);
 
   useEffect(() => {
-    contactsPromptAttemptedRef.current = false;
-    contactsAutoOpenedTabRef.current = false;
     setContactsPermissionStatus('undetermined');
     setContactsPermissionLoading(false);
     setContactMatches([]);
@@ -228,6 +234,44 @@ export default function FriendsTabScreen() {
     setContactMatchesLoaded(false);
     setContactMatchSelection({});
     setContactMatchActionBusy(false);
+    setContactsIntroVisible(false);
+    setContactsIntroSeen(false);
+    setContactsIntroHydrated(false);
+    contactsAutoOpenAttemptedRef.current = false;
+  }, [user?.uid]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateContactsIntroState() {
+      if (!user?.uid) {
+        if (!cancelled) {
+          setContactsIntroSeen(true);
+          setContactsIntroHydrated(true);
+        }
+        return;
+      }
+
+      try {
+        const storedValue = await AsyncStorage.getItem(getContactsIntroSeenStorageKey(user.uid));
+        if (!cancelled) {
+          setContactsIntroSeen(storedValue === 'true');
+          setContactsIntroHydrated(true);
+        }
+      } catch (error) {
+        console.error('Failed to hydrate contacts intro state', error);
+        if (!cancelled) {
+          setContactsIntroSeen(false);
+          setContactsIntroHydrated(true);
+        }
+      }
+    }
+
+    hydrateContactsIntroState();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user?.uid]);
 
   const loadContactMatches = useCallback(async ({ showLoading = true } = {}) => {
@@ -285,16 +329,23 @@ export default function FriendsTabScreen() {
   }, [defaultContactCountry, showToast, user?.uid]);
 
   const syncContactDiscovery = useCallback(async ({
-    autoPrompt = false,
+    requestPermission = false,
     forceReload = false,
+    promptIfDenied = false,
   } = {}) => {
+    if (!user?.uid) {
+      return { status: 'undetermined', matches: [] };
+    }
+
     try {
       const currentStatus = await getContactsPermissionStatus();
       setContactsPermissionStatus(currentStatus);
 
       let nextStatus = currentStatus;
-      if (currentStatus === 'undetermined' && autoPrompt && !contactsPromptAttemptedRef.current) {
-        contactsPromptAttemptedRef.current = true;
+      if (
+        requestPermission
+        && (currentStatus === 'undetermined' || (promptIfDenied && currentStatus !== 'granted'))
+      ) {
         setContactsPermissionLoading(true);
         try {
           console.log('[FriendsTab] Requesting contacts permission');
@@ -306,64 +357,90 @@ export default function FriendsTabScreen() {
         }
       }
 
-      if (autoPrompt && !contactsAutoOpenedTabRef.current && nextStatus !== 'undetermined') {
-        contactsAutoOpenedTabRef.current = true;
-        setActiveTab('requests');
-      }
-
       if (nextStatus !== 'granted') {
         setContactMatches([]);
         setContactMatchSelection({});
         setContactMatchesLoaded(false);
-        return [];
+        return { status: nextStatus, matches: [] };
       }
 
       const matches = forceReload || !contactMatchesLoaded
         ? await loadContactMatches({ showLoading: true })
         : contactMatches;
 
-      if (!contactsAutoOpenedTabRef.current && Array.isArray(matches) && matches.length) {
-        contactsAutoOpenedTabRef.current = true;
-        setActiveTab('requests');
-      }
-
-      return matches;
+      return { status: nextStatus, matches };
     } catch (error) {
       console.error('[FriendsTab] Contact discovery failed', error);
       setContactsPermissionLoading(false);
       setContactMatches([]);
       setContactMatchSelection({});
       setContactMatchesLoaded(false);
-      return [];
+      return { status: 'undetermined', matches: [] };
     }
-  }, [contactMatches, contactMatchesLoaded, loadContactMatches]);
+  }, [contactMatches, contactMatchesLoaded, loadContactMatches, user?.uid]);
 
-  const handleContactsButtonPress = useCallback(async () => {
-    if (contactsPermissionStatus === 'denied') {
-      try {
-        await Linking.openSettings();
-      } catch (error) {
-        Alert.alert('Contacts', 'Unable to open device settings.');
-      }
+  const markContactsIntroSeen = useCallback(async () => {
+    if (!user?.uid) {
+      setContactsIntroSeen(true);
       return;
     }
 
-    await syncContactDiscovery({ autoPrompt: true, forceReload: true });
-  }, [contactsPermissionStatus, syncContactDiscovery]);
+    setContactsIntroSeen(true);
+    try {
+      await AsyncStorage.setItem(getContactsIntroSeenStorageKey(user.uid), 'true');
+    } catch (error) {
+      console.error('Failed to persist contacts intro state', error);
+    }
+  }, [user?.uid]);
+
+  const skipContactsOverlay = useCallback(() => {
+    setContactsIntroVisible(false);
+    setContactMatchSelection({});
+    markContactsIntroSeen();
+  }, [markContactsIntroSeen]);
+
+  const openContactsOverlay = useCallback(async ({ allowDeniedPrompt = false } = {}) => {
+    if (!user?.uid) {
+      return false;
+    }
+
+    setActiveTab('requests');
+    const { status } = await syncContactDiscovery({
+      requestPermission: true,
+      forceReload: true,
+      promptIfDenied: allowDeniedPrompt,
+    });
+
+    if (status === 'granted') {
+      setContactsIntroVisible(true);
+      return true;
+    }
+
+    return false;
+  }, [syncContactDiscovery, user?.uid]);
+
+  const handleContactsButtonPress = useCallback(async () => {
+    await openContactsOverlay({ allowDeniedPrompt: true });
+  }, [openContactsOverlay]);
 
   const toggleContactMatchSelection = useCallback((uid) => {
     if (!uid) return;
     setContactMatchSelection((prev) => ({ ...prev, [uid]: !prev[uid] }));
   }, []);
 
-  const sendSelectedContactRequests = useCallback(async () => {
+  const sendSelectedContactRequests = useCallback(async ({ closeOverlay = false } = {}) => {
     const selectedUids = contactMatches
       .map((item) => item?.uid)
       .filter((uid) => uid && contactMatchSelection[uid]);
 
     if (!selectedUids.length) {
-      showToast('Select at least one contact match first.', 2500);
       return;
+    }
+
+    if (closeOverlay) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setContactsIntroVisible(false);
+      markContactsIntroSeen();
     }
 
     setContactMatchActionBusy(true);
@@ -374,26 +451,18 @@ export default function FriendsTabScreen() {
       const successful = results.filter(
         (result) => result.status === 'fulfilled' && result.value?.success
       ).length;
-      const failed = results.length - successful;
 
       if (successful > 0) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         await Promise.all([
           refreshFriends({ force: true }),
           refreshFriendRequests({ force: true }),
         ]);
         await loadContactMatches({ showLoading: false });
-        showToast(
-          successful === 1 ? 'Sent 1 friend request.' : `Sent ${successful} friend requests.`,
-          2500
-        );
+      } else {
+        await refreshFriendRequests({ force: true });
       }
-
-      if (failed > 0 && successful === 0) {
-        Alert.alert('Friend Requests', 'Failed to send friend requests.');
-      } else if (failed > 0) {
-        Alert.alert('Friend Requests', `${failed} request${failed === 1 ? '' : 's'} could not be sent.`);
-      }
+    } catch (error) {
+      console.error('Failed to send contact friend requests', error);
     } finally {
       setContactMatchActionBusy(false);
     }
@@ -401,9 +470,9 @@ export default function FriendsTabScreen() {
     contactMatchSelection,
     contactMatches,
     loadContactMatches,
+    markContactsIntroSeen,
     refreshFriendRequests,
     refreshFriends,
-    showToast,
   ]);
 
   const onRefresh = useCallback(async () => {
@@ -429,15 +498,34 @@ export default function FriendsTabScreen() {
   ]);
 
   useFocusEffect(
+    useCallback(() => () => {
+      contactsAutoOpenAttemptedRef.current = false;
+    }, [])
+  );
+
+  useFocusEffect(
     useCallback(() => {
       markFriendActivitySeen();
       refreshFriendRequests({ force: false });
-      syncContactDiscovery({
-        autoPrompt: true,
-        forceReload: false,
-      }).catch((error) => {
-        console.error('Failed to sync contact discovery', error);
-      });
+      if (user?.uid) {
+        syncContactDiscovery({
+          requestPermission: false,
+          forceReload: false,
+        }).catch((error) => {
+          console.error('Failed to sync contact discovery', error);
+        });
+      }
+      if (
+        contactsIntroHydrated
+        && user?.uid
+        && !contactsIntroSeen
+        && !contactsAutoOpenAttemptedRef.current
+      ) {
+        contactsAutoOpenAttemptedRef.current = true;
+        openContactsOverlay({ allowDeniedPrompt: false }).catch((error) => {
+          console.error('Failed to auto-open contacts overlay', error);
+        });
+      }
       refreshFriendActivity({
         force: false,
         showLoading: !friendActivityFetchedAt && !activityItems.length && !activitySuggestions.length,
@@ -445,11 +533,15 @@ export default function FriendsTabScreen() {
     }, [
       activityItems.length,
       activitySuggestions.length,
+      contactsIntroHydrated,
+      contactsIntroSeen,
       friendActivityFetchedAt,
       markFriendActivitySeen,
+      openContactsOverlay,
       refreshFriendActivity,
       refreshFriendRequests,
       syncContactDiscovery,
+      user?.uid,
     ])
   );
 
@@ -527,10 +619,10 @@ export default function FriendsTabScreen() {
       setSearchMessage(null);
       return;
     }
-    const timer = setTimeout(() => {
+    const timer = globalThis.setTimeout(() => {
       runFriendSearch(trimmed, { showLoading: false });
     }, 250);
-    return () => clearTimeout(timer);
+    return () => globalThis.clearTimeout(timer);
   }, [friendSearchInput, runFriendSearch]);
 
   useEffect(() => {
@@ -827,18 +919,14 @@ export default function FriendsTabScreen() {
 
     return (
       <View key={`contact-match-${item.uid}`} style={styles.contactMatchRow}>
-        <Pressable
-          onPress={() => toggleContactMatchSelection(item.uid)}
-          style={({ pressed }) => [styles.contactCheckboxButton, pressed && styles.pressed]}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: isSelected }}
-        >
-          <MaterialIcons
-            name={isSelected ? 'check-box' : 'check-box-outline-blank'}
-            size={24}
-            color={isSelected ? colors.primary : colors.textMuted}
-          />
-        </Pressable>
+        <Switch
+          value={isSelected}
+          onValueChange={() => toggleContactMatchSelection(item.uid)}
+          disabled={contactMatchActionBusy}
+          trackColor={{ false: colors.border, true: colors.primary }}
+          thumbColor={colors.bg}
+          style={styles.contactSwitch}
+        />
 
         <Pressable
           onPress={() => openUserProfile(item.uid)}
@@ -860,122 +948,99 @@ export default function FriendsTabScreen() {
       </View>
     );
   }, [
+    colors.bg,
     colors.primary,
-    colors.textMuted,
+    colors.border,
+    contactMatchActionBusy,
     contactMatchSelection,
     openUserProfile,
     styles,
     toggleContactMatchSelection,
   ]);
 
-  const renderContactsSection = useCallback(() => {
-    const toggleAllSelected = selectedContactMatchCount > 0 && selectedContactMatchCount === contactMatches.length;
+  const renderContactsSection = useCallback(() => (
+    <View style={styles.contactsSection}>
+      <CTAButton
+        title={contactsPermissionLoading || contactMatchesLoading ? 'Loading Contacts...' : 'Add From Contacts'}
+        onPress={handleContactsButtonPress}
+        style={styles.contactsEntryButton}
+        disabled={contactsPermissionLoading || contactMatchesLoading || contactMatchActionBusy}
+      />
+    </View>
+  ), [
+    contactMatchActionBusy,
+    contactMatchesLoading,
+    contactsPermissionLoading,
+    handleContactsButtonPress,
+    styles,
+  ]);
 
-    return (
-      <View style={[formStyles.card, styles.sectionCard]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>From Contacts</Text>
-          <Text style={styles.sectionCount}>{contactMatches.length}</Text>
+  const renderContactsOverlay = useCallback(() => (
+    <Modal
+      visible={contactsIntroVisible}
+      transparent={false}
+      animationType="fade"
+      onRequestClose={() => {}}
+    >
+      <SafeAreaView style={styles.modalScreen}>
+        <View style={styles.modalCard} testID="contacts-overlay">
+          <Text style={styles.modalEyebrow}>From Contacts</Text>
+          <View style={styles.modalHeaderRow}>
+            <Text style={styles.modalTitle}>Add friends from contacts</Text>
+            <Text style={styles.sectionCount}>{contactMatches.length}</Text>
+          </View>
+          <Text style={styles.modalBody}>Toggle anyone you do not want to add.</Text>
+
+          <View style={styles.modalListWrap}>
+            {contactMatchesLoading && !contactMatchesLoaded ? (
+              <View style={styles.centerRowTall}>
+                <ActivityIndicator size="small" color={colors.text} />
+              </View>
+            ) : !contactMatches.length ? (
+              <View style={styles.centerRowTall}>
+                <Text style={styles.emptyText}>No SideQuest profiles from your contacts were found yet.</Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.modalList}
+                contentContainerStyle={styles.modalListContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {contactMatches.map((item) => renderContactMatchRow(item))}
+              </ScrollView>
+            )}
+          </View>
+
+          <View style={styles.modalFooter}>
+            <CTAButton
+              title="Skip"
+              onPress={skipContactsOverlay}
+              style={styles.footerSkipButton}
+              textStyle={styles.footerSkipButtonText}
+            />
+            <CTAButton
+              title={contactMatchActionBusy ? 'Sending...' : `Send Selected (${selectedContactMatchCount})`}
+              onPress={() => sendSelectedContactRequests({ closeOverlay: true })}
+              variant="filled"
+              style={styles.footerSendButton}
+              disabled={contactMatchActionBusy || selectedContactMatchCount === 0}
+            />
+          </View>
         </View>
-
-        {contactsPermissionLoading ? (
-          <View style={styles.centerRow}>
-            <ActivityIndicator size="small" color={colors.text} />
-          </View>
-        ) : contactsPermissionStatus === 'denied' ? (
-          <>
-            <Text style={styles.emptyText}>
-              Contacts access is off. Open settings to find SideQuest profiles already in your address book.
-            </Text>
-            <View style={styles.contactActionBar}>
-              <SecondaryButton
-                title="Open Settings"
-                onPress={handleContactsButtonPress}
-                style={styles.contactCtaButton}
-              />
-            </View>
-          </>
-        ) : contactsPermissionStatus !== 'granted' ? (
-          <>
-            <Text style={styles.emptyText}>
-              Find friends already on SideQuest by matching verified phone numbers from your contacts. Phone numbers are never shown to other users.
-            </Text>
-            <View style={styles.contactActionBar}>
-              <CTAButton
-                title="Find Friends From Contacts"
-                onPress={handleContactsButtonPress}
-                variant="filled"
-                style={styles.contactCtaButton}
-              />
-            </View>
-          </>
-        ) : contactMatchesLoading && !contactMatchesLoaded ? (
-          <View style={styles.centerRow}>
-            <ActivityIndicator size="small" color={colors.text} />
-          </View>
-        ) : !contactMatches.length ? (
-          <>
-            <Text style={styles.emptyText}>No SideQuest profiles from your contacts were found yet.</Text>
-            <View style={styles.contactActionBar}>
-              <SecondaryButton
-                title="Refresh Contacts"
-                onPress={handleContactsButtonPress}
-                style={styles.contactCtaButton}
-                disabled={contactMatchActionBusy}
-              />
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.contactsHelperText}>
-              Matches start checked. Uncheck anyone you do not want to add, then send requests to the rest.
-            </Text>
-
-            <View style={styles.contactBulkActionRow}>
-              <SecondaryButton
-                title={toggleAllSelected ? 'Clear All' : 'Select All'}
-                onPress={() => {
-                  setContactMatchSelection(
-                    contactMatches.reduce((accumulator, item) => {
-                      if (item?.uid) {
-                        accumulator[item.uid] = !toggleAllSelected;
-                      }
-                      return accumulator;
-                    }, {})
-                  );
-                }}
-                style={styles.contactBulkButton}
-                disabled={contactMatchActionBusy}
-              />
-              <CTAButton
-                title={contactMatchActionBusy ? 'Sending...' : `Send Selected (${selectedContactMatchCount})`}
-                onPress={sendSelectedContactRequests}
-                variant="filled"
-                style={styles.contactBulkButton}
-                disabled={contactMatchActionBusy || selectedContactMatchCount === 0}
-              />
-            </View>
-
-            <View style={styles.stackSection}>
-              {contactMatches.map((item) => renderContactMatchRow(item))}
-            </View>
-          </>
-        )}
-      </View>
-    );
-  }, [
+      </SafeAreaView>
+    </Modal>
+  ), [
     colors.text,
     contactMatchActionBusy,
     contactMatches,
     contactMatchesLoading,
     contactMatchesLoaded,
-    contactsPermissionLoading,
-    contactsPermissionStatus,
-    formStyles.card,
-    handleContactsButtonPress,
+    contactsIntroVisible,
     renderContactMatchRow,
     selectedContactMatchCount,
     sendSelectedContactRequests,
+    skipContactsOverlay,
     styles,
   ]);
 
@@ -1228,6 +1293,7 @@ export default function FriendsTabScreen() {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
+      {renderContactsOverlay()}
       <Toast message={toastMessage} bottomOffset={spacing.xl} />
     </SafeAreaView>
   );
@@ -1327,21 +1393,11 @@ function createStyles(colors) {
     stackSection: {
       marginTop: spacing.sm,
     },
-    contactActionBar: {
-      marginTop: spacing.md,
+    contactsSection: {
+      marginBottom: spacing.xl,
     },
-    contactCtaButton: {
+    contactsEntryButton: {
       width: '100%',
-    },
-    contactBulkActionRow: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-      marginTop: spacing.md,
-      marginBottom: spacing.sm,
-    },
-    contactBulkButton: {
-      flex: 1,
-      minHeight: 46,
     },
     contactMatchRow: {
       flexDirection: 'row',
@@ -1351,17 +1407,11 @@ function createStyles(colors) {
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
-    contactCheckboxButton: {
-      width: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
+    contactSwitch: {
+      marginRight: 2,
     },
     contactMatchPressable: {
       flex: 1,
-    },
-    contactsHelperText: {
-      color: colors.textMuted,
-      lineHeight: 20,
     },
     personRow: {
       flexDirection: 'row',
@@ -1517,6 +1567,68 @@ function createStyles(colors) {
       color: colors.textMuted,
       marginTop: spacing.xs,
       lineHeight: 20,
+    },
+    footerSkipButton: {
+      minHeight: 54,
+      minWidth: 92,
+      paddingHorizontal: spacing.md,
+    },
+    footerSkipButtonText: {
+      ...textStyles.buttonSmall,
+    },
+    footerSendButton: {
+      flex: 1,
+    },
+    modalScreen: {
+      flex: 1,
+      backgroundColor: colors.surface,
+    },
+    modalCard: {
+      flex: 1,
+      width: '100%',
+      backgroundColor: colors.surface,
+      padding: spacing.xl,
+    },
+    modalHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    modalEyebrow: {
+      ...textStyles.sectionTitleSm,
+      color: colors.primary,
+      marginBottom: spacing.sm,
+    },
+    modalTitle: {
+      ...textStyles.title,
+      color: colors.text,
+      flex: 1,
+    },
+    modalBody: {
+      ...textStyles.body,
+      color: colors.textMuted,
+      marginTop: spacing.sm,
+    },
+    modalListWrap: {
+      flex: 1,
+      minHeight: 180,
+      marginTop: spacing.lg,
+    },
+    modalList: {
+      flex: 1,
+    },
+    modalListContent: {
+      paddingBottom: spacing.sm,
+    },
+    modalFooter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.lg,
+      paddingTop: spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
     },
     pressed: {
       opacity: 0.78,

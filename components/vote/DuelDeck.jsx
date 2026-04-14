@@ -377,8 +377,8 @@ function createStyles(colors) {
     actionSlot: {
       position: 'absolute',
       top: 18,
-      left: 18,
-      right: 18,
+      left: 12,
+      right: 12,
       zIndex: 10,
     },
     metaSlot: {
