@@ -1,38 +1,50 @@
 // components/ui/CTAButton.jsx
 // Call-to-action button (currently placed in bottombar container)
 import React, { useMemo } from 'react';
-import { Pressable, Text, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, StyleSheet, View } from 'react-native';
 import { usePalette } from '@/hooks/usePalette';
 import { spacing, radii, shadows } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
-export function CTAButton({ title, onPress, variant = 'primary', style, textStyle, disabled = false }) {
+export function CTAButton({
+  title,
+  onPress,
+  variant = 'primary',
+  style,
+  textStyle,
+  disabled = false,
+  loading = false,
+}) {
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isFilled = variant === 'filled';
+  const spinnerColor = isFilled ? colors.primaryTextOn : colors.primary;
 
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
+      disabled={disabled || loading}
       style={({ pressed }) => [
         styles.base,
         isFilled ? styles.filled : variant === 'primary' ? styles.primary : styles.secondary,
         disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
+        pressed && !(disabled || loading) && styles.pressed,
         style,
       ]}
     >
-      <Text
-        style={[
-          styles.text,
-          isFilled ? styles.textFilled : variant === 'primary' ? styles.textPrimary : styles.textSecondary,
-          disabled && styles.textDisabled,
-          textStyle,
-        ]}
-      >
-        {title}
-      </Text>
+      <View style={styles.content}>
+        {loading ? <ActivityIndicator size="small" color={spinnerColor} style={styles.spinner} /> : null}
+        <Text
+          style={[
+            styles.text,
+            isFilled ? styles.textFilled : variant === 'primary' ? styles.textPrimary : styles.textSecondary,
+            disabled && styles.textDisabled,
+            textStyle,
+          ]}
+        >
+          {title}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -94,6 +106,14 @@ function createStyles(colors) {
     },
     text: {
       ...textStyles.button,
+    },
+    content: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    spinner: {
+      marginRight: spacing.sm,
     },
     textPrimary: { color: colors.primary },
     textSecondary: { color: colors.text },

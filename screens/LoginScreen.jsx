@@ -1,36 +1,53 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
-import { View, TextInput, Text, StyleSheet, Alert, Pressable, Image, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import {
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import auth from '@react-native-firebase/auth';
 import CountryPicker, { DARK_THEME, DEFAULT_THEME } from 'react-native-country-picker-modal';
-
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useIsDarkMode, usePalette } from '@/hooks/usePalette';
-import BottomBar from '@/components/ui/BottomBar';
-import { CTAButton, OutlineIconButton } from '@/components/ui/Buttons';
-import { createFormStyles } from '@/components/ui/FormStyles';
-import { spacing, radii } from '@/theme/tokens';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CTAButton } from '@/components/ui/Buttons';
+import BottomBar from '@/components/ui/BottomBar';
+import { createFormStyles } from '@/components/ui/FormStyles';
+import { useIsDarkMode, usePalette } from '@/hooks/usePalette';
+import { radii, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
-
+const PHONE_DIGIT_MIN_LENGTH = 7;
+const CODE_LENGTH = 6;
 
 export default function LoginScreen() {
+  const [step, setStep] = useState('phone');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [isRegistering, setIsRegistering] = useState(true);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [smsCode, setSmsCode] = useState('');
   const [confirmation, setConfirmation] = useState(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const [isPhoneMode, setIsPhoneMode] = useState(true);
   const [countryCode, setCountryCode] = useState('US');
   const [callingCode, setCallingCode] = useState('1');
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [isConfirmingCode, setIsConfirmingCode] = useState(false);
+  const [isEmailLoading, setIsEmailLoading] = useState(false);
+  const codeInputRef = useRef(null);
+
   const colors = usePalette();
   const isDarkMode = useIsDarkMode();
   const countryPickerTheme = useMemo(() => (
@@ -40,7 +57,7 @@ export default function LoginScreen() {
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
 
   useEffect(() => {
-    if (cooldownSeconds <= 0) return;
+    if (cooldownSeconds <= 0) return undefined;
     const timer = setInterval(() => {
       setCooldownSeconds((prev) => {
         if (prev <= 1) {
@@ -69,293 +86,361 @@ export default function LoginScreen() {
     return () => unsubscribe();
   }, []);
 
-  const handleLogin = async () => {
-    try {
-      setErrorMsg('');
-      await auth().signInWithEmailAndPassword(email, password);
+  useEffect(() => {
+    if (step !== 'verify') {
+      return undefined;
+    }
 
-      const user = auth().currentUser;
-      if (user) {
-        const token = await user.getIdToken();
-        await AsyncStorage.setItem('user_token', token);
-        // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
-      }
-    } catch (err) {
-      setErrorMsg(err?.message || String(err));
+    const timer = setTimeout(() => {
+      codeInputRef.current?.focus();
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [step]);
+
+  const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
+  const hasValidPhoneNumber = normalizedPhoneNumber.length >= PHONE_DIGIT_MIN_LENGTH;
+  const hasCompleteCode = smsCode.length === CODE_LENGTH;
+  const hasEmailCredentials = email.trim().length > 0 && password.length > 0;
+  const isPrimaryLoading = step === 'phone'
+    ? isSendingSms
+    : step === 'verify'
+      ? isConfirmingCode
+      : isEmailLoading;
+
+  const resetPhoneVerification = ({ clearCooldown = false } = {}) => {
+    setConfirmation(null);
+    setSmsCode('');
+    if (clearCooldown) {
+      setCooldownSeconds(0);
     }
   };
 
-  const handleRegister = async () => {
-    try {
-      setErrorMsg('');
-      await auth().createUserWithEmailAndPassword(email, password);
-      console.log('Registered new user');
-    } catch (err) {
-      setErrorMsg(err?.message || String(err));
+  const requestPhoneVerification = async () => {
+    if (!hasValidPhoneNumber || isSendingSms) {
+      return;
     }
-  };
 
-  const handleSendSms = async () => {
     try {
       setErrorMsg('');
-      if (cooldownSeconds > 0) return;
-      const nationalDigits = phoneNumber.replace(/\D/g, '');
-      if (!nationalDigits) {
-        Alert.alert('Missing phone number', 'Please enter your phone number.');
-        return;
-      }
+      setIsSendingSms(true);
+      setSmsCode('');
 
       // This triggers app verification (silent APNs / reCAPTCHA) and sends the SMS.
-      const e164 = `+${callingCode}${nationalDigits}`;
-      setSmsCode('');
-      setConfirmation({ pending: true });
-      setCooldownSeconds(30);
+      const e164 = `+${callingCode}${normalizedPhoneNumber}`;
       const confirm = await auth().signInWithPhoneNumber(e164);
       setConfirmation(confirm);
+      setCooldownSeconds(30);
+      setStep('verify');
     } catch (err) {
       setConfirmation(null);
       setErrorMsg(err?.message || String(err));
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
+  const handleEmailLogin = async () => {
+    if (!hasEmailCredentials || isEmailLoading) {
+      return;
+    }
+
+    try {
+      setErrorMsg('');
+      setIsEmailLoading(true);
+      await auth().signInWithEmailAndPassword(email.trim(), password);
+
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('Email login succeeded, but we could not finish signing you in. Please try again.');
+      }
+
+      const token = await user.getIdToken();
+      await AsyncStorage.setItem('user_token', token);
+      // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
+    } catch (err) {
+      setErrorMsg(err?.message || String(err));
+    } finally {
+      setIsEmailLoading(false);
     }
   };
 
   const handleConfirmCode = async () => {
+    if (!hasCompleteCode || isConfirmingCode) {
+      return;
+    }
+
     try {
       setErrorMsg('');
+      setIsConfirmingCode(true);
       if (!confirmation || typeof confirmation.confirm !== 'function') {
-        Alert.alert('Starting verification', 'Please wait a moment for the code request to finish.');
-        return;
-      }
-      if (!smsCode) {
-        Alert.alert('Missing code', 'Please enter the 6-digit code you received.');
-        return;
+        throw new Error('We could not finish setting up phone verification. Please request a new text.');
       }
 
       await confirmation.confirm(smsCode);
 
       const user = auth().currentUser;
-      if (user) {
-        const token = await user.getIdToken();
-        await AsyncStorage.setItem('user_token', token);
-        // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
+      if (!user) {
+        throw new Error('Verification succeeded, but we could not finish signing you in. Please try again.');
       }
+
+      const token = await user.getIdToken();
+      await AsyncStorage.setItem('user_token', token);
+      // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
     } catch (err) {
       setErrorMsg(err?.message || String(err));
+    } finally {
+      setIsConfirmingCode(false);
     }
   };
 
-  const authTitle = isRegistering ? 'Sign Up' : 'Login';
-  const isConfirmationPending = isPhoneMode && confirmation && typeof confirmation.confirm !== 'function';
-  const isSmsCooldown = isPhoneMode && !confirmation && cooldownSeconds > 0;
-  const primaryAction = isPhoneMode
-    ? confirmation
-      ? handleConfirmCode
-      : handleSendSms
-    : isRegistering
-      ? handleRegister
-      : handleLogin;
-  const primaryLabel = isPhoneMode && confirmation ? 'Confirm code' : authTitle;
-  const primaryDisabled = isPhoneMode ? (isSmsCooldown || isConfirmationPending) : false;
-
-  const switchToPhone = () => {
+  const handleBackFromVerify = () => {
     setErrorMsg('');
-    setIsPhoneMode(true);
-    setConfirmation(null);
-    setSmsCode('');
+    resetPhoneVerification({ clearCooldown: true });
+    setStep('phone');
   };
 
-  const switchToEmail = () => {
+  const handleBackFromEmail = () => {
     setErrorMsg('');
-    setIsPhoneMode(false);
-    setConfirmation(null);
-    setSmsCode('');
+    setStep('phone');
   };
 
-  const toggleAuthMode = () => {
-    setErrorMsg('');
-    setIsRegistering(!isRegistering);
+  const renderHeader = () => (
+    <View style={styles.header}>
+      {step === 'phone' ? (
+        <View style={styles.backButtonPlaceholder} />
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          onPress={step === 'verify' ? handleBackFromVerify : handleBackFromEmail}
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+        >
+          <FontAwesome name="arrow-left" size={16} color="#FFFFFF" />
+        </Pressable>
+      )}
+    </View>
+  );
+
+  const renderPhoneStep = () => (
+    <View style={styles.section}>
+      <Text style={styles.title}>What&apos;s your phone number?</Text>
+      <View>
+        <View style={styles.phoneRow}>
+          <Pressable
+            onPress={() => setCountryPickerVisible(true)}
+            style={styles.countryButton}
+          >
+            <CountryPicker
+              withFilter
+              withFlag
+              withCallingCode
+              withCallingCodeButton
+              countryCode={countryCode}
+              theme={countryPickerTheme}
+              visible={countryPickerVisible}
+              onClose={() => setCountryPickerVisible(false)}
+              onSelect={(country) => {
+                setCountryCode(country.cca2);
+                const nextCallingCode = country.callingCode?.[0];
+                if (nextCallingCode) {
+                  setCallingCode(nextCallingCode);
+                }
+                setCountryPickerVisible(false);
+              }}
+            />
+          </Pressable>
+          <TextInput
+            testID="phone-number-input"
+            placeholder="Phone number"
+            value={phoneNumber}
+            onChangeText={(text) => {
+              setPhoneNumber(text.replace(/\D/g, ''));
+              if (errorMsg) {
+                setErrorMsg('');
+              }
+            }}
+            autoCapitalize="none"
+            keyboardType="phone-pad"
+            style={[formStyles.input, styles.phoneInput]}
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.primary}
+            cursorColor={colors.text}
+          />
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setErrorMsg('');
+            setStep('email');
+          }}
+          style={styles.emailLink}
+        >
+          <Text style={styles.emailLinkText}>I need to log in with email</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const renderVerifyStep = () => {
+    const codeDigits = Array.from({ length: CODE_LENGTH }, (_, index) => smsCode[index] ?? '');
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.title}>Verify your phone number</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => codeInputRef.current?.focus()}
+          style={styles.codeSlots}
+        >
+          {codeDigits.map((digit, index) => {
+            const isFilled = Boolean(digit);
+            const isActive = smsCode.length < CODE_LENGTH && index === smsCode.length;
+            return (
+              <View
+                key={`code-slot-${index}`}
+                style={[
+                  styles.codeSlot,
+                  index < CODE_LENGTH - 1 && styles.codeSlotGap,
+                  isFilled && styles.codeSlotFilled,
+                  isActive && styles.codeSlotActive,
+                ]}
+              >
+                <Text style={[styles.codeDigit, !isFilled && styles.codePlaceholder]}>
+                  {isFilled ? digit : '•'}
+                </Text>
+              </View>
+            );
+          })}
+          <TextInput
+            ref={codeInputRef}
+            testID="sms-code-input"
+            value={smsCode}
+            onChangeText={(text) => {
+              setSmsCode(text.replace(/\D/g, '').slice(0, CODE_LENGTH));
+              if (errorMsg) {
+                setErrorMsg('');
+              }
+            }}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+            maxLength={CODE_LENGTH}
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
+            style={styles.hiddenCodeInput}
+          />
+        </Pressable>
+        {cooldownSeconds <= 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSendingSms}
+            onPress={requestPhoneVerification}
+            style={styles.resendLink}
+          >
+            <Text style={styles.resendText}>Resend code</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.resendPlaceholder} />
+        )}
+      </View>
+    );
   };
+
+  const renderEmailStep = () => (
+    <View style={styles.section}>
+      <Text style={styles.title}>Log in with email</Text>
+      <View>
+        <TextInput
+          testID="email-input"
+          placeholder="Email"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            if (errorMsg) {
+              setErrorMsg('');
+            }
+          }}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          style={[formStyles.input, styles.emailField]}
+          placeholderTextColor={colors.textMuted}
+          selectionColor={colors.primary}
+          cursorColor={colors.text}
+        />
+        <TextInput
+          testID="password-input"
+          placeholder="Password"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            if (errorMsg) {
+              setErrorMsg('');
+            }
+          }}
+          secureTextEntry
+          style={formStyles.input}
+          placeholderTextColor={colors.textMuted}
+          selectionColor={colors.primary}
+          cursorColor={colors.text}
+        />
+      </View>
+    </View>
+  );
+
+  const primaryLabel = step === 'phone' ? 'Send verification text' : step === 'verify' ? 'Continue' : 'Log In';
+  const primaryAction = step === 'phone' ? requestPhoneVerification : step === 'verify' ? handleConfirmCode : handleEmailLogin;
+  const primaryDisabled = step === 'phone'
+    ? !hasValidPhoneNumber || isSendingSms
+    : step === 'verify'
+      ? !hasCompleteCode || isConfirmingCode || isSendingSms
+      : !hasEmailCredentials || isEmailLoading;
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
-        <View style={styles.content}>
-        <View style={styles.brandBlock}>
-          <Image source={require('../assets/images/icon.png')} style={styles.logo} />
-          <Text style={styles.brand}>SideQuest</Text>
-        </View>
-
-        <Text style={styles.title}>{authTitle}</Text>
-
-        {isOffline ? (
-          <View style={styles.offlineBanner}>
-            <Text style={styles.offlineBannerText}>
-              No network connection. Reconnect to continue.
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={[formStyles.card, styles.card]}>
-          {!isPhoneMode ? (
-            <>
-              <TextInput
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                style={[formStyles.input, styles.field]}
-                placeholderTextColor={colors.textMuted}
-                selectionColor={colors.primary}
-                cursorColor={colors.text}
-              />
-              <TextInput
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                style={[formStyles.input, styles.field]}
-                placeholderTextColor={colors.textMuted}
-                selectionColor={colors.primary}
-                cursorColor={colors.text}
-              />
-            </>
-          ) : (
-            <>
-              <View style={styles.field}>
-                <View style={styles.phoneRow}>
-                  <Pressable
-                    onPress={() => setCountryPickerVisible(true)}
-                    style={styles.countryButton}
-                  >
-                    <CountryPicker
-                      withFilter
-                      withFlag
-                      withCallingCode
-                      withCallingCodeButton
-                      countryCode={countryCode}
-                      theme={countryPickerTheme}
-                      visible={countryPickerVisible}
-                      onClose={() => setCountryPickerVisible(false)}
-                      onSelect={(country) => {
-                        setCountryCode(country.cca2);
-                        const nextCallingCode = country.callingCode?.[0];
-                        if (nextCallingCode) {
-                          setCallingCode(nextCallingCode);
-                        }
-                        setCountryPickerVisible(false);
-                      }}
-                    />
-                  </Pressable>
-                  <TextInput
-                    placeholder="Phone number"
-                    value={phoneNumber}
-                    onChangeText={(text) => setPhoneNumber(text.replace(/\D/g, ''))}
-                    autoCapitalize="none"
-                    keyboardType="phone-pad"
-                    style={[formStyles.input, styles.phoneInput]}
-                    placeholderTextColor={colors.textMuted}
-                    selectionColor={colors.primary}
-                    cursorColor={colors.text}
-                  />
-                </View>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardWrap}
+        >
+          {renderHeader()}
+          <View style={styles.content}>
+            <View style={styles.brandBlock}>
+              <View style={styles.logoWrap}>
+                <Image source={require('../assets/images/icon.png')} style={styles.logo} />
               </View>
+              <Text style={styles.brand}>SideQuest</Text>
+            </View>
 
-              {confirmation ? (
-                <>
-                  <TextInput
-                    placeholder="6-digit code"
-                    value={smsCode}
-                    onChangeText={setSmsCode}
-                    keyboardType="number-pad"
-                    style={[formStyles.input, styles.field]}
-                    placeholderTextColor={colors.textMuted}
-                    selectionColor={colors.primary}
-                    cursorColor={colors.text}
-                  />
-                  {cooldownSeconds > 0 ? (
-                    <Text style={styles.cooldownText}>
-                      Resend available in {cooldownSeconds}s
-                    </Text>
-                  ) : (
-                    <Pressable onPress={handleSendSms} style={styles.resendLink}>
-                      <Text style={styles.resendText}>Resend code</Text>
-                    </Pressable>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Text style={formStyles.helperText}>
-                    We will text a 6-digit code to finish {authTitle.toLowerCase()}.
-                  </Text>
-                  {cooldownSeconds > 0 ? (
-                    <Text style={styles.cooldownText}>
-                      Request another code in {cooldownSeconds}s
-                    </Text>
-                  ) : null}
-                </>
-              )}
-            </>
-          )}
-        </View>
+            {isOffline ? (
+              <View style={styles.offlineBanner}>
+                <Text style={styles.offlineBannerText}>
+                  No network connection. Reconnect to continue.
+                </Text>
+              </View>
+            ) : null}
 
-        <View style={styles.toggleRow}>
-          <Text style={styles.toggleText}>
-            {isRegistering ? 'Already have an account?' : 'No account yet?'}
-          </Text>
-          <Pressable onPress={toggleAuthMode}>
-            <Text style={styles.toggleLink}>
-              {isRegistering ? 'Log in' : 'Sign up'}
-            </Text>
-          </Pressable>
-        </View>
+            {step === 'phone' ? renderPhoneStep() : null}
+            {step === 'verify' ? renderVerifyStep() : null}
+            {step === 'email' ? renderEmailStep() : null}
 
-        <BottomBar style={styles.actionBar}>
-          <View style={styles.actionInner}>
-            <CTAButton
-              title={primaryLabel}
-              onPress={primaryAction}
-              variant="filled"
-              style={styles.primaryButton}
-              disabled={primaryDisabled}
-            />
+            {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
           </View>
-        </BottomBar>
 
-        <View style={styles.altMethods}>
-          <Text style={styles.altTitle}>Other ways to continue</Text>
-          <View style={styles.altRow}>
-            <OutlineIconButton
-              title="Phone"
-              onPress={switchToPhone}
-              icon={
-                <FontAwesome
-                  name="mobile"
-                  size={16}
-                  color={isPhoneMode ? colors.primary : colors.textMuted}
-                />
-              }
-              style={[styles.methodButton, isPhoneMode && styles.methodButtonActive]}
-              textStyle={isPhoneMode ? styles.methodTextActive : null}
-            />
-            <OutlineIconButton
-              title="Email"
-              onPress={switchToEmail}
-              icon={
-                <FontAwesome
-                  name="envelope"
-                  size={14}
-                  color={!isPhoneMode ? colors.primary : colors.textMuted}
-                />
-              }
-              style={[styles.methodButton, styles.methodButtonLast, !isPhoneMode && styles.methodButtonActive]}
-              textStyle={!isPhoneMode ? styles.methodTextActive : null}
-            />
-          </View>
-        </View>
-
-        {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
-        </View>
-      </View>
+          <BottomBar style={styles.actionBar}>
+            <View style={styles.actionInner}>
+              <CTAButton
+                title={primaryLabel}
+                onPress={primaryAction}
+                variant="filled"
+                style={styles.primaryButton}
+                disabled={primaryDisabled}
+                loading={isPrimaryLoading}
+              />
+            </View>
+          </BottomBar>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </TouchableWithoutFeedback>
   );
 }
@@ -366,61 +451,65 @@ function createStyles(colors) {
       flex: 1,
       backgroundColor: colors.surface,
     },
+    keyboardWrap: {
+      flex: 1,
+    },
+    header: {
+      height: 68,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg,
+    },
+    backButtonPlaceholder: {
+      width: 42,
+      height: 42,
+    },
+    backButton: {
+      width: 42,
+      height: 42,
+      borderRadius: radii.round,
+      backgroundColor: 'rgba(26, 26, 26, 0.88)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    backButtonPressed: {
+      opacity: 0.92,
+      transform: [{ scale: 0.97 }],
+    },
     content: {
       flex: 1,
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing['2xl'],
       width: '100%',
       maxWidth: 420,
       alignSelf: 'center',
+      paddingHorizontal: spacing.xl,
+      paddingBottom: spacing.xl,
       justifyContent: 'center',
     },
     brandBlock: {
       alignItems: 'center',
-      marginBottom: spacing.xl,
+      marginBottom: spacing['2xl'],
+    },
+    logoWrap: {
+      marginBottom: spacing.sm,
+      borderRadius: 28,
+      overflow: 'hidden',
     },
     logo: {
-      width: 80,
-      height: 80,
-      borderRadius: 24,
-      marginBottom: spacing.sm,
+      width: 84,
+      height: 84,
+      borderRadius: 28,
     },
     brand: {
       ...textStyles.brand,
       color: colors.primary,
     },
+    section: {
+      width: '100%',
+    },
     title: {
-      ...textStyles.pageTitle,
+      ...textStyles.pageTitleCompact,
       color: colors.text,
       textAlign: 'center',
-      marginBottom: spacing.lg,
-    },
-    subtitle: {
-      ...textStyles.body,
-      color: colors.textMuted,
-      textAlign: 'center',
-      marginTop: spacing.xs,
-      marginBottom: spacing.lg,
-    },
-    offlineBanner: {
-      marginBottom: spacing.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radii.md,
-      borderWidth: 1,
-      borderColor: colors.warning,
-      backgroundColor: colors.surface,
-    },
-    offlineBannerText: {
-      ...textStyles.bodySmallStrong,
-      color: colors.warning,
-      textAlign: 'center',
-    },
-    card: {
-      marginBottom: spacing.md,
-    },
-    field: {
-      marginBottom: spacing.md,
+      marginBottom: spacing.xl,
     },
     phoneRow: {
       flexDirection: 'row',
@@ -440,41 +529,100 @@ function createStyles(colors) {
     phoneInput: {
       flex: 1,
     },
-    resendLink: {
-      marginTop: spacing.xs,
-      alignSelf: 'flex-start',
+    emailLink: {
+      alignSelf: 'center',
+      marginTop: spacing.sm,
+      paddingVertical: spacing.xs,
     },
-    resendText: {
-      ...textStyles.buttonSmall,
-      color: colors.primary,
+    emailLinkText: {
+      ...textStyles.body2xsBold,
+      color: isLightColor(colors.surface) ? colors.textMuted : '#FFFFFF',
+      letterSpacing: 0.2,
     },
-    cooldownText: {
-      ...textStyles.bodyXsStrong,
-      color: colors.textMuted,
-      marginTop: spacing.xs,
-    },
-    toggleRow: {
+    codeSlots: {
+      position: 'relative',
       flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    codeSlot: {
+      flex: 1,
+      minHeight: 64,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: spacing.sm,
+    },
+    codeSlotGap: {
+      marginRight: spacing.sm,
+    },
+    codeSlotFilled: {
+      borderColor: colors.primary,
+    },
+    codeSlotActive: {
+      borderColor: colors.primary,
+      shadowColor: colors.primary,
+      shadowOpacity: 0.16,
+      shadowOffset: { width: 0, height: 0 },
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    codeDigit: {
+      ...textStyles.title,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    codePlaceholder: {
+      color: colors.textMuted,
+    },
+    hiddenCodeInput: {
+      position: 'absolute',
+      opacity: 0.01,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    },
+    resendLink: {
+      alignSelf: 'center',
+      marginTop: spacing.lg,
+      paddingVertical: spacing.xs,
+    },
+    resendText: {
+      ...textStyles.body2xsBold,
+      color: isLightColor(colors.surface) ? colors.textMuted : '#FFFFFF',
+      letterSpacing: 0.2,
+    },
+    resendPlaceholder: {
+      minHeight: 26,
+      marginTop: spacing.lg,
+    },
+    emailField: {
       marginBottom: spacing.md,
     },
-    toggleText: {
-      color: colors.textMuted,
-      marginRight: spacing.xs,
+    offlineBanner: {
+      marginBottom: spacing.lg,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.warning,
+      backgroundColor: colors.bg,
     },
-    toggleLink: {
-      ...textStyles.buttonSmall,
-      color: colors.primary,
+    offlineBannerText: {
+      ...textStyles.bodySmallStrong,
+      color: colors.warning,
+      textAlign: 'center',
     },
     actionBar: {
-      marginTop: spacing.sm,
       borderRadius: radii.lg,
       borderTopWidth: 0,
       borderWidth: 1,
       borderColor: colors.barBorder,
       backgroundColor: colors.bg,
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.lg,
     },
     actionInner: {
       width: '100%',
@@ -482,38 +630,36 @@ function createStyles(colors) {
     primaryButton: {
       width: '100%',
     },
-    altMethods: {
-      marginTop: spacing.lg,
-    },
-    altTitle: {
-      ...textStyles.sectionTitleSm,
-      color: colors.textMuted,
-      letterSpacing: 1.1,
-      marginBottom: spacing.sm,
-      textAlign: 'center',
-    },
-    altRow: {
-      flexDirection: 'row',
-    },
-    methodButton: {
-      flex: 1,
-      marginRight: spacing.sm,
-    },
-    methodButtonLast: {
-      marginRight: 0,
-    },
-    methodButtonActive: {
-      borderColor: colors.primary,
-      backgroundColor: colors.surface,
-    },
-    methodTextActive: {
-      color: colors.primary,
-    },
     error: {
       ...textStyles.bodySmallStrong,
       color: colors.danger,
-      marginTop: spacing.md,
+      marginTop: spacing.lg,
       textAlign: 'center',
     },
   });
+}
+
+function isLightColor(value) {
+  if (typeof value !== 'string' || !value.startsWith('#')) {
+    return false;
+  }
+
+  const hex = value.length === 4
+    ? value.slice(1).split('').map((digit) => `${digit}${digit}`).join('')
+    : value.slice(1);
+
+  if (hex.length !== 6) {
+    return false;
+  }
+
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+
+  if ([red, green, blue].some((channel) => Number.isNaN(channel))) {
+    return false;
+  }
+
+  const luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue);
+  return luminance > 170;
 }
