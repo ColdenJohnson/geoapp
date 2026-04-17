@@ -110,7 +110,7 @@ describe('LoginScreen', () => {
     expect(queryByText('Verify your phone number')).toBeNull();
   });
 
-  it('confirms the code and stores the auth token', async () => {
+  it('auto-confirms the code and stores the auth token once 6 digits are entered', async () => {
     auth().signInWithPhoneNumber.mockResolvedValue(mockConfirmation);
     mockConfirmation.confirm.mockResolvedValue({});
     auth().currentUser.getIdToken.mockResolvedValue('token-abc');
@@ -125,11 +125,9 @@ describe('LoginScreen', () => {
     await waitFor(() => expect(getByText('Verify your phone number')).toBeTruthy());
 
     fireEvent.changeText(getByTestId('sms-code-input'), '12345');
-    fireEvent.press(getByText('Continue').parent);
     expect(mockConfirmation.confirm).not.toHaveBeenCalled();
 
     fireEvent.changeText(getByTestId('sms-code-input'), '123456');
-    fireEvent.press(getByText('Continue').parent);
 
     await waitFor(() => expect(mockConfirmation.confirm).toHaveBeenCalledWith('123456'));
     expect(auth().currentUser.getIdToken).toHaveBeenCalled();

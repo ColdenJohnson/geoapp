@@ -47,6 +47,7 @@ export default function LoginScreen() {
   const [isConfirmingCode, setIsConfirmingCode] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
   const codeInputRef = useRef(null);
+  const lastAutoSubmittedCodeRef = useRef('');
 
   const colors = usePalette();
   const isDarkMode = useIsDarkMode();
@@ -98,6 +99,12 @@ export default function LoginScreen() {
     return () => clearTimeout(timer);
   }, [step]);
 
+  useEffect(() => {
+    if (smsCode.length < CODE_LENGTH) {
+      lastAutoSubmittedCodeRef.current = '';
+    }
+  }, [smsCode]);
+
   const normalizedPhoneNumber = phoneNumber.replace(/\D/g, '');
   const hasValidPhoneNumber = normalizedPhoneNumber.length >= PHONE_DIGIT_MIN_LENGTH;
   const hasCompleteCode = smsCode.length === CODE_LENGTH;
@@ -111,6 +118,7 @@ export default function LoginScreen() {
   const resetPhoneVerification = ({ clearCooldown = false } = {}) => {
     setConfirmation(null);
     setSmsCode('');
+    lastAutoSubmittedCodeRef.current = '';
     if (clearCooldown) {
       setCooldownSeconds(0);
     }
@@ -204,6 +212,18 @@ export default function LoginScreen() {
     setErrorMsg('');
     setStep('phone');
   };
+
+  useEffect(() => {
+    if (step !== 'verify' || smsCode.length !== CODE_LENGTH || isConfirmingCode) {
+      return;
+    }
+    if (lastAutoSubmittedCodeRef.current === smsCode) {
+      return;
+    }
+
+    lastAutoSubmittedCodeRef.current = smsCode;
+    handleConfirmCode();
+  }, [handleConfirmCode, isConfirmingCode, smsCode, step]);
 
   const renderHeader = () => (
     <View style={styles.header}>
