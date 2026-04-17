@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import auth from '@react-native-firebase/auth';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import CountryPicker, { DARK_THEME, DEFAULT_THEME } from 'react-native-country-picker-modal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
@@ -46,6 +48,8 @@ export default function LoginScreen() {
   const [isSendingSms, setIsSendingSms] = useState(false);
   const [isConfirmingCode, setIsConfirmingCode] = useState(false);
   const [isEmailLoading, setIsEmailLoading] = useState(false);
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [isAppleAuthAvailable, setIsAppleAuthAvailable] = useState(false);
   const codeInputRef = useRef(null);
   const lastAutoSubmittedCodeRef = useRef('');
 
@@ -88,6 +92,32 @@ export default function LoginScreen() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (Platform.OS !== 'ios') {
+      setIsAppleAuthAvailable(false);
+      return undefined;
+    }
+
+    AppleAuthentication.isAvailableAsync()
+      .then((available) => {
+        if (!cancelled) {
+          setIsAppleAuthAvailable(Boolean(available));
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setIsAppleAuthAvailable(false);
+        }
+        console.warn('Failed to determine Apple authentication availability', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (step !== 'verify') {
       return undefined;
     }
@@ -124,6 +154,16 @@ export default function LoginScreen() {
     }
   };
 
+  const persistCurrentUserToken = async (missingUserMessage) => {
+    const user = auth().currentUser;
+    if (!user) {
+      throw new Error(missingUserMessage);
+    }
+
+    const token = await user.getIdToken();
+    await AsyncStorage.setItem('user_token', token);
+  };
+
   const requestPhoneVerification = async () => {
     if (!hasValidPhoneNumber || isSendingSms) {
       return;
@@ -157,14 +197,7 @@ export default function LoginScreen() {
       setErrorMsg('');
       setIsEmailLoading(true);
       await auth().signInWithEmailAndPassword(email.trim(), password);
-
-      const user = auth().currentUser;
-      if (!user) {
-        throw new Error('Email login succeeded, but we could not finish signing you in. Please try again.');
-      }
-
-      const token = await user.getIdToken();
-      await AsyncStorage.setItem('user_token', token);
+      await persistCurrentUserToken('Email login succeeded, but we could not finish signing you in. Please try again.');
       // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
     } catch (err) {
       setErrorMsg(err?.message || String(err));
@@ -186,14 +219,7 @@ export default function LoginScreen() {
       }
 
       await confirmation.confirm(smsCode);
-
-      const user = auth().currentUser;
-      if (!user) {
-        throw new Error('Verification succeeded, but we could not finish signing you in. Please try again.');
-      }
-
-      const token = await user.getIdToken();
-      await AsyncStorage.setItem('user_token', token);
+      await persistCurrentUserToken('Verification succeeded, but we could not finish signing you in. Please try again.');
       // AuthContext is sourced from Firebase listeners; avoid writing a partial user object here.
     } catch (err) {
       setErrorMsg(err?.message || String(err));
@@ -211,6 +237,51 @@ export default function LoginScreen() {
   const handleBackFromEmail = () => {
     setErrorMsg('');
     setStep('phone');
+  };
+
+  const handleAppleLogin = async () => {
+    if (Platform.OS !== 'ios' || !isAppleAuthAvailable || isAppleLoading) {
+      return;
+    }
+
+    if (isOffline) {
+      setErrorMsg('No network connection. Reconnect to continue.');
+      return;
+    }
+
+    try {
+      setErrorMsg('');
+      setIsAppleLoading(true);
+
+      const rawNonce = Crypto.randomUUID();
+      const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+      const appleCredential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+
+      if (!appleCredential?.identityToken) {
+        throw new Error('Apple sign-in did not return an identity token. Please try again.');
+      }
+
+      const firebaseCredential = auth.AppleAuthProvider.credential(
+        appleCredential.identityToken,
+        rawNonce,
+      );
+
+      await auth().signInWithCredential(firebaseCredential);
+      await persistCurrentUserToken('Apple sign-in succeeded, but we could not finish signing you in. Please try again.');
+    } catch (err) {
+      if (err?.code === 'ERR_REQUEST_CANCELED') {
+        return;
+      }
+      setErrorMsg(err?.message || String(err));
+    } finally {
+      setIsAppleLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -288,6 +359,29 @@ export default function LoginScreen() {
             cursorColor={colors.text}
           />
         </View>
+        {isAppleAuthAvailable ? (
+          <View style={styles.appleAuthBlock}>
+            <Text style={styles.altAuthLabel}>or</Text>
+            <View
+              pointerEvents={isAppleLoading || isOffline ? 'none' : 'auto'}
+              style={[
+                styles.appleButtonWrap,
+                (isAppleLoading || isOffline) && styles.appleButtonWrapDisabled,
+              ]}
+            >
+              <AppleAuthentication.AppleAuthenticationButton
+                testID="apple-sign-in-button"
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={isDarkMode
+                  ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                  : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={radii.pill}
+                style={styles.appleButton}
+                onPress={handleAppleLogin}
+              />
+            </View>
+          </View>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           onPress={() => {
@@ -553,6 +647,28 @@ function createStyles(colors) {
       alignSelf: 'center',
       marginTop: spacing.sm,
       paddingVertical: spacing.xs,
+    },
+    appleAuthBlock: {
+      marginTop: spacing.lg,
+      alignItems: 'center',
+    },
+    altAuthLabel: {
+      ...textStyles.body2xsBold,
+      color: colors.textMuted,
+      marginBottom: spacing.sm,
+      letterSpacing: 0.2,
+      textTransform: 'uppercase',
+    },
+    appleButtonWrap: {
+      width: '100%',
+      height: 52,
+    },
+    appleButtonWrapDisabled: {
+      opacity: 0.55,
+    },
+    appleButton: {
+      width: '100%',
+      height: '100%',
     },
     emailLinkText: {
       ...textStyles.body2xsBold,

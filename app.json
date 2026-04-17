@@ -10,6 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "usesAppleSignIn": true,
       "bundleIdentifier": "com.coldenjohnson.geode",
       "googleServicesFile": "./GoogleService-Info.plist",
       "associatedDomains": ["applinks:geode-backend-834952308922.us-central1.run.app"],
@@ -19,6 +20,7 @@
         "NSPhotoLibraryAddUsageDescription": "SideQuest can save photos you capture back to your library if you choose.",
         "NSLocationWhenInUseUsageDescription": "SideQuest uses your location to show nearby photo challenges and enable on‑site submissions.",
         "NSContactsUsageDescription": "SideQuest uses your contacts to find friends already on the app. Your phone number is never shown to other users.",
+        "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSHumanReadableCopyright": "Copyright © 2025 Colden Johnson. All rights reserved."
       }
@@ -88,6 +90,7 @@
         }
       ],
       "react-native-vision-camera",
+      "expo-apple-authentication",
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       [

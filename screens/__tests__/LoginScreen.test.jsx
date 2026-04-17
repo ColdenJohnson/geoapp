@@ -1,20 +1,28 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import LoginScreen from '@/screens/LoginScreen';
-import { AuthContext } from '@/hooks/AuthContext';
 
 const mockConfirmation = {
   confirm: jest.fn(),
 };
 
+const mockAppleCredentialFactory = jest.fn((token, secret) => ({
+  providerId: 'apple.com',
+  token,
+  secret,
+}));
+
 const mockAuthInstance = {
   signInWithEmailAndPassword: jest.fn(),
+  signInWithCredential: jest.fn(),
   signInWithPhoneNumber: jest.fn(),
   currentUser: { getIdToken: jest.fn(() => Promise.resolve('token-123')) },
 };
 
 jest.mock('@react-native-firebase/auth', () => {
   const mock = jest.fn(() => mockAuthInstance);
+  mock.AppleAuthProvider = {
+    credential: mockAppleCredentialFactory,
+  };
   return mock;
 });
 
@@ -38,9 +46,53 @@ jest.mock('react-native-country-picker-modal', () => {
   };
 });
 
+const mockAppleSignInAsync = jest.fn();
+const mockAppleIsAvailableAsync = jest.fn(() => Promise.resolve(true));
+
+jest.mock('expo-apple-authentication', () => {
+  const React = require('react');
+  const { Pressable, Text } = require('react-native');
+
+  return {
+    __esModule: true,
+    isAvailableAsync: mockAppleIsAvailableAsync,
+    signInAsync: mockAppleSignInAsync,
+    AppleAuthenticationScope: {
+      FULL_NAME: 'FULL_NAME',
+      EMAIL: 'EMAIL',
+    },
+    AppleAuthenticationButtonType: {
+      SIGN_IN: 'SIGN_IN',
+    },
+    AppleAuthenticationButtonStyle: {
+      BLACK: 'BLACK',
+      WHITE: 'WHITE',
+    },
+    AppleAuthenticationButton: ({ onPress, testID }) => (
+      <Pressable onPress={onPress} testID={testID}>
+        <Text>Sign in with Apple</Text>
+      </Pressable>
+    ),
+  };
+}, { virtual: true });
+
+const mockDigestStringAsync = jest.fn(() => Promise.resolve('hashed-apple-nonce'));
+const mockRandomUUID = jest.fn(() => 'raw-apple-nonce');
+
+jest.mock('expo-crypto', () => ({
+  __esModule: true,
+  digestStringAsync: mockDigestStringAsync,
+  randomUUID: mockRandomUUID,
+  CryptoDigestAlgorithm: {
+    SHA256: 'SHA-256',
+  },
+}), { virtual: true });
+
 const auth = require('@react-native-firebase/auth');
 const AsyncStorage = require('@react-native-async-storage/async-storage');
 const NetInfo = require('@react-native-community/netinfo');
+const LoginScreen = require('@/screens/LoginScreen').default;
+const { AuthContext } = require('@/hooks/AuthContext');
 
 function renderWithContext(ui, contextOverrides = {}) {
   const defaultValue = {
@@ -67,12 +119,20 @@ describe('LoginScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockConfirmation.confirm.mockReset();
+    mockAppleCredentialFactory.mockClear();
     auth().signInWithEmailAndPassword.mockReset();
+    auth().signInWithCredential.mockReset();
     auth().signInWithPhoneNumber.mockReset();
     auth().currentUser.getIdToken.mockReset();
     auth().currentUser.getIdToken.mockResolvedValue('token-123');
     NetInfo.fetch.mockResolvedValue({ isConnected: true, isInternetReachable: true });
     NetInfo.addEventListener.mockImplementation(() => jest.fn());
+    mockAppleIsAvailableAsync.mockResolvedValue(true);
+    mockAppleSignInAsync.mockReset();
+    mockDigestStringAsync.mockReset();
+    mockDigestStringAsync.mockResolvedValue('hashed-apple-nonce');
+    mockRandomUUID.mockReset();
+    mockRandomUUID.mockReturnValue('raw-apple-nonce');
   });
 
   it('starts on phone entry and only advances after a successful SMS request', async () => {
@@ -151,6 +211,24 @@ describe('LoginScreen', () => {
       expect(auth().signInWithEmailAndPassword).toHaveBeenCalledWith('user@example.com', 'secret')
     );
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('user_token', 'token-email');
+  });
+
+  it('supports Apple sign-in on the phone entry screen', async () => {
+    mockAppleSignInAsync.mockResolvedValue({ identityToken: 'apple-id-token' });
+    auth().signInWithCredential.mockResolvedValue({});
+    auth().currentUser.getIdToken.mockResolvedValue('token-apple');
+
+    const { findByTestId } = renderWithContext(<LoginScreen />);
+
+    const appleButton = await findByTestId('apple-sign-in-button');
+    fireEvent.press(appleButton);
+
+    await waitFor(() =>
+      expect(mockDigestStringAsync).toHaveBeenCalledWith('SHA-256', 'raw-apple-nonce')
+    );
+    expect(auth.AppleAuthProvider.credential).toHaveBeenCalledWith('apple-id-token', 'raw-apple-nonce');
+    await waitFor(() => expect(auth().signInWithCredential).toHaveBeenCalled());
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('user_token', 'token-apple');
   });
 
   it('shows an offline banner when network connectivity is unavailable', async () => {
