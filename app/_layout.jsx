@@ -12,11 +12,19 @@ import { usePalette } from '@/hooks/usePalette';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeUploadQueue } from '@/lib/uploadQueue';
+import { AchievementCelebrationModal } from '@/components/ui/AchievementCelebrationModal';
 
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const colors = usePalette();
-  const { user, profile, loadingAuth, loadingProfile } = useContext(AuthContext);
+  const {
+    user,
+    profile,
+    loadingAuth,
+    loadingProfile,
+    achievementCelebration,
+    dismissAchievementCelebration,
+  } = useContext(AuthContext);
   usePushNotifications(user);
 
   const navigationTheme = useMemo(() => {
@@ -81,6 +89,12 @@ function RootLayoutContent() {
             </Stack>
             {shouldShieldAuthedApp ? <View pointerEvents="auto" style={[styles.authedShield, { backgroundColor: colors.surface }]} /> : null}
             {shouldShowCreateUsernameGate ? <View style={styles.gateWrap}><CreateUsernameScreen /></View> : null}
+            <AchievementCelebrationModal
+              achievement={achievementCelebration}
+              colors={colors}
+              visible={!!achievementCelebration}
+              onClose={dismissAchievementCelebration}
+            />
           </View>
         ) : (
           <LoginScreen />

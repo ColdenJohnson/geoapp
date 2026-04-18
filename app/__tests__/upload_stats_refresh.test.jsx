@@ -2,28 +2,31 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import Upload from '@/app/upload';
+import { AuthContext } from '@/hooks/AuthContext';
 
-const mockInvalidateStats = jest.fn();
+const mockApplyUploadResult = jest.fn();
 
 jest.mock('@/lib/promiseStore', () => ({
   resolveUpload: jest.fn(),
   resolveUploadSubmit: jest.fn(),
 }));
 
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(async () => null),
+  setItem: jest.fn(async () => null),
+  removeItem: jest.fn(async () => null),
+}));
+
+jest.mock('@react-native-firebase/auth', () => jest.fn(() => ({
+  currentUser: null,
+  onAuthStateChanged: jest.fn(() => jest.fn()),
+  onIdTokenChanged: jest.fn(() => jest.fn()),
+})));
+
 jest.mock('@/lib/uploadQueue', () => ({
   enqueueAddPhotoUpload: jest.fn(),
   waitForUploadQueueItem: jest.fn(),
 }));
-
-jest.mock('@/hooks/AuthContext', () => {
-  const React = require('react');
-  return {
-    AuthContext: React.createContext({
-      profile: { handle: 'tester' },
-      invalidateStats: mockInvalidateStats,
-    }),
-  };
-});
 
 jest.mock('expo-location', () => ({
   getForegroundPermissionsAsync: jest.fn(async () => ({ status: 'denied' })),
@@ -39,23 +42,27 @@ const expoRouter = require('expo-router');
 describe('Upload stats refresh', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockInvalidateStats.mockClear();
+    mockApplyUploadResult.mockClear();
     router.back.mockClear();
     router.replace.mockClear();
     expoRouter.useLocalSearchParams.mockReturnValue({});
     cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
   });
 
-  it('invalidates stats after the queued upload actually completes', async () => {
+  it('applies the upload result after the queued upload actually completes', async () => {
     enqueueAddPhotoUpload.mockResolvedValue({ id: 'queue-123' });
-    waitForUploadQueueItem.mockResolvedValue({ success: true });
+    waitForUploadQueueItem.mockResolvedValue({ success: true, stats: { photo_count: 10 } });
 
-    const { getByText } = render(<Upload initialUri="file://mock.jpg" />);
+    const { getByText } = render(
+      <AuthContext.Provider value={{ profile: { handle: 'tester' }, applyUploadResult: mockApplyUploadResult }}>
+        <Upload initialUri="file://mock.jpg" />
+      </AuthContext.Provider>
+    );
 
     fireEvent.press(getByText('UPLOAD>'));
 
     await waitFor(() => expect(enqueueAddPhotoUpload).toHaveBeenCalled());
     await waitFor(() => expect(waitForUploadQueueItem).toHaveBeenCalledWith('queue-123'));
-    await waitFor(() => expect(mockInvalidateStats).toHaveBeenCalled());
+    await waitFor(() => expect(mockApplyUploadResult).toHaveBeenCalledWith({ success: true, stats: { photo_count: 10 } }));
   });
 });

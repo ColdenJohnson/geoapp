@@ -57,7 +57,7 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
-  const { user, friends, invalidateStats, isAppTutorialStepVisible, advanceAppTutorial } = useContext(AuthContext);
+  const { user, friends, applyUploadResult, isAppTutorialStepVisible, advanceAppTutorial } = useContext(AuthContext);
   const colorScheme = useColorScheme();
   const colors = usePalette();
   const showMapCreateTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE);
@@ -377,7 +377,7 @@ export default function HomeScreen() {
             return [nextPin, ...prev];
           });
         }
-        invalidateStats();
+        await applyUploadResult?.(created);
         showToast('Upload Sucess', 2200);
         router.push(buildViewPhotoChallengeRoute({
           pinId: created.pinId,

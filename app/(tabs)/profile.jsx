@@ -161,6 +161,7 @@ export default function UserProfileScreen() {
         </View>
 
         <ProfileAchievementsCard
+          earnedAchievements={stats?.earned_achievements}
           earnedBadgeIds={stats?.earned_badges}
           colors={colors}
           styles={styles}

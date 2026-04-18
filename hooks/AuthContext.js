@@ -127,6 +127,7 @@ export function AuthProvider({ children }) {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsDirty, setStatsDirty] = useState(false);
+  const [achievementCelebrationQueue, setAchievementCelebrationQueue] = useState([]);
   const [topPhotos, setTopPhotos] = useState([]);
   const [topPhotosLoading, setTopPhotosLoading] = useState(false);
   const [topPhotosDirty, setTopPhotosDirty] = useState(false);
@@ -152,6 +153,56 @@ export function AuthProvider({ children }) {
   const friendsCacheKey = (uid) => `friends_cache_${uid}`;
   const statsCacheKey = (uid) => `stats_cache_${uid}`;
   const topPhotosCacheKey = (uid) => `top_photos_cache_${uid}`;
+  const achievementCelebration = achievementCelebrationQueue[0] || null;
+
+  const applyStatsSnapshot = useCallback(async (nextStats) => {
+    if (!user?.uid || !nextStats) return null;
+    setStats(nextStats);
+    setStatsDirty(false);
+    try {
+      await AsyncStorage.setItem(
+        `stats_cache_${user.uid}`,
+        JSON.stringify({ stats: nextStats })
+      );
+    } catch (error) {
+      console.warn('Failed to persist stats cache', error);
+    }
+    return nextStats;
+  }, [user?.uid]);
+
+  const queueAchievementCelebrations = useCallback((items) => {
+    const nextItems = Array.isArray(items)
+      ? items.filter((item) => typeof item?.id === 'string' && item.id)
+      : [];
+    if (!nextItems.length) return;
+
+    setAchievementCelebrationQueue((current) => {
+      const existingKeys = new Set(
+        current.map((item) => `${item?.id || ''}:${item?.earned_at || ''}`)
+      );
+      const dedupedIncoming = nextItems.filter((item) => {
+        const key = `${item?.id || ''}:${item?.earned_at || ''}`;
+        if (existingKeys.has(key)) {
+          return false;
+        }
+        existingKeys.add(key);
+        return true;
+      });
+      return dedupedIncoming.length ? [...current, ...dedupedIncoming] : current;
+    });
+  }, []);
+
+  const dismissAchievementCelebration = useCallback(() => {
+    setAchievementCelebrationQueue((current) => current.slice(1));
+  }, []);
+
+  const applyUploadResult = useCallback(async (result) => {
+    if (result?.stats) {
+      await applyStatsSnapshot(result.stats);
+    }
+    queueAchievementCelebrations(result?.newly_earned_achievements);
+    return result?.stats || null;
+  }, [applyStatsSnapshot, queueAchievementCelebrations]);
 
   const prefetchTopPhotoUrls = (photos) => {
     if (!Array.isArray(photos)) return;
@@ -188,6 +239,7 @@ export function AuthProvider({ children }) {
       if (!fbUser) {
         setUser(null);
         setProfile(null);
+        setAchievementCelebrationQueue([]);
         setLoadingAuth(false);
         Promise.resolve(AsyncStorage.removeItem('user_token')).catch((error) => {
           console.warn('Failed to clear auth token from cache', error);
@@ -565,12 +617,7 @@ export function AuthProvider({ children }) {
     try {
       const data = await fetchUserStats(user.uid);
       if (data) {
-        setStats(data);
-        setStatsDirty(false);
-        await AsyncStorage.setItem(
-          statsCacheKey(user.uid),
-          JSON.stringify({ stats: data })
-        );
+        await applyStatsSnapshot(data);
       }
       return data;
     } finally {
@@ -710,6 +757,7 @@ export function AuthProvider({ children }) {
       friendsLoading,
       stats,
       statsLoading,
+      achievementCelebration,
       topPhotos,
       topPhotosLoading,
       friendActivityItems,
@@ -729,7 +777,10 @@ export function AuthProvider({ children }) {
       refreshTopPhotos,
       invalidateFriends,
       invalidateStats,
-      invalidateTopPhotos
+      invalidateTopPhotos,
+      applyStatsSnapshot,
+      applyUploadResult,
+      dismissAchievementCelebration
     }}>
       <ThemeContext.Provider value={themePreference}>
         {children}

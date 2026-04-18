@@ -3,15 +3,11 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
+import { ACHIEVEMENT_CATALOG, getEarnedAchievementIds } from '@/lib/achievements';
 import { spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
-export const PROFILE_BADGES = [
-  { id: 'photos_10', label: '10 Photos', icon: 'photo-camera' },
-  { id: 'photos_100', label: '100 Photos', icon: 'collections' },
-  { id: 'elo_1100', label: '1100 Elo', icon: 'emoji-events' },
-  { id: 'elo_1200', label: '1200 Elo', icon: 'emoji-events' },
-];
+export const PROFILE_BADGES = ACHIEVEMENT_CATALOG;
 
 export function ProfileHeaderCard({
   profile,
@@ -54,11 +50,15 @@ export function ProfileHeaderCard({
 }
 
 export function ProfileAchievementsCard({
+  earnedAchievements,
   earnedBadgeIds,
   colors,
   styles,
 }) {
-  const earnedBadgeIdSet = new Set(Array.isArray(earnedBadgeIds) ? earnedBadgeIds : []);
+  const earnedIds = Array.isArray(earnedAchievements)
+    ? getEarnedAchievementIds(earnedAchievements)
+    : earnedBadgeIds;
+  const earnedBadgeIdSet = new Set(Array.isArray(earnedIds) ? earnedIds : []);
   const earnedBadgeCount = PROFILE_BADGES.filter((badge) => earnedBadgeIdSet.has(badge.id)).length;
 
   return (

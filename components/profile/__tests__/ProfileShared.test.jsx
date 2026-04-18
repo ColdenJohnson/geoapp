@@ -1,7 +1,7 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
-import { createProfileStyles, ProfileHeaderCard, ProfileTopPhotosCard } from '@/components/profile/ProfileShared';
+import { createProfileStyles, ProfileAchievementsCard, ProfileHeaderCard, ProfileTopPhotosCard } from '@/components/profile/ProfileShared';
 
 const colors = {
   surface: '#FFFFFF',
@@ -51,5 +51,23 @@ describe('ProfileTopPhotosCard', () => {
 
     expect(getByText('1137')).toBeTruthy();
     expect(queryByText('Score 1137')).toBeNull();
+  });
+});
+
+describe('ProfileAchievementsCard', () => {
+  it('renders earned achievements from persisted achievement objects', () => {
+    const styles = createProfileStyles(colors);
+    const { getByText } = render(
+      <ProfileAchievementsCard
+        earnedAchievements={[
+          { id: 'photos_10', earned_at: '2026-04-18T00:00:00.000Z' },
+        ]}
+        colors={colors}
+        styles={styles}
+      />
+    );
+
+    expect(getByText('1/5')).toBeTruthy();
+    expect(getByText('10 Photos')).toBeTruthy();
   });
 });

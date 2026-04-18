@@ -93,7 +93,7 @@ export default function Upload({ initialUri = null }) {
   const isMounted = useRef(true);
   const didSubmitUpload = useRef(false);
   const backButtonClearance = insets.top + spacing.sm + BACK_BUTTON_HEIGHT;
-  const { profile, invalidateStats } = useContext(AuthContext);
+  const { profile, applyUploadResult } = useContext(AuthContext);
 
   useEffect(() => () => {
     isMounted.current = false;
@@ -185,8 +185,8 @@ export default function Upload({ initialUri = null }) {
 
       if (queueId) {
         void waitForUploadQueueItem(queueId)
-          .then(() => {
-            invalidateStats?.();
+          .then((result) => {
+            void applyUploadResult?.(result);
           })
           .catch((queueError) => {
             console.warn('Failed waiting for queued upload completion', queueError);

@@ -289,6 +289,7 @@ export default function PublicUserProfileScreen() {
               </View>
             ) : null}
             <ProfileAchievementsCard
+              earnedAchievements={statsData?.earned_achievements}
               earnedBadgeIds={statsData?.earned_badges}
               colors={colors}
               styles={styles}
