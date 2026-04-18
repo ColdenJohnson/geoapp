@@ -162,7 +162,8 @@ export default function FriendsTabScreen() {
   const [contactMatchesLoaded, setContactMatchesLoaded] = useState(false);
   const [contactMatchSelection, setContactMatchSelection] = useState({});
   const [contactMatchActionBusy, setContactMatchActionBusy] = useState(false);
-  const [contactsIntroVisible, setContactsIntroVisible] = useState(false);
+  const [contactsConsentVisible, setContactsConsentVisible] = useState(false);
+  const [contactsOverlayVisible, setContactsOverlayVisible] = useState(false);
   const [contactsIntroSeen, setContactsIntroSeen] = useState(false);
   const [contactsIntroHydrated, setContactsIntroHydrated] = useState(false);
   const router = useRouter();
@@ -244,7 +245,8 @@ export default function FriendsTabScreen() {
     setContactMatchesLoaded(false);
     setContactMatchSelection({});
     setContactMatchActionBusy(false);
-    setContactsIntroVisible(false);
+    setContactsConsentVisible(false);
+    setContactsOverlayVisible(false);
     setContactsIntroSeen(false);
     setContactsIntroHydrated(false);
     contactsAutoOpenAttemptedRef.current = false;
@@ -404,34 +406,79 @@ export default function FriendsTabScreen() {
   }, [user?.uid]);
 
   const skipContactsOverlay = useCallback(() => {
-    setContactsIntroVisible(false);
+    setContactsConsentVisible(false);
+    setContactsOverlayVisible(false);
     setContactMatchSelection({});
     markContactsIntroSeen();
   }, [markContactsIntroSeen]);
 
-  const openContactsOverlay = useCallback(async ({ allowDeniedPrompt = false } = {}) => {
+  const requestContactsAndOpenOverlay = useCallback(async ({ allowDeniedPrompt = false } = {}) => {
     if (!user?.uid) {
       return false;
     }
 
-    setActiveTab('requests');
+    setContactsConsentVisible(false);
     const { status } = await syncContactDiscovery({
       requestPermission: true,
       forceReload: true,
       promptIfDenied: allowDeniedPrompt,
     });
 
+    await markContactsIntroSeen();
+
     if (status === 'granted') {
-      setContactsIntroVisible(true);
+      setActiveTab('requests');
+      setContactsOverlayVisible(true);
       return true;
     }
 
     return false;
-  }, [syncContactDiscovery, user?.uid]);
+  }, [markContactsIntroSeen, syncContactDiscovery, user?.uid]);
+
+  const openContactsExperience = useCallback(async ({
+    allowDeniedPrompt = false,
+    forceIntro = false,
+  } = {}) => {
+    if (!user?.uid) {
+      return false;
+    }
+
+    const currentStatus = await getContactsPermissionStatus();
+    setContactsPermissionStatus(currentStatus);
+
+    if (currentStatus === 'granted') {
+      setActiveTab('requests');
+      const { status } = await syncContactDiscovery({
+        requestPermission: false,
+        forceReload: true,
+      });
+      if (status === 'granted') {
+        setContactsOverlayVisible(true);
+        return true;
+      }
+      return false;
+    }
+
+    if (forceIntro || !contactsIntroSeen) {
+      setContactsConsentVisible(true);
+      return true;
+    }
+
+    if (allowDeniedPrompt) {
+      setContactsConsentVisible(true);
+      return true;
+    }
+
+    return false;
+  }, [contactsIntroSeen, syncContactDiscovery, user?.uid]);
 
   const handleContactsButtonPress = useCallback(async () => {
-    await openContactsOverlay({ allowDeniedPrompt: true });
-  }, [openContactsOverlay]);
+    await openContactsExperience({ allowDeniedPrompt: true, forceIntro: true });
+  }, [openContactsExperience]);
+
+  const handleContactsIntroContinue = useCallback(async () => {
+    await requestContactsAndOpenOverlay({ allowDeniedPrompt: true });
+  }, [requestContactsAndOpenOverlay]);
 
   const handleShareProfile = useCallback(async () => {
     if (!shareProfileUrl) {
@@ -467,7 +514,7 @@ export default function FriendsTabScreen() {
 
     if (closeOverlay) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setContactsIntroVisible(false);
+      setContactsOverlayVisible(false);
       markContactsIntroSeen();
     }
 
@@ -550,8 +597,8 @@ export default function FriendsTabScreen() {
         && !contactsAutoOpenAttemptedRef.current
       ) {
         contactsAutoOpenAttemptedRef.current = true;
-        openContactsOverlay({ allowDeniedPrompt: false }).catch((error) => {
-          console.error('Failed to auto-open contacts overlay', error);
+        openContactsExperience({ allowDeniedPrompt: false, forceIntro: false }).catch((error) => {
+          console.error('Failed to open contacts experience', error);
         });
       }
       refreshFriendActivity({
@@ -565,7 +612,7 @@ export default function FriendsTabScreen() {
       contactsIntroSeen,
       friendActivityFetchedAt,
       markFriendActivitySeen,
-      openContactsOverlay,
+      openContactsExperience,
       refreshFriendActivity,
       refreshFriendRequests,
       syncContactDiscovery,
@@ -1019,9 +1066,53 @@ export default function FriendsTabScreen() {
     styles,
   ]);
 
+  const renderContactsConsentOverlay = useCallback(() => (
+    <Modal
+      visible={contactsConsentVisible}
+      transparent={false}
+      animationType="fade"
+      onRequestClose={() => {}}
+    >
+      <SafeAreaView style={styles.modalScreen}>
+        <View style={styles.contactsConsentCard} testID="contacts-consent-overlay">
+          <View style={styles.contactsConsentContent}>
+            <Text style={styles.contactsConsentTitle}>See if your friends are SideQuesting</Text>
+            <Text style={styles.contactsConsentBody}>
+              This information is not stored on our servers or sent anywhere. We only use it
+              once to help you find if any of your friends are already on SideQuest.
+            </Text>
+          </View>
+
+          <View style={styles.contactsConsentFooter}>
+            <SecondaryButton
+              title="Skip"
+              onPress={skipContactsOverlay}
+              style={styles.contactsConsentSkipButton}
+              textStyle={styles.smallButtonText}
+            />
+            <CTAButton
+              title="Share Contacts"
+              onPress={handleContactsIntroContinue}
+              variant="filled"
+              style={styles.contactsConsentContinueButton}
+              disabled={contactsPermissionLoading}
+              loading={contactsPermissionLoading}
+            />
+          </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  ), [
+    contactsConsentVisible,
+    contactsPermissionLoading,
+    handleContactsIntroContinue,
+    skipContactsOverlay,
+    styles,
+  ]);
+
   const renderContactsOverlay = useCallback(() => (
     <Modal
-      visible={contactsIntroVisible}
+      visible={contactsOverlayVisible}
       transparent={false}
       animationType="fade"
       onRequestClose={() => {}}
@@ -1088,7 +1179,7 @@ export default function FriendsTabScreen() {
     contactMatches,
     contactMatchesLoading,
     contactMatchesLoaded,
-    contactsIntroVisible,
+    contactsOverlayVisible,
     handleShareProfile,
     renderContactMatchRow,
     selectedContactMatchCount,
@@ -1394,6 +1485,7 @@ export default function FriendsTabScreen() {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
+      {renderContactsConsentOverlay()}
       {renderContactsOverlay()}
       <Toast message={toastMessage} bottomOffset={spacing.xl} />
     </SafeAreaView>
@@ -1708,6 +1800,47 @@ function createStyles(colors) {
     },
     emptyStateWrap: {
       paddingHorizontal: 2,
+    },
+    contactsConsentCard: {
+      flex: 1,
+      width: '100%',
+      backgroundColor: colors.surface,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing['3xl'],
+      justifyContent: 'space-between',
+    },
+    contactsConsentContent: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md,
+    },
+    contactsConsentTitle: {
+      ...textStyles.title,
+      color: colors.text,
+      textAlign: 'center',
+      maxWidth: 320,
+    },
+    contactsConsentBody: {
+      ...textStyles.body,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: 22,
+      marginTop: spacing.md,
+      maxWidth: 320,
+    },
+    contactsConsentFooter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    contactsConsentSkipButton: {
+      minHeight: 46,
+      minWidth: 92,
+      paddingHorizontal: spacing.md,
+    },
+    contactsConsentContinueButton: {
+      flex: 1,
     },
     footerSkipButton: {
       minHeight: 54,

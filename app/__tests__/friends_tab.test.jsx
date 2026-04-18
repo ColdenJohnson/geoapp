@@ -71,6 +71,7 @@ jest.mock('@/components/ui/Toast', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { cancelFriendRequest } from '@/lib/api';
+import { getContactsPermissionStatus, requestContactsPermission } from '@/lib/contactDiscovery';
 import FriendsTabScreen from '@/app/(tabs)/friends_tab';
 import { AuthContext } from '@/hooks/AuthContext';
 
@@ -220,13 +221,56 @@ describe('FriendsTabScreen', () => {
     });
   });
 
-  it('shows the contacts overlay the first time the tab is opened', async () => {
+  it('shows the contacts consent overlay the first time the tab is opened', async () => {
     AsyncStorage.getItem.mockResolvedValueOnce(null);
 
     const { findByTestId } = renderScreen({
       user: { uid: 'user-1', phoneNumber: '+15551234567' },
     });
 
+    expect(await findByTestId('contacts-consent-overlay')).toBeTruthy();
+  });
+
+  it('opens the contacts overlay directly on first open when permission is already granted', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    getContactsPermissionStatus.mockResolvedValue('granted');
+
+    const { findByTestId, queryByTestId } = renderScreen({
+      user: { uid: 'user-1', phoneNumber: '+15551234567' },
+    });
+
     expect(await findByTestId('contacts-overlay')).toBeTruthy();
+    expect(queryByTestId('contacts-consent-overlay')).toBeNull();
+  });
+
+  it('shows the contacts consent overlay again when Add From Contacts is tapped after skipping', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce('true');
+
+    const { getAllByText, getByText, findByTestId, queryByTestId } = renderScreen({
+      user: { uid: 'user-1', phoneNumber: '+15551234567' },
+    });
+
+    fireEvent.press(getAllByText('Friends')[1]);
+    fireEvent.press(getByText('Add From Contacts'));
+
+    expect(await findByTestId('contacts-consent-overlay')).toBeTruthy();
+    expect(queryByTestId('contacts-overlay')).toBeNull();
+  });
+
+  it('requests contacts permission only after continuing from the consent overlay', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+
+    const { findByTestId, getByText } = renderScreen({
+      user: { uid: 'user-1', phoneNumber: '+15551234567' },
+    });
+
+    expect(await findByTestId('contacts-consent-overlay')).toBeTruthy();
+    expect(requestContactsPermission).not.toHaveBeenCalled();
+
+    fireEvent.press(getByText('Continue'));
+
+    await waitFor(() => {
+      expect(requestContactsPermission).toHaveBeenCalled();
+    });
   });
 });
