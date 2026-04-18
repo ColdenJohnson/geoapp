@@ -49,6 +49,12 @@ jest.mock('@/hooks/usePalette', () => ({
   }),
 }));
 
+jest.mock('@/hooks/usePushNotifications', () => ({
+  ensurePushRegistration: jest.fn(async () => 'ExpoPushToken-mock'),
+  getNotificationPermissionStatus: jest.fn(async () => 'undetermined'),
+  requestNotificationPermission: jest.fn(async () => 'granted'),
+}));
+
 jest.mock('@/lib/contactDiscovery', () => ({
   getContactsPermissionStatus: jest.fn(async () => 'undetermined'),
   inferDefaultCountryFromPhone: jest.fn(() => 'US'),
@@ -72,6 +78,11 @@ jest.mock('@/components/ui/Toast', () => ({
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { cancelFriendRequest } from '@/lib/api';
 import { getContactsPermissionStatus, requestContactsPermission } from '@/lib/contactDiscovery';
+import {
+  ensurePushRegistration,
+  getNotificationPermissionStatus,
+  requestNotificationPermission,
+} from '@/hooks/usePushNotifications';
 import FriendsTabScreen from '@/app/(tabs)/friends_tab';
 import { AuthContext } from '@/hooks/AuthContext';
 
@@ -109,6 +120,11 @@ describe('FriendsTabScreen', () => {
     AsyncStorage.getItem.mockResolvedValue('true');
     AsyncStorage.setItem.mockResolvedValue();
     AsyncStorage.removeItem.mockResolvedValue();
+    getNotificationPermissionStatus.mockResolvedValue('undetermined');
+    requestNotificationPermission.mockResolvedValue('granted');
+    ensurePushRegistration.mockResolvedValue('ExpoPushToken-mock');
+    getContactsPermissionStatus.mockResolvedValue('undetermined');
+    requestContactsPermission.mockResolvedValue('granted');
   });
 
   it('shows a toast when a geo-locked activity card is tapped', () => {
@@ -221,18 +237,37 @@ describe('FriendsTabScreen', () => {
     });
   });
 
-  it('shows the contacts consent overlay the first time the tab is opened', async () => {
-    AsyncStorage.getItem.mockResolvedValueOnce(null);
+  it('shows the notifications consent overlay the first time the tab is opened', async () => {
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key.includes('notifications') ? null : 'true'
+    ));
 
     const { findByTestId } = renderScreen({
       user: { uid: 'user-1', phoneNumber: '+15551234567' },
     });
 
-    expect(await findByTestId('contacts-consent-overlay')).toBeTruthy();
+    expect(await findByTestId('notifications-consent-overlay')).toBeTruthy();
   });
 
-  it('opens the contacts overlay directly on first open when permission is already granted', async () => {
-    AsyncStorage.getItem.mockResolvedValueOnce(null);
+  it('skips the notifications intro and opens contacts consent when notifications are already granted', async () => {
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key.includes('notifications') || key.includes('contacts') ? null : 'true'
+    ));
+    getNotificationPermissionStatus.mockResolvedValue('granted');
+
+    const { findByTestId, queryByTestId } = renderScreen({
+      user: { uid: 'user-1', phoneNumber: '+15551234567' },
+    });
+
+    expect(await findByTestId('contacts-consent-overlay')).toBeTruthy();
+    expect(queryByTestId('notifications-consent-overlay')).toBeNull();
+  });
+
+  it('opens the contacts overlay directly on first open when contacts permission is already granted', async () => {
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key.includes('notifications') || key.includes('contacts') ? null : 'true'
+    ));
+    getNotificationPermissionStatus.mockResolvedValue('granted');
     getContactsPermissionStatus.mockResolvedValue('granted');
 
     const { findByTestId, queryByTestId } = renderScreen({
@@ -240,6 +275,7 @@ describe('FriendsTabScreen', () => {
     });
 
     expect(await findByTestId('contacts-overlay')).toBeTruthy();
+    expect(queryByTestId('notifications-consent-overlay')).toBeNull();
     expect(queryByTestId('contacts-consent-overlay')).toBeNull();
   });
 
@@ -257,8 +293,33 @@ describe('FriendsTabScreen', () => {
     expect(queryByTestId('contacts-overlay')).toBeNull();
   });
 
-  it('requests contacts permission only after continuing from the consent overlay', async () => {
-    AsyncStorage.getItem.mockResolvedValueOnce(null);
+  it('requests notification permission and then continues to contacts consent after allowing notifications', async () => {
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key.includes('notifications') || key.includes('contacts') ? null : 'true'
+    ));
+
+    const { findByTestId, getByText } = renderScreen({
+      user: { uid: 'user-1', phoneNumber: '+15551234567' },
+    });
+
+    expect(await findByTestId('notifications-consent-overlay')).toBeTruthy();
+    expect(requestNotificationPermission).not.toHaveBeenCalled();
+
+    fireEvent.press(getByText('Allow'));
+
+    await waitFor(() => {
+      expect(requestNotificationPermission).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(ensurePushRegistration).toHaveBeenCalledWith({ uid: 'user-1', phoneNumber: '+15551234567' });
+    });
+    expect(await findByTestId('contacts-consent-overlay')).toBeTruthy();
+  });
+
+  it('requests contacts permission only after continuing from the contacts consent overlay', async () => {
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key.includes('contacts') ? null : 'true'
+    ));
 
     const { findByTestId, getByText } = renderScreen({
       user: { uid: 'user-1', phoneNumber: '+15551234567' },

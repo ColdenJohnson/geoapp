@@ -34,9 +34,8 @@ describe('usePushNotifications', () => {
     expect(Notifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
   });
 
-  it('requests permissions and registers a token when granted', async () => {
-    Notifications.getPermissionsAsync.mockResolvedValueOnce({ status: 'undetermined' });
-    Notifications.requestPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
+  it('registers a token when notification permission is already granted', async () => {
+    Notifications.getPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
 
     render(<TestHarness user={{ uid: 'user-1' }} />);
 
@@ -47,17 +46,17 @@ describe('usePushNotifications', () => {
       uid: 'user-1',
     }));
 
-    expect(Notifications.requestPermissionsAsync).toHaveBeenCalled();
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
     expect(Notifications.getExpoPushTokenAsync).toHaveBeenCalledWith({ projectId: 'mock-project-id' });
   });
 
-  it('skips registration when permission is denied', async () => {
-    Notifications.getPermissionsAsync.mockResolvedValueOnce({ status: 'denied' });
-    Notifications.requestPermissionsAsync.mockResolvedValueOnce({ status: 'denied' });
+  it('skips registration when permission has not been granted yet', async () => {
+    Notifications.getPermissionsAsync.mockResolvedValueOnce({ status: 'undetermined' });
 
     render(<TestHarness user={{ uid: 'user-2' }} />);
 
     await waitFor(() => expect(registerPushToken).not.toHaveBeenCalled());
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
     expect(Notifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
   });
 

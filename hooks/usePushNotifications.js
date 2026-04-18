@@ -25,6 +25,58 @@ function resolveProjectId() {
   );
 }
 
+export async function getNotificationPermissionStatus() {
+  const permission = await Notifications.getPermissionsAsync();
+  return permission?.status || 'undetermined';
+}
+
+export async function requestNotificationPermission() {
+  const permission = await Notifications.requestPermissionsAsync();
+  return permission?.status || 'undetermined';
+}
+
+export async function ensurePushRegistration(user) {
+  if (!user?.uid) {
+    return null;
+  }
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
+  }
+
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') {
+    console.log('Push notification permission not granted; skipping registration.');
+    return null;
+  }
+
+  const projectId = resolveProjectId();
+  console.log('[push][client] Resolved projectId=', projectId);
+  const tokenResult = await Notifications.getExpoPushTokenAsync(
+    projectId ? { projectId } : undefined
+  );
+  const expoPushToken = tokenResult?.data;
+  console.log('[push][client] Expo push token=', expoPushToken);
+  if (!expoPushToken) {
+    return null;
+  }
+
+  console.log('[push][client] Posting token to backend /register_push_token');
+  await registerPushToken({
+    token: expoPushToken,
+    platform: Platform.OS,
+    timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+    uid: user.uid,
+  });
+  console.log('[push][client] Backend registration complete');
+  return expoPushToken;
+}
+
 const ROUTABLE_PATHS = new Set([
   '/',
   '/(tabs)/vote',
@@ -123,46 +175,17 @@ export function usePushNotifications(user) {
         }
         console.log('[push][client] Starting registration for uid=', user.uid);
 
-        if (Platform.OS === 'android') {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FF231F7C',
-          });
-        }
-
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        if (finalStatus !== 'granted' || cancelled) {
+        const existingStatus = await getNotificationPermissionStatus();
+        if (existingStatus !== 'granted' || cancelled) {
           console.log('Push notification permission not granted; skipping registration.');
           return;
         }
         console.log('[push][client] Permission granted');
 
-        const projectId = resolveProjectId();
-        console.log('[push][client] Resolved projectId=', projectId);
-        const tokenResult = await Notifications.getExpoPushTokenAsync(
-          projectId ? { projectId } : undefined
-        );
-        const expoPushToken = tokenResult?.data;
-        console.log('[push][client] Expo push token=', expoPushToken);
+        const expoPushToken = await ensurePushRegistration(user);
         if (!expoPushToken || cancelled) return;
 
         if (lastRegisteredToken.current === expoPushToken) return;
-
-        console.log('[push][client] Posting token to backend /register_push_token');
-        await registerPushToken({
-          token: expoPushToken,
-          platform: Platform.OS,
-          timezoneOffsetMinutes: new Date().getTimezoneOffset(),
-          uid: user.uid,
-        });
-        console.log('[push][client] Backend registration complete');
         lastRegisteredToken.current = expoPushToken;
       } catch (err) {
         console.log('Push registration failed', err?.message || err, err?.stack);

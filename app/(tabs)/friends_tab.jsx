@@ -26,6 +26,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { APP_TUTORIAL_STEPS, AuthContext } from '@/hooks/AuthContext';
 import {
+  ensurePushRegistration,
+  getNotificationPermissionStatus,
+  requestNotificationPermission,
+} from '@/hooks/usePushNotifications';
+import {
   acceptFriendRequest,
   cancelFriendRequest,
   fetchContactMatches,
@@ -48,12 +53,17 @@ import { radii, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
+const NOTIFICATIONS_INTRO_SEEN_KEY_PREFIX = 'friends_notifications_intro_seen';
 const CONTACTS_INTRO_SEEN_KEY_PREFIX = 'friends_contacts_intro_seen';
 const PUBLIC_SHARE_BASE_URL =
   process.env.EXPO_PUBLIC_BASE_URL ||
   (Constants?.expoConfig?.extra &&
     (Constants.expoConfig.extra.EXPO_PUBLIC_BASE_URL || Constants.expoConfig.extra.apiBaseUrl)) ||
   'https://geode-backend-834952308922.us-central1.run.app';
+
+function getNotificationsIntroSeenStorageKey(uid) {
+  return `${NOTIFICATIONS_INTRO_SEEN_KEY_PREFIX}_${uid}`;
+}
 
 function getContactsIntroSeenStorageKey(uid) {
   return `${CONTACTS_INTRO_SEEN_KEY_PREFIX}_${uid}`;
@@ -155,6 +165,11 @@ export default function FriendsTabScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingSuggestionRequests, setPendingSuggestionRequests] = useState({});
   const [optimisticCanceledOutgoingRequests, setOptimisticCanceledOutgoingRequests] = useState({});
+  const [notificationsPermissionStatus, setNotificationsPermissionStatus] = useState('undetermined');
+  const [notificationsPermissionLoading, setNotificationsPermissionLoading] = useState(false);
+  const [notificationsConsentVisible, setNotificationsConsentVisible] = useState(false);
+  const [notificationsIntroSeen, setNotificationsIntroSeen] = useState(false);
+  const [notificationsIntroHydrated, setNotificationsIntroHydrated] = useState(false);
   const [contactsPermissionStatus, setContactsPermissionStatus] = useState('undetermined');
   const [contactsPermissionLoading, setContactsPermissionLoading] = useState(false);
   const [contactMatches, setContactMatches] = useState([]);
@@ -173,7 +188,7 @@ export default function FriendsTabScreen() {
   const { message: toastMessage, show: showToast } = useToast(2500);
   const prefilledHandleRef = useRef('');
   const activityHasScrolledRef = useRef(false);
-  const contactsAutoOpenAttemptedRef = useRef(false);
+  const friendsPromptsAutoOpenAttemptedRef = useRef(false);
   const sharedHandle = useMemo(
     () => (Array.isArray(sharedHandleParam) ? sharedHandleParam[0] : sharedHandleParam),
     [sharedHandleParam]
@@ -238,6 +253,11 @@ export default function FriendsTabScreen() {
   }, [activityItems, activityLoading, activitySuggestions]);
 
   useEffect(() => {
+    setNotificationsPermissionStatus('undetermined');
+    setNotificationsPermissionLoading(false);
+    setNotificationsConsentVisible(false);
+    setNotificationsIntroSeen(false);
+    setNotificationsIntroHydrated(false);
     setContactsPermissionStatus('undetermined');
     setContactsPermissionLoading(false);
     setContactMatches([]);
@@ -249,11 +269,35 @@ export default function FriendsTabScreen() {
     setContactsOverlayVisible(false);
     setContactsIntroSeen(false);
     setContactsIntroHydrated(false);
-    contactsAutoOpenAttemptedRef.current = false;
+    friendsPromptsAutoOpenAttemptedRef.current = false;
   }, [user?.uid]);
 
   useEffect(() => {
     let cancelled = false;
+
+    async function hydrateNotificationsIntroState() {
+      if (!user?.uid) {
+        if (!cancelled) {
+          setNotificationsIntroSeen(true);
+          setNotificationsIntroHydrated(true);
+        }
+        return;
+      }
+
+      try {
+        const storedValue = await AsyncStorage.getItem(getNotificationsIntroSeenStorageKey(user.uid));
+        if (!cancelled) {
+          setNotificationsIntroSeen(storedValue === 'true');
+          setNotificationsIntroHydrated(true);
+        }
+      } catch (error) {
+        console.error('Failed to hydrate notifications intro state', error);
+        if (!cancelled) {
+          setNotificationsIntroSeen(false);
+          setNotificationsIntroHydrated(true);
+        }
+      }
+    }
 
     async function hydrateContactsIntroState() {
       if (!user?.uid) {
@@ -279,6 +323,7 @@ export default function FriendsTabScreen() {
       }
     }
 
+    hydrateNotificationsIntroState();
     hydrateContactsIntroState();
 
     return () => {
@@ -391,6 +436,20 @@ export default function FriendsTabScreen() {
     }
   }, [contactMatches, contactMatchesLoaded, loadContactMatches, user?.uid]);
 
+  const markNotificationsIntroSeen = useCallback(async () => {
+    if (!user?.uid) {
+      setNotificationsIntroSeen(true);
+      return;
+    }
+
+    setNotificationsIntroSeen(true);
+    try {
+      await AsyncStorage.setItem(getNotificationsIntroSeenStorageKey(user.uid), 'true');
+    } catch (error) {
+      console.error('Failed to persist notifications intro state', error);
+    }
+  }, [user?.uid]);
+
   const markContactsIntroSeen = useCallback(async () => {
     if (!user?.uid) {
       setContactsIntroSeen(true);
@@ -404,6 +463,121 @@ export default function FriendsTabScreen() {
       console.error('Failed to persist contacts intro state', error);
     }
   }, [user?.uid]);
+
+  const openContactsExperience = useCallback(async ({
+    allowDeniedPrompt = false,
+    forceIntro = false,
+  } = {}) => {
+    if (!user?.uid) {
+      return false;
+    }
+
+    const currentStatus = await getContactsPermissionStatus();
+    setContactsPermissionStatus(currentStatus);
+
+    if (currentStatus === 'granted') {
+      await markContactsIntroSeen();
+      setActiveTab('requests');
+      const { status } = await syncContactDiscovery({
+        requestPermission: false,
+        forceReload: true,
+      });
+      if (status === 'granted') {
+        setContactsOverlayVisible(true);
+        return true;
+      }
+      return false;
+    }
+
+    if (forceIntro || !contactsIntroSeen) {
+      setContactsConsentVisible(true);
+      return true;
+    }
+
+    if (allowDeniedPrompt) {
+      setContactsConsentVisible(true);
+      return true;
+    }
+
+    return false;
+  }, [contactsIntroSeen, markContactsIntroSeen, syncContactDiscovery, user?.uid]);
+
+  const continueToContactsExperience = useCallback(async () => {
+    await openContactsExperience({ allowDeniedPrompt: false, forceIntro: false });
+  }, [openContactsExperience]);
+
+  const skipNotificationsIntro = useCallback(async () => {
+    setNotificationsConsentVisible(false);
+    await markNotificationsIntroSeen();
+    await continueToContactsExperience();
+  }, [continueToContactsExperience, markNotificationsIntroSeen]);
+
+  const handleNotificationsIntroAllow = useCallback(async () => {
+    if (!user?.uid) {
+      return;
+    }
+
+    setNotificationsConsentVisible(false);
+    setNotificationsPermissionLoading(true);
+    let nextStatus = 'undetermined';
+    try {
+      nextStatus = await requestNotificationPermission();
+      setNotificationsPermissionStatus(nextStatus);
+    } catch (error) {
+      console.error('Failed to request notification permission', error);
+    } finally {
+      setNotificationsPermissionLoading(false);
+    }
+
+    await markNotificationsIntroSeen();
+
+    if (nextStatus === 'granted') {
+      try {
+        await ensurePushRegistration(user);
+      } catch (error) {
+        console.error('Failed to register push notifications', error);
+      }
+    }
+
+    await continueToContactsExperience();
+  }, [continueToContactsExperience, markNotificationsIntroSeen, user?.uid, user]);
+
+  const openNotificationsExperience = useCallback(async ({
+    forceIntro = false,
+    continueToContacts = false,
+  } = {}) => {
+    if (!user?.uid) {
+      return false;
+    }
+
+    const currentStatus = await getNotificationPermissionStatus();
+    setNotificationsPermissionStatus(currentStatus);
+
+    if (currentStatus === 'granted') {
+      await markNotificationsIntroSeen();
+      if (continueToContacts) {
+        await continueToContactsExperience();
+      }
+      return true;
+    }
+
+    if (forceIntro || !notificationsIntroSeen) {
+      setNotificationsConsentVisible(true);
+      return true;
+    }
+
+    if (continueToContacts) {
+      await continueToContactsExperience();
+      return true;
+    }
+
+    return false;
+  }, [
+    continueToContactsExperience,
+    markNotificationsIntroSeen,
+    notificationsIntroSeen,
+    user?.uid,
+  ]);
 
   const skipContactsOverlay = useCallback(() => {
     setContactsConsentVisible(false);
@@ -434,43 +608,6 @@ export default function FriendsTabScreen() {
 
     return false;
   }, [markContactsIntroSeen, syncContactDiscovery, user?.uid]);
-
-  const openContactsExperience = useCallback(async ({
-    allowDeniedPrompt = false,
-    forceIntro = false,
-  } = {}) => {
-    if (!user?.uid) {
-      return false;
-    }
-
-    const currentStatus = await getContactsPermissionStatus();
-    setContactsPermissionStatus(currentStatus);
-
-    if (currentStatus === 'granted') {
-      setActiveTab('requests');
-      const { status } = await syncContactDiscovery({
-        requestPermission: false,
-        forceReload: true,
-      });
-      if (status === 'granted') {
-        setContactsOverlayVisible(true);
-        return true;
-      }
-      return false;
-    }
-
-    if (forceIntro || !contactsIntroSeen) {
-      setContactsConsentVisible(true);
-      return true;
-    }
-
-    if (allowDeniedPrompt) {
-      setContactsConsentVisible(true);
-      return true;
-    }
-
-    return false;
-  }, [contactsIntroSeen, syncContactDiscovery, user?.uid]);
 
   const handleContactsButtonPress = useCallback(async () => {
     await openContactsExperience({ allowDeniedPrompt: true, forceIntro: true });
@@ -574,7 +711,7 @@ export default function FriendsTabScreen() {
 
   useFocusEffect(
     useCallback(() => () => {
-      contactsAutoOpenAttemptedRef.current = false;
+      friendsPromptsAutoOpenAttemptedRef.current = false;
     }, [])
   );
 
@@ -591,14 +728,15 @@ export default function FriendsTabScreen() {
         });
       }
       if (
-        contactsIntroHydrated
+        notificationsIntroHydrated
+        && contactsIntroHydrated
         && user?.uid
-        && !contactsIntroSeen
-        && !contactsAutoOpenAttemptedRef.current
+        && (!notificationsIntroSeen || !contactsIntroSeen)
+        && !friendsPromptsAutoOpenAttemptedRef.current
       ) {
-        contactsAutoOpenAttemptedRef.current = true;
-        openContactsExperience({ allowDeniedPrompt: false, forceIntro: false }).catch((error) => {
-          console.error('Failed to open contacts experience', error);
+        friendsPromptsAutoOpenAttemptedRef.current = true;
+        openNotificationsExperience({ forceIntro: false, continueToContacts: true }).catch((error) => {
+          console.error('Failed to open friends permission prompts', error);
         });
       }
       refreshFriendActivity({
@@ -608,11 +746,13 @@ export default function FriendsTabScreen() {
     }, [
       activityItems.length,
       activitySuggestions.length,
+      notificationsIntroHydrated,
+      notificationsIntroSeen,
       contactsIntroHydrated,
       contactsIntroSeen,
       friendActivityFetchedAt,
       markFriendActivitySeen,
-      openContactsExperience,
+      openNotificationsExperience,
       refreshFriendActivity,
       refreshFriendRequests,
       syncContactDiscovery,
@@ -1066,6 +1206,50 @@ export default function FriendsTabScreen() {
     styles,
   ]);
 
+  const renderNotificationsConsentOverlay = useCallback(() => (
+    <Modal
+      visible={notificationsConsentVisible}
+      transparent={false}
+      animationType="fade"
+      onRequestClose={() => {}}
+    >
+      <SafeAreaView style={styles.modalScreen}>
+        <View style={styles.contactsConsentCard} testID="notifications-consent-overlay">
+          <View style={styles.contactsConsentContent}>
+            <Text style={styles.contactsConsentTitle}>Allow notifications</Text>
+            <Text style={styles.contactsConsentBody}>
+              We promise we won&apos;t spam you. This is just to let you know when people upload to
+              your quests or comment on your photos!
+            </Text>
+          </View>
+
+          <View style={styles.contactsConsentFooter}>
+            <SecondaryButton
+              title="Skip"
+              onPress={skipNotificationsIntro}
+              style={styles.contactsConsentSkipButton}
+              textStyle={styles.smallButtonText}
+            />
+            <CTAButton
+              title="Allow"
+              onPress={handleNotificationsIntroAllow}
+              variant="filled"
+              style={styles.contactsConsentContinueButton}
+              disabled={notificationsPermissionLoading}
+              loading={notificationsPermissionLoading}
+            />
+          </View>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  ), [
+    handleNotificationsIntroAllow,
+    notificationsConsentVisible,
+    notificationsPermissionLoading,
+    skipNotificationsIntro,
+    styles,
+  ]);
+
   const renderContactsConsentOverlay = useCallback(() => (
     <Modal
       visible={contactsConsentVisible}
@@ -1076,10 +1260,10 @@ export default function FriendsTabScreen() {
       <SafeAreaView style={styles.modalScreen}>
         <View style={styles.contactsConsentCard} testID="contacts-consent-overlay">
           <View style={styles.contactsConsentContent}>
-            <Text style={styles.contactsConsentTitle}>See if your friends are SideQuesting</Text>
+            <Text style={styles.contactsConsentTitle}>See if any friends are SideQuesting</Text>
             <Text style={styles.contactsConsentBody}>
-              This information is not stored on our servers or sent anywhere. We only use it
-              once to help you find if any of your friends are already on SideQuest.
+              This information is not stored on our servers or sent anywhere. We only use it one
+              time to check whether any of your contacts are already on SideQuest.
             </Text>
           </View>
 
@@ -1091,7 +1275,7 @@ export default function FriendsTabScreen() {
               textStyle={styles.smallButtonText}
             />
             <CTAButton
-              title="Share Contacts"
+              title="Continue"
               onPress={handleContactsIntroContinue}
               variant="filled"
               style={styles.contactsConsentContinueButton}
@@ -1485,6 +1669,7 @@ export default function FriendsTabScreen() {
           </ScrollView>
         )}
       </KeyboardAvoidingView>
+      {renderNotificationsConsentOverlay()}
       {renderContactsConsentOverlay()}
       {renderContactsOverlay()}
       <Toast message={toastMessage} bottomOffset={spacing.xl} />
