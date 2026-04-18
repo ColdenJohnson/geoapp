@@ -12,7 +12,7 @@ import { CTAButton } from '@/components/ui/Buttons';
 import { textStyles } from '@/theme/typography';
 
 export default function FriendsScreen() {
-  const { friends, friendRequests, friendsLoading, refreshFriends, invalidateFriends } = useContext(AuthContext);
+  const { friends, friendRequests, friendsLoading, refreshFriends, invalidateFriends, applyUploadResult } = useContext(AuthContext);
   const [refreshing, setRefreshing] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const router = useRouter();
@@ -46,6 +46,7 @@ export default function FriendsScreen() {
     setActionBusy(true);
     const resp = await acceptFriendRequest(uid);
     if (resp?.success) {
+      void applyUploadResult?.(resp);
       invalidateFriends();
     }
     setActionBusy(false);

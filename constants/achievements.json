@@ -33,5 +33,26 @@
     "icon": "emoji-events",
     "metric": "max_global_elo",
     "threshold": 1200
+  },
+  {
+    "id": "elo_1500",
+    "label": "1500 Elo",
+    "icon": "emoji-events",
+    "metric": "max_global_elo",
+    "threshold": 1500
+  },
+  {
+    "id": "opinionated",
+    "label": "Opinionated",
+    "icon": "chat",
+    "metric": "comment_count",
+    "threshold": 5
+  },
+  {
+    "id": "popular",
+    "label": "Popular",
+    "icon": "people",
+    "metric": "friend_count",
+    "threshold": 10
   }
 ]

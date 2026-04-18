@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useEffect, useMemo } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { AuthContext, AuthProvider } from '../hooks/AuthContext';
 import CreateUsernameScreen from '../screens/CreateUsernameScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -49,6 +50,11 @@ function RootLayoutContent() {
     }
     return initializeUploadQueue();
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!achievementCelebration) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+  }, [achievementCelebration]);
 
   const shouldShowCreateUsernameGate = Boolean(user?.uid && !loadingProfile && !profile?.handle);
   const shouldShieldAuthedApp = Boolean(user?.uid && (loadingProfile || shouldShowCreateUsernameGate));

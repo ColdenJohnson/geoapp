@@ -49,6 +49,7 @@ export default function PublicUserProfileScreen() {
     friendsLoading,
     friendRequests,
     refreshFriends,
+    applyUploadResult,
   } = useContext(AuthContext);
   const [profileData, setProfileData] = useState(null);
   const [statsData, setStatsData] = useState(null);
@@ -164,11 +165,12 @@ export default function PublicUserProfileScreen() {
         Alert.alert('Friend Request', response?.error || 'Failed to accept friend request.');
         return;
       }
+      void applyUploadResult?.(response);
       await refreshFriends({ force: true });
     } finally {
       setFriendActionBusy(false);
     }
-  }, [refreshFriends, targetUid]);
+  }, [applyUploadResult, refreshFriends, targetUid]);
 
   const onPressRemoveFriend = useCallback(async () => {
     if (!targetUid) return;

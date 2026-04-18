@@ -67,7 +67,10 @@ describe('ProfileAchievementsCard', () => {
       />
     );
 
-    expect(getByText('1/5')).toBeTruthy();
+    expect(getByText('1/8')).toBeTruthy();
     expect(getByText('10 Photos')).toBeTruthy();
+    expect(getByText('1500 Elo')).toBeTruthy();
+    expect(getByText('Opinionated')).toBeTruthy();
+    expect(getByText('Popular')).toBeTruthy();
   });
 });

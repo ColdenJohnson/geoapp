@@ -375,7 +375,7 @@ export default function ViewPhotoScreen() {
   const { message: toastMessage, show: showToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { user, profile, invalidateStats } = useContext(AuthContext);
+  const { user, profile, invalidateStats, applyUploadResult } = useContext(AuthContext);
 
   const selectedPhoto = useMemo(
     () => photos.find((photo) => String(photo?._id) === String(selectedPhotoId)) || null,
@@ -851,7 +851,8 @@ export default function ViewPhotoScreen() {
     setCommentDraft('');
 
     createPhotoComment(selectedPhotoId, normalizedText)
-      .then((createdComment) => {
+      .then((result) => {
+        const createdComment = result?.comment || null;
         pendingCommentIdsRef.current.delete(optimisticId);
         if (!createdComment) {
           const rollback = (current) => current.filter((item) => String(item?._id) !== optimisticId);
@@ -880,6 +881,7 @@ export default function ViewPhotoScreen() {
         } else {
           void writeCommentsCacheOnly(selectedPhotoId, reconcile, { isDirty: false });
         }
+        void applyUploadResult?.(result);
       })
       .catch((error) => {
         console.error('Failed to submit comment optimistically', error);
@@ -903,6 +905,7 @@ export default function ViewPhotoScreen() {
     selectedPhotoId,
     showToast,
     user?.uid,
+    applyUploadResult,
     writeCommentsCacheOnly,
   ]);
 

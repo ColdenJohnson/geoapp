@@ -154,6 +154,7 @@ export default function FriendsTabScreen() {
     loadMoreFriendActivity,
     isAppTutorialStepVisible,
     advanceAppTutorial,
+    applyUploadResult,
   } = useContext(AuthContext);
   const { handle: sharedHandleParam } = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState('activity');
@@ -893,6 +894,7 @@ export default function FriendsTabScreen() {
     setFriendActionBusy(true);
     const resp = await acceptFriendRequest(uid);
     if (resp?.success) {
+      void applyUploadResult?.(resp);
       activityHasScrolledRef.current = false;
       await Promise.all([
         refreshFriends({ force: true }),
@@ -902,7 +904,7 @@ export default function FriendsTabScreen() {
       Alert.alert('Friend Request', resp?.error || 'Failed to accept friend request.');
     }
     setFriendActionBusy(false);
-  }, [refreshFriendActivity, refreshFriends]);
+  }, [applyUploadResult, refreshFriendActivity, refreshFriends]);
 
   const rejectRequest = useCallback(async (uid) => {
     if (!uid) return;
