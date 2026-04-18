@@ -11,9 +11,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -38,6 +40,13 @@ import {
   writePinCommentsCache,
   writePinPhotosCache,
 } from '@/lib/pinChallengeCache';
+import {
+  buildMentionCandidates,
+  createMentionDismissKey,
+  filterMentionCandidates,
+  findActiveMention,
+  replaceActiveMention,
+} from '@/lib/commentMentions';
 import { goBackOrHome } from '@/lib/navigation';
 import {
   removeUploadQueueItem,
@@ -53,6 +62,8 @@ import { radii, shadows, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
 const COMMENT_MAX_LENGTH = 200;
+const MENTION_PICKER_WIDTH = 248;
+const MENTION_PICKER_ROW_HEIGHT = 58;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DETAIL_IMAGE_MAX_SCALE = 4;
 const DETAIL_IMAGE_RESET_SPRING = {
@@ -162,6 +173,36 @@ function firstParamValue(value) {
     return trimmed || null;
   }
   return null;
+}
+
+function getFriendDisplayLabel(friend) {
+  return friend?.mentionDisplayLabel || friend?.display_name || friend?.handle || 'Unnamed user';
+}
+
+function getFriendHandleLabel(friend) {
+  return friend?.mentionHandle ? `@${friend.mentionHandle}` : null;
+}
+
+function estimateMentionAnchorOffset(text, mentionStart, inputWidth) {
+  const safeWidth = Number.isFinite(inputWidth) ? inputWidth : 0;
+  const innerWidth = Math.max(1, safeWidth - (spacing.md * 2));
+  const estimatedCharWidth = 8.2;
+  const charsPerLine = Math.max(1, Math.floor(innerWidth / estimatedCharWidth));
+  const content = typeof text === 'string' ? text.slice(0, Math.max(0, mentionStart)) : '';
+
+  let column = 0;
+  for (const char of content) {
+    if (char === '\n') {
+      column = 0;
+      continue;
+    }
+    column += 1;
+    if (column >= charsPerLine) {
+      column = 0;
+    }
+  }
+
+  return spacing.md + Math.min(innerWidth, column * estimatedCharWidth);
 }
 
 function UserAvatar({ uri, label, size, styles }) {
@@ -351,6 +392,7 @@ export default function ViewPhotoScreen() {
   const { pinId: pinIdParam, photoId: photoIdParam } = useLocalSearchParams();
   const pinId = firstParamValue(pinIdParam);
   const selectedPhotoId = firstParamValue(photoIdParam);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -361,6 +403,11 @@ export default function ViewPhotoScreen() {
   const [photoComments, setPhotoComments] = useState([]);
   const [commentsHydrated, setCommentsHydrated] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
+  const [commentSelection, setCommentSelection] = useState({ start: 0, end: 0 });
+  const [mentionPickerDismissedKey, setMentionPickerDismissedKey] = useState(null);
+  const [mentionPickerAnchor, setMentionPickerAnchor] = useState(null);
+  const [mentionPickerScrollOffset, setMentionPickerScrollOffset] = useState(0);
+  const [activeDraggedMentionUid, setActiveDraggedMentionUid] = useState(null);
 
   const photosRef = useRef([]);
   const pendingCommentIdsRef = useRef(new Set());
@@ -370,12 +417,23 @@ export default function ViewPhotoScreen() {
   const isMountedRef = useRef(true);
   const selectedPhotoIdRef = useRef(null);
   const missingParamsHandledRef = useRef(false);
+  const detailSafeRef = useRef(null);
+  const commentInputWrapRef = useRef(null);
+  const commentInputRef = useRef(null);
+  const mentionDragMovedRef = useRef(false);
+  const mentionPickerScrollOffsetRef = useRef(0);
 
   const router = useRouter();
   const { message: toastMessage, show: showToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { user, profile, invalidateStats, applyUploadResult } = useContext(AuthContext);
+  const {
+    user,
+    profile,
+    friends,
+    invalidateStats,
+    applyUploadResult,
+  } = useContext(AuthContext);
 
   const selectedPhoto = useMemo(
     () => photos.find((photo) => String(photo?._id) === String(selectedPhotoId)) || null,
@@ -416,6 +474,37 @@ export default function ViewPhotoScreen() {
   const currentUserName = typeof profile?.display_name === 'string' && profile.display_name
     ? profile.display_name
     : null;
+  const mentionCandidates = useMemo(() => buildMentionCandidates(friends), [friends]);
+  const activeMention = useMemo(
+    () => findActiveMention(commentDraft, commentSelection.start),
+    [commentDraft, commentSelection.start]
+  );
+  const activeMentionDismissKey = useMemo(
+    () => createMentionDismissKey(activeMention),
+    [activeMention]
+  );
+  const mentionSuggestions = useMemo(() => {
+    if (!activeMention) return [];
+    if (activeMentionDismissKey && activeMentionDismissKey === mentionPickerDismissedKey) {
+      return [];
+    }
+    return filterMentionCandidates(mentionCandidates, activeMention.query);
+  }, [activeMention, activeMentionDismissKey, mentionCandidates, mentionPickerDismissedKey]);
+  const mentionPickerVisible = Boolean(activeMention && mentionSuggestions.length > 0);
+  const mentionPickerHeight = Math.min(mentionSuggestions.length, 3) * MENTION_PICKER_ROW_HEIGHT;
+  const mentionPickerLeft = useMemo(() => {
+    if (!mentionPickerVisible || !mentionPickerAnchor || !activeMention) return spacing.lg;
+    const offsetLeft = estimateMentionAnchorOffset(commentDraft, activeMention.start, mentionPickerAnchor.width);
+    const desiredLeft = mentionPickerAnchor.x + offsetLeft - 28;
+    return Math.max(
+      spacing.sm,
+      Math.min(desiredLeft, Math.max(spacing.sm, windowWidth - MENTION_PICKER_WIDTH - spacing.sm))
+    );
+  }, [activeMention, commentDraft, mentionPickerAnchor, mentionPickerVisible, windowWidth]);
+  const mentionPickerTop = useMemo(() => {
+    if (!mentionPickerVisible || !mentionPickerAnchor) return spacing.sm;
+    return Math.max(spacing.sm, mentionPickerAnchor.y - mentionPickerHeight - spacing.xs);
+  }, [mentionPickerAnchor, mentionPickerHeight, mentionPickerVisible]);
 
   useEffect(() => {
     photosRef.current = photos;
@@ -429,9 +518,57 @@ export default function ViewPhotoScreen() {
     selectedPhotoIdRef.current = selectedPhotoId ? String(selectedPhotoId) : null;
   }, [selectedPhotoId]);
 
+  useEffect(() => {
+    mentionPickerScrollOffsetRef.current = mentionPickerScrollOffset;
+  }, [mentionPickerScrollOffset]);
+
   useEffect(() => () => {
     isMountedRef.current = false;
   }, []);
+
+  useEffect(() => {
+    setCommentSelection({ start: 0, end: 0 });
+    setMentionPickerDismissedKey(null);
+    setMentionPickerScrollOffset(0);
+    setActiveDraggedMentionUid(null);
+  }, [selectedPhotoId]);
+
+  const measureMentionPickerAnchor = useCallback(() => {
+    const safeNode = detailSafeRef.current;
+    const inputNode = commentInputWrapRef.current;
+    if (!safeNode?.measureInWindow || !inputNode?.measureInWindow) {
+      return;
+    }
+
+    safeNode.measureInWindow((safeX, safeY) => {
+      inputNode.measureInWindow((inputX, inputY, inputWidth) => {
+        setMentionPickerAnchor({
+          x: Math.max(0, inputX - safeX),
+          y: Math.max(0, inputY - safeY),
+          width: inputWidth,
+        });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!mentionPickerVisible) return;
+    measureMentionPickerAnchor();
+  }, [
+    measureMentionPickerAnchor,
+    mentionPickerVisible,
+    commentDraft,
+    commentSelection.start,
+    windowHeight,
+    windowWidth,
+  ]);
+
+  useEffect(() => {
+    if (!mentionPickerVisible) {
+      setActiveDraggedMentionUid(null);
+      setMentionPickerScrollOffset(0);
+    }
+  }, [mentionPickerVisible]);
 
   useEffect(() => {
     if (pinId && selectedPhotoId) return;
@@ -826,11 +963,99 @@ export default function ViewPhotoScreen() {
     }
   }, [pinId, router, selectedPhotoQueueId, showToast]);
 
+  const dismissMentionPicker = useCallback(() => {
+    if (!activeMentionDismissKey) return;
+    setMentionPickerDismissedKey(activeMentionDismissKey);
+    setActiveDraggedMentionUid(null);
+  }, [activeMentionDismissKey]);
+
+  const handleCommentDraftChange = useCallback((nextValue) => {
+    const nextDraft = typeof nextValue === 'string'
+      ? nextValue.slice(0, COMMENT_MAX_LENGTH)
+      : '';
+    setCommentDraft(nextDraft);
+    setCommentSelection((current) => {
+      const nextStart = Math.min(current?.start ?? 0, nextDraft.length);
+      const nextEnd = Math.min(current?.end ?? nextStart, nextDraft.length);
+      return { start: nextStart, end: nextEnd };
+    });
+    setMentionPickerDismissedKey(null);
+  }, []);
+
+  const handleCommentSelectionChange = useCallback((event) => {
+    const selection = event?.nativeEvent?.selection;
+    const nextStart = Number.isFinite(selection?.start) ? selection.start : 0;
+    const nextEnd = Number.isFinite(selection?.end) ? selection.end : nextStart;
+    setCommentSelection({ start: nextStart, end: nextEnd });
+  }, []);
+
+  const handleSelectMention = useCallback((friend) => {
+    if (!activeMention || !friend?.mentionHandle) return;
+
+    const replacement = replaceActiveMention(commentDraft, activeMention, friend.mentionHandle);
+    setCommentDraft(replacement.text);
+    setCommentSelection({ start: replacement.selection, end: replacement.selection });
+    setMentionPickerDismissedKey(null);
+    setActiveDraggedMentionUid(null);
+    setMentionPickerScrollOffset(0);
+    commentInputRef.current?.focus?.();
+    Haptics.selectionAsync().catch(() => {});
+  }, [activeMention, commentDraft]);
+
+  const updateDraggedMentionFromTouch = useCallback((event) => {
+    if (!mentionSuggestions.length) return;
+    const locationY = event?.nativeEvent?.locationY;
+    if (!Number.isFinite(locationY)) return;
+
+    const contentY = locationY + mentionPickerScrollOffsetRef.current;
+    const nextIndex = Math.max(0, Math.floor(contentY / MENTION_PICKER_ROW_HEIGHT));
+    const nextMention = mentionSuggestions[nextIndex] || null;
+    const nextUid = nextMention?.uid || null;
+
+    setActiveDraggedMentionUid((current) => {
+      if (current === nextUid) {
+        return current;
+      }
+      if (nextUid) {
+        Haptics.selectionAsync().catch(() => {});
+      }
+      return nextUid;
+    });
+  }, [mentionSuggestions]);
+
+  const handleMentionPickerTouchStart = useCallback((event) => {
+    mentionDragMovedRef.current = false;
+    updateDraggedMentionFromTouch(event);
+  }, [updateDraggedMentionFromTouch]);
+
+  const handleMentionPickerTouchMove = useCallback((event) => {
+    mentionDragMovedRef.current = true;
+    updateDraggedMentionFromTouch(event);
+  }, [updateDraggedMentionFromTouch]);
+
+  const handleMentionPickerTouchEnd = useCallback(() => {
+    if (mentionDragMovedRef.current) {
+      const selectedFriend = mentionSuggestions.find((item) => item?.uid === activeDraggedMentionUid) || null;
+      if (selectedFriend) {
+        handleSelectMention(selectedFriend);
+      }
+    }
+    mentionDragMovedRef.current = false;
+    setActiveDraggedMentionUid(null);
+  }, [activeDraggedMentionUid, handleSelectMention, mentionSuggestions]);
+
+  const handleMentionPickerTouchCancel = useCallback(() => {
+    mentionDragMovedRef.current = false;
+    setActiveDraggedMentionUid(null);
+  }, []);
+
   const submitComment = useCallback(async () => {
     const normalizedText = commentDraft.trim();
     if (!selectedPhotoCanComment || !selectedPhotoId || !normalizedText) {
       return;
     }
+    setMentionPickerDismissedKey(null);
+    setActiveDraggedMentionUid(null);
     const optimisticId = `optimistic-comment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const optimisticComment = {
       _id: optimisticId,
@@ -849,6 +1074,7 @@ export default function ViewPhotoScreen() {
     pendingCommentIdsRef.current.add(optimisticId);
     applyCommentsUpdate(selectedPhotoId, (current) => [optimisticComment, ...current], { isDirty: true });
     setCommentDraft('');
+    setCommentSelection({ start: 0, end: 0 });
 
     createPhotoComment(selectedPhotoId, normalizedText)
       .then((result) => {
@@ -997,12 +1223,32 @@ export default function ViewPhotoScreen() {
       const draftText = typeof currentDraft === 'string' ? currentDraft : '';
       const trimmedStart = draftText.trimStart();
       if (trimmedStart === mentionPrefix || trimmedStart.startsWith(`${mentionPrefix} `)) {
+        const nextSelection = draftText.length;
+        setCommentSelection({ start: nextSelection, end: nextSelection });
+        setMentionPickerDismissedKey(null);
+        requestAnimationFrame(() => {
+          commentInputRef.current?.focus?.();
+        });
         return draftText;
       }
       if (!draftText.trim()) {
-        return `${mentionPrefix} `;
+        const nextDraft = `${mentionPrefix} `;
+        const nextSelection = nextDraft.length;
+        setCommentSelection({ start: nextSelection, end: nextSelection });
+        setMentionPickerDismissedKey(null);
+        requestAnimationFrame(() => {
+          commentInputRef.current?.focus?.();
+        });
+        return nextDraft;
       }
-      return `${mentionPrefix} ${draftText}`;
+      const nextDraft = `${mentionPrefix} ${draftText}`;
+      const nextSelection = nextDraft.length;
+      setCommentSelection({ start: nextSelection, end: nextSelection });
+      setMentionPickerDismissedKey(null);
+      requestAnimationFrame(() => {
+        commentInputRef.current?.focus?.();
+      });
+      return nextDraft;
     });
   }, []);
 
@@ -1093,7 +1339,7 @@ export default function ViewPhotoScreen() {
   ]);
 
   return (
-    <SafeAreaView style={styles.detailSafe}>
+    <SafeAreaView ref={detailSafeRef} collapsable={false} style={styles.detailSafe}>
       <View style={styles.detailHeader}>
         <Pressable onPress={closePhotoDetail} style={styles.detailCloseButton}>
           <MaterialIcons name="arrow-back" size={22} color={colors.text} />
@@ -1254,16 +1500,26 @@ export default function ViewPhotoScreen() {
                 size={40}
                 styles={styles}
               />
-              <View style={styles.commentComposerInputWrap}>
+              <View
+                ref={commentInputWrapRef}
+                collapsable={false}
+                onLayout={measureMentionPickerAnchor}
+                style={styles.commentComposerInputWrap}
+              >
                 <TextInput
+                  ref={commentInputRef}
                   value={commentDraft}
-                  onChangeText={(nextValue) => setCommentDraft(nextValue.slice(0, COMMENT_MAX_LENGTH))}
+                  onChangeText={handleCommentDraftChange}
+                  onSelectionChange={handleCommentSelectionChange}
                   placeholder="Add a comment..."
                   placeholderTextColor={colors.textMuted}
                   style={styles.commentComposerInput}
                   multiline
                   textAlignVertical="top"
                   maxLength={COMMENT_MAX_LENGTH}
+                  selection={commentSelection}
+                  selectionColor={colors.primary}
+                  cursorColor={colors.text}
                 />
               </View>
               <Pressable
@@ -1288,6 +1544,74 @@ export default function ViewPhotoScreen() {
           )}
         </BottomBar>
       </KeyboardAvoidingView>
+
+      {mentionPickerVisible ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close mention suggestions"
+            onPress={dismissMentionPicker}
+            style={styles.mentionBackdrop}
+          />
+          <View
+            style={[
+              styles.mentionPicker,
+              {
+                left: mentionPickerLeft,
+                top: mentionPickerTop,
+                height: mentionPickerHeight,
+              },
+            ]}
+          >
+            <FlatList
+              data={mentionSuggestions}
+              keyExtractor={(item) => String(item?.uid || item?.mentionHandle)}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="always"
+              bounces={mentionSuggestions.length > 3}
+              onScroll={(event) => {
+                const nextOffset = Number.isFinite(event?.nativeEvent?.contentOffset?.y)
+                  ? event.nativeEvent.contentOffset.y
+                  : 0;
+                setMentionPickerScrollOffset(nextOffset);
+              }}
+              onTouchStart={handleMentionPickerTouchStart}
+              onTouchMove={handleMentionPickerTouchMove}
+              onTouchEnd={handleMentionPickerTouchEnd}
+              onTouchCancel={handleMentionPickerTouchCancel}
+              renderItem={({ item }) => {
+                const isDragged = activeDraggedMentionUid && item?.uid === activeDraggedMentionUid;
+                return (
+                  <Pressable
+                    onPress={() => handleSelectMention(item)}
+                    style={({ pressed }) => [
+                      styles.mentionRow,
+                      isDragged && styles.mentionRowActive,
+                      pressed && styles.mentionRowPressed,
+                    ]}
+                    testID={`mention-row-${item?.mentionHandle}`}
+                  >
+                    <UserAvatar
+                      uri={item?.photo_url || null}
+                      label={getAvatarInitial(item)}
+                      size={38}
+                      styles={styles}
+                    />
+                    <View style={styles.mentionTextWrap}>
+                      <Text numberOfLines={1} style={styles.mentionName}>
+                        {getFriendDisplayLabel(item)}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.mentionHandleText}>
+                        {getFriendHandleLabel(item)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        </>
+      ) : null}
 
       <Toast message={toastMessage} bottomOffset={100} />
     </SafeAreaView>
@@ -1660,6 +1984,49 @@ function createStyles(colors) {
       ...textStyles.bodySmallStrong,
       color: colors.textMuted,
       textAlign: 'center',
+    },
+    mentionBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 18,
+    },
+    mentionPicker: {
+      position: 'absolute',
+      width: MENTION_PICKER_WIDTH,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      overflow: 'hidden',
+      zIndex: 20,
+      ...shadows.chip,
+    },
+    mentionRow: {
+      height: MENTION_PICKER_ROW_HEIGHT,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      backgroundColor: colors.bg,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    mentionRowActive: {
+      backgroundColor: colors.surface,
+    },
+    mentionRowPressed: {
+      opacity: 0.88,
+    },
+    mentionTextWrap: {
+      flex: 1,
+      gap: 1,
+    },
+    mentionName: {
+      ...textStyles.bodySmallBold,
+      color: colors.text,
+    },
+    mentionHandleText: {
+      ...textStyles.body2xsBold,
+      color: colors.textMuted,
     },
   });
 }

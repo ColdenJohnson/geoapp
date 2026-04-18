@@ -8,35 +8,35 @@
   },
   {
     "id": "photos_10",
-    "label": "10 Photos",
+    "label": "Many Photos",
     "icon": "photo-camera",
     "metric": "photo_count",
     "threshold": 10
   },
   {
     "id": "photos_100",
-    "label": "100 Photos",
+    "label": "Photomania",
     "icon": "collections",
     "metric": "photo_count",
     "threshold": 100
   },
   {
     "id": "elo_1100",
-    "label": "1100 Elo",
+    "label": "Nice Quest",
     "icon": "emoji-events",
     "metric": "max_global_elo",
     "threshold": 1100
   },
   {
     "id": "elo_1200",
-    "label": "1200 Elo",
+    "label": "Great Quest",
     "icon": "emoji-events",
     "metric": "max_global_elo",
     "threshold": 1200
   },
   {
     "id": "elo_1500",
-    "label": "1500 Elo",
+    "label": "Epic Quest",
     "icon": "emoji-events",
     "metric": "max_global_elo",
     "threshold": 1500
