@@ -2,8 +2,9 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useContext, useEffect, useMemo } from 'react';
-import { Image, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { AuthContext, AuthProvider } from '../hooks/AuthContext';
+import CreateUsernameScreen from '../screens/CreateUsernameScreen';
 import LoginScreen from '../screens/LoginScreen';
 import '../config/logging';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -15,7 +16,7 @@ import { initializeUploadQueue } from '@/lib/uploadQueue';
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const colors = usePalette();
-  const { user, loadingAuth } = useContext(AuthContext);
+  const { user, profile, loadingAuth, loadingProfile } = useContext(AuthContext);
   usePushNotifications(user);
 
   const navigationTheme = useMemo(() => {
@@ -41,6 +42,9 @@ function RootLayoutContent() {
     return initializeUploadQueue();
   }, [user?.uid]);
 
+  const shouldShowCreateUsernameGate = Boolean(user?.uid && !loadingProfile && !profile?.handle);
+  const shouldShieldAuthedApp = Boolean(user?.uid && (loadingProfile || shouldShowCreateUsernameGate));
+
   // Show splash screen while loading / not authorized
   if (loadingAuth) {
     return (
@@ -57,23 +61,27 @@ function RootLayoutContent() {
     <ThemeProvider value={navigationTheme}>
       <>
         {user ? (
-          <Stack
-            screenOptions={{
-              headerShown: false,
-            }}
-          >
-            <Stack.Screen name="(tabs)" options={{ headerShown: false, title:"Map"}} />
-            <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
-            <Stack.Screen name="friends" options={{ headerShown: false }} />
-            <Stack.Screen name="user_profile/[uid]" options={{ headerShown: false }} />
-            <Stack.Screen name="enter_message" options={{ title: 'Create a new Quest' }} />
-            <Stack.Screen name="upload" options={{ title: 'Upload Photo' }} />
-            <Stack.Screen 
-              name="view_photochallenge" 
-              options={{ 
-                title: 'View Quest',
-              }} />
-          </Stack>
+          <View style={styles.authedRoot}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+            >
+              <Stack.Screen name="(tabs)" options={{ headerShown: false, title:"Map"}} />
+              <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
+              <Stack.Screen name="friends" options={{ headerShown: false }} />
+              <Stack.Screen name="user_profile/[uid]" options={{ headerShown: false }} />
+              <Stack.Screen name="enter_message" options={{ title: 'Create a new Quest' }} />
+              <Stack.Screen name="upload" options={{ title: 'Upload Photo' }} />
+              <Stack.Screen
+                name="view_photochallenge"
+                options={{
+                  title: 'View Quest',
+                }} />
+            </Stack>
+            {shouldShieldAuthedApp ? <View pointerEvents="auto" style={[styles.authedShield, { backgroundColor: colors.surface }]} /> : null}
+            {shouldShowCreateUsernameGate ? <View style={styles.gateWrap}><CreateUsernameScreen /></View> : null}
+          </View>
         ) : (
           <LoginScreen />
         )}
@@ -82,6 +90,18 @@ function RootLayoutContent() {
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  authedRoot: {
+    flex: 1,
+  },
+  authedShield: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  gateWrap: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});
 
 export default function RootLayout() {
   return (

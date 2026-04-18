@@ -16,6 +16,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 jest.mock('@react-native-firebase/auth', () => () => ({
   onAuthStateChanged: jest.fn(() => jest.fn()),
   onIdTokenChanged: jest.fn(() => jest.fn()),
+  signOut: jest.fn(async () => {}),
 }));
 
 jest.mock('expo-image-picker', () => ({

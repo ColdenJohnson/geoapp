@@ -145,7 +145,7 @@ describe('LoginScreen', () => {
     fireEvent.changeText(getByTestId('phone-number-input'), '123');
     fireEvent.press(getByText('Send verification text').parent);
     expect(auth().signInWithPhoneNumber).not.toHaveBeenCalled();
-    expect(queryByText('Verify your phone number')).toBeNull();
+    expect(queryByText('Verify your number')).toBeNull();
 
     fireEvent.changeText(getByTestId('phone-number-input'), '4155552671');
     fireEvent.press(getByText('Send verification text').parent);
@@ -153,7 +153,7 @@ describe('LoginScreen', () => {
     await waitFor(() =>
       expect(auth().signInWithPhoneNumber).toHaveBeenCalledWith('+14155552671')
     );
-    expect(getByText('Verify your phone number')).toBeTruthy();
+    expect(getByText('Verify your number')).toBeTruthy();
   });
 
   it('stays on the phone screen and renders an inline error when SMS sending fails', async () => {
@@ -167,7 +167,7 @@ describe('LoginScreen', () => {
     fireEvent.press(getByText('Send verification text').parent);
 
     expect(await findByText('Unable to send text')).toBeTruthy();
-    expect(queryByText('Verify your phone number')).toBeNull();
+    expect(queryByText('Verify your number')).toBeNull();
   });
 
   it('auto-confirms the code and stores the auth token once 6 digits are entered', async () => {
@@ -182,7 +182,7 @@ describe('LoginScreen', () => {
     fireEvent.changeText(getByTestId('phone-number-input'), '4155552671');
     fireEvent.press(getByText('Send verification text').parent);
 
-    await waitFor(() => expect(getByText('Verify your phone number')).toBeTruthy());
+    await waitFor(() => expect(getByText('Verify your number')).toBeTruthy());
 
     fireEvent.changeText(getByTestId('sms-code-input'), '12345');
     expect(mockConfirmation.confirm).not.toHaveBeenCalled();

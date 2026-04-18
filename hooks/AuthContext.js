@@ -51,7 +51,7 @@ function getForcedAppTutorialStep() {
     return debugForcedStep;
   }
 
-  const forcedStep = process.env['EXPO_PUBLIC_FORCE_APP_TUTORIAL_STEP'];
+  const forcedStep = process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL_STEP;
   if (Object.values(APP_TUTORIAL_STEPS).includes(forcedStep)) {
     return forcedStep;
   }
@@ -63,7 +63,7 @@ function getForcedAppTutorialVisibility() {
   if (forcedStep) {
     return createAppTutorialVisibilityState([forcedStep]);
   }
-  if (globalThis.__DEV_FORCE_APP_TUTORIAL__ === true || isTruthyEnvFlag(process.env['EXPO_PUBLIC_FORCE_APP_TUTORIAL'])) {
+  if (globalThis.__DEV_FORCE_APP_TUTORIAL__ === true || isTruthyEnvFlag(process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL)) {
     return createAppTutorialVisibilityState(APP_TUTORIAL_STEP_LIST);
   }
   return null;
@@ -117,6 +117,7 @@ function mergeActivityItems(existingItems, incomingItems) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);           // Firebase user
   const [profile, setProfile] = useState(null);     // Mongo profile
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const [themePreference, setThemePreference] = useState(DEFAULT_THEME_PREFERENCE);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [friends, setFriends] = useState([]);
@@ -222,17 +223,25 @@ export function AuthProvider({ children }) {
 
     async function loadProfile() {
       if (user?.uid) {
+        setLoadingProfile(true);
         setProfile(null);
-        const p = await fetchUsersByUID(user.uid);
-        if (cancelled) return;
-        if (p?.photo_url) {
-          Image.prefetch(p.photo_url).catch((error) => {
-            console.warn('Failed to prefetch profile photo', error);
-          });
+        try {
+          const p = await fetchUsersByUID(user.uid);
+          if (cancelled) return;
+          if (p?.photo_url) {
+            Image.prefetch(p.photo_url).catch((error) => {
+              console.warn('Failed to prefetch profile photo', error);
+            });
+          }
+          setProfile(p);
+        } finally {
+          if (!cancelled) {
+            setLoadingProfile(false);
+          }
         }
-        setProfile(p);
       } else {
         setProfile(null);
+        setLoadingProfile(false);
       }
     }
     loadProfile();
@@ -692,6 +701,7 @@ export function AuthProvider({ children }) {
       user,
       setUser,
       profile,
+      loadingProfile,
       setProfile,
       themePreference,
       loadingAuth,

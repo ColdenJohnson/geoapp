@@ -19,9 +19,9 @@ import storage from '@react-native-firebase/storage';
 import { goBackOrHome } from '@/lib/navigation';
 import { normalizeThemePreference } from '@/theme/themePreference';
 import { textStyles } from '@/theme/typography';
+import { getHandleValidationMessage, normalizeHandleInput } from '@/lib/handleValidation';
 
 const BIO_MAX_LENGTH = 100;
-const HANDLE_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
 
 export default function EditProfileScreen() {
   const { user, profile, setProfile, setUser } = useContext(AuthContext);
@@ -45,11 +45,9 @@ export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const isDefaultPinPrivate = profile?.default_pin_private === true;
   const themePreference = normalizeThemePreference(profile?.theme_preference);
-  const trimmedHandleInput = typeof handleInput === 'string' ? handleInput.trim().replace(/^@/, '') : '';
+  const trimmedHandleInput = normalizeHandleInput(handleInput);
   const isHandleChanged = trimmedHandleInput !== '' && trimmedHandleInput !== (profile?.handle || '');
-  const handleValidationMessage = isHandleChanged && !HANDLE_REGEX.test(trimmedHandleInput)
-    ? 'Handle must be 3-20 letters, numbers, or underscores.'
-    : null;
+  const handleValidationMessage = isHandleChanged ? getHandleValidationMessage(handleInput) : null;
   const isSaveDisabled = !!handleValidationMessage;
 
   useEffect(() => {
@@ -249,7 +247,12 @@ export default function EditProfileScreen() {
             try {
               setDeleting(true);
               const resp = await deleteMyAccount();
+              console.log('Delete account backend response:', resp);
               if (resp?.success) {
+                if (resp?.authDeleted === false) {
+                  console.warn('Delete account completed without Firebase Auth deletion. Signing out locally so the account can be recreated on next login.');
+                }
+                await auth().signOut();
                 await AsyncStorage.removeItem('user_token');
                 setUser(null);
                 console.log('Account deleted');
