@@ -1,10 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // import * as SecureStore from 'expo-secure-store';
 // do this: https://docs.expo.dev/versions/latest/sdk/auth-session/
 import {
-  Image,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
@@ -17,8 +15,9 @@ import NetInfo from '@react-native-community/netinfo';
 import auth from '@react-native-firebase/auth';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import CountryPicker, { DARK_THEME, DEFAULT_THEME } from 'react-native-country-picker-modal';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -50,11 +49,13 @@ export default function LoginScreen() {
   const [isEmailLoading, setIsEmailLoading] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isAppleAuthAvailable, setIsAppleAuthAvailable] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const codeInputRef = useRef(null);
   const lastAutoSubmittedCodeRef = useRef('');
 
   const colors = usePalette();
   const isDarkMode = useIsDarkMode();
+  const insets = useSafeAreaInsets();
   const countryPickerTheme = useMemo(() => (
     isDarkMode ? DARK_THEME : DEFAULT_THEME
   ), [isDarkMode]);
@@ -63,17 +64,17 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return undefined;
-    const timer = setInterval(() => {
+    const timer = globalThis.setInterval(() => {
       setCooldownSeconds((prev) => {
         if (prev <= 1) {
-          clearInterval(timer);
+          globalThis.clearInterval(timer);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => globalThis.clearInterval(timer);
   }, [cooldownSeconds]);
 
   useEffect(() => {
@@ -118,15 +119,36 @@ export default function LoginScreen() {
   }, []);
 
   useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const handleKeyboardShow = (event) => {
+      setKeyboardHeight(event?.endCoordinates?.height ?? 0);
+    };
+
+    const handleKeyboardHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showSubscription = Keyboard.addListener(showEvent, handleKeyboardShow);
+    const hideSubscription = Keyboard.addListener(hideEvent, handleKeyboardHide);
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (step !== 'verify') {
       return undefined;
     }
 
-    const timer = setTimeout(() => {
+    const timer = globalThis.setTimeout(() => {
       codeInputRef.current?.focus();
     }, 150);
 
-    return () => clearTimeout(timer);
+    return () => globalThis.clearTimeout(timer);
   }, [step]);
 
   useEffect(() => {
@@ -139,6 +161,19 @@ export default function LoginScreen() {
   const hasValidPhoneNumber = normalizedPhoneNumber.length >= PHONE_DIGIT_MIN_LENGTH;
   const hasCompleteCode = smsCode.length === CODE_LENGTH;
   const hasEmailCredentials = email.trim().length > 0 && password.length > 0;
+  const formattedVerificationPhone = useMemo(() => {
+    const e164 = normalizedPhoneNumber ? `+${callingCode}${normalizedPhoneNumber}` : '';
+    if (!e164) {
+      return '';
+    }
+
+    try {
+      const parsed = parsePhoneNumberFromString(e164);
+      return parsed?.formatInternational() || e164;
+    } catch {
+      return e164;
+    }
+  }, [callingCode, normalizedPhoneNumber]);
   const isPrimaryLoading = step === 'phone'
     ? isSendingSms
     : step === 'verify'
@@ -206,7 +241,7 @@ export default function LoginScreen() {
     }
   };
 
-  const handleConfirmCode = async () => {
+  const handleConfirmCode = useCallback(async () => {
     if (!hasCompleteCode || isConfirmingCode) {
       return;
     }
@@ -226,7 +261,7 @@ export default function LoginScreen() {
     } finally {
       setIsConfirmingCode(false);
     }
-  };
+  }, [confirmation, hasCompleteCode, isConfirmingCode, smsCode]);
 
   const handleBackFromVerify = () => {
     setErrorMsg('');
@@ -298,23 +333,29 @@ export default function LoginScreen() {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      {step === 'phone' ? (
+      <View style={styles.headerSide}>
+        {step === 'phone' ? (
+          <View style={styles.backButtonPlaceholder} />
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={step === 'verify' ? handleBackFromVerify : handleBackFromEmail}
+            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          >
+            <FontAwesome name="arrow-left" size={16} color="#FFFFFF" />
+          </Pressable>
+        )}
+      </View>
+      <Text style={styles.brand}>SideQuest</Text>
+      <View style={styles.headerSide}>
         <View style={styles.backButtonPlaceholder} />
-      ) : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={step === 'verify' ? handleBackFromVerify : handleBackFromEmail}
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-        >
-          <FontAwesome name="arrow-left" size={16} color="#FFFFFF" />
-        </Pressable>
-      )}
+      </View>
     </View>
   );
 
   const renderPhoneStep = () => (
-    <View style={styles.section}>
+    <View style={[styles.section, styles.phoneSection]}>
       <Text style={styles.title}>What&apos;s your phone number?</Text>
       <View>
         <View style={styles.phoneRow}>
@@ -400,8 +441,8 @@ export default function LoginScreen() {
     const codeDigits = Array.from({ length: CODE_LENGTH }, (_, index) => smsCode[index] ?? '');
 
     return (
-      <View style={styles.section}>
-        <Text style={styles.title}>Verify your phone number</Text>
+      <View style={[styles.section, styles.verifySection]}>
+        <Text style={styles.title}>Verify your number</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => codeInputRef.current?.focus()}
@@ -454,9 +495,12 @@ export default function LoginScreen() {
           >
             <Text style={styles.resendText}>Resend code</Text>
           </Pressable>
-        ) : (
-          <View style={styles.resendPlaceholder} />
-        )}
+        ) : null}
+        {formattedVerificationPhone ? (
+          <Text style={styles.verificationSentText}>
+            Verification code sent to {formattedVerificationPhone}
+          </Text>
+        ) : null}
       </View>
     );
   };
@@ -509,23 +553,17 @@ export default function LoginScreen() {
     : step === 'verify'
       ? !hasCompleteCode || isConfirmingCode || isSendingSms
       : !hasEmailCredentials || isEmailLoading;
+  const keyboardOffset = Platform.OS === 'ios'
+    ? Math.max(keyboardHeight - insets.bottom, 0)
+    : keyboardHeight;
+  const actionBarBottom = keyboardOffset > 0 ? keyboardOffset + spacing.sm : spacing.lg;
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.container}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardWrap}
-        >
+        <View style={styles.screen}>
           {renderHeader()}
           <View style={styles.content}>
-            <View style={styles.brandBlock}>
-              <View style={styles.logoWrap}>
-                <Image source={require('../assets/images/icon.png')} style={styles.logo} />
-              </View>
-              <Text style={styles.brand}>SideQuest</Text>
-            </View>
-
             {isOffline ? (
               <View style={styles.offlineBanner}>
                 <Text style={styles.offlineBannerText}>
@@ -541,7 +579,7 @@ export default function LoginScreen() {
             {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
           </View>
 
-          <BottomBar style={styles.actionBar}>
+          <BottomBar style={[styles.actionBar, { bottom: actionBarBottom }]}>
             <View style={styles.actionInner}>
               <CTAButton
                 title={primaryLabel}
@@ -553,7 +591,7 @@ export default function LoginScreen() {
               />
             </View>
           </BottomBar>
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </TouchableWithoutFeedback>
   );
@@ -565,13 +603,20 @@ function createStyles(colors) {
       flex: 1,
       backgroundColor: colors.surface,
     },
-    keyboardWrap: {
+    screen: {
       flex: 1,
+      position: 'relative',
     },
     header: {
-      height: 68,
-      justifyContent: 'center',
+      height: 72,
+      flexDirection: 'row',
+      alignItems: 'center',
       paddingHorizontal: spacing.lg,
+    },
+    headerSide: {
+      width: 42,
+      alignItems: 'flex-start',
+      justifyContent: 'center',
     },
     backButtonPlaceholder: {
       width: 42,
@@ -595,29 +640,24 @@ function createStyles(colors) {
       maxWidth: 420,
       alignSelf: 'center',
       paddingHorizontal: spacing.xl,
-      paddingBottom: spacing.xl,
-      justifyContent: 'center',
-    },
-    brandBlock: {
-      alignItems: 'center',
-      marginBottom: spacing['2xl'],
-    },
-    logoWrap: {
-      marginBottom: spacing.sm,
-      borderRadius: 28,
-      overflow: 'hidden',
-    },
-    logo: {
-      width: 84,
-      height: 84,
-      borderRadius: 28,
+      paddingTop: spacing.lg,
+      paddingBottom: 132,
+      justifyContent: 'flex-start',
     },
     brand: {
       ...textStyles.brand,
       color: colors.primary,
+      flex: 1,
+      textAlign: 'center',
     },
     section: {
       width: '100%',
+    },
+    phoneSection: {
+      marginTop: spacing['2xl'],
+    },
+    verifySection: {
+      marginTop: spacing['2xl'],
     },
     title: {
       ...textStyles.pageTitleCompact,
@@ -730,9 +770,12 @@ function createStyles(colors) {
       color: isLightColor(colors.surface) ? colors.textMuted : '#FFFFFF',
       letterSpacing: 0.2,
     },
-    resendPlaceholder: {
-      minHeight: 26,
+    verificationSentText: {
+      ...textStyles.body2xsBold,
+      color: colors.textMuted,
+      textAlign: 'center',
       marginTop: spacing.lg,
+      lineHeight: 18,
     },
     emailField: {
       marginBottom: spacing.md,
@@ -752,13 +795,14 @@ function createStyles(colors) {
       textAlign: 'center',
     },
     actionBar: {
+      position: 'absolute',
+      left: spacing.lg,
+      right: spacing.lg,
       borderRadius: radii.lg,
       borderTopWidth: 0,
       borderWidth: 1,
       borderColor: colors.barBorder,
       backgroundColor: colors.bg,
-      marginHorizontal: spacing.lg,
-      marginBottom: spacing.lg,
     },
     actionInner: {
       width: '100%',
