@@ -356,11 +356,14 @@ export default function EditProfileScreen() {
 
             <Text style={styles.sectionTitle}>Bio</Text>
             <TextInput
-              style={formStyles.input}
+              style={[formStyles.input, styles.bioInput]}
               placeholder=""
               value={formBio}
               onChangeText={(value) => setFormBio(value.slice(0, BIO_MAX_LENGTH))}
               maxLength={BIO_MAX_LENGTH}
+              multiline
+              numberOfLines={2}
+              scrollEnabled={false}
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.primary}
               cursorColor={colors.text}
@@ -605,6 +608,12 @@ function createStyles(colors) {
     },
     invalidInput: {
       borderColor: colors.danger,
+    },
+    bioInput: {
+      height: 80,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.sm,
+      textAlignVertical: 'top',
     },
     bioCounter: {
       marginTop: spacing.xs,

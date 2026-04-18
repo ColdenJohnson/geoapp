@@ -95,4 +95,14 @@ describe('EditProfileScreen', () => {
 
     await waitFor(() => expect(updateUserProfile).toHaveBeenCalledWith('user-1', { theme_preference: 'light' }));
   });
+
+  it('renders the bio field as a fixed two-line multiline input', () => {
+    const { getByDisplayValue } = renderScreen();
+
+    const bioInput = getByDisplayValue('Hello');
+
+    expect(bioInput.props.multiline).toBe(true);
+    expect(bioInput.props.numberOfLines).toBe(2);
+    expect(bioInput.props.scrollEnabled).toBe(false);
+  });
 });
