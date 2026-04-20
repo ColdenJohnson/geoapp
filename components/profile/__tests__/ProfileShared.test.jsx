@@ -16,6 +16,17 @@ const colors = {
   badgeLockedIcon: '#999999',
 };
 
+const achievementCatalog = [
+  { id: 'photos_1', label: 'First Photo', icon: 'camera-alt', metric: 'photo_count', threshold: 1 },
+  { id: 'photos_10', label: '10 Photos', icon: 'photo-camera', metric: 'photo_count', threshold: 10 },
+  { id: 'photos_100', label: '100 Photos', icon: 'collections', metric: 'photo_count', threshold: 100 },
+  { id: 'elo_1100', label: '1100 Elo', icon: 'emoji-events', metric: 'max_global_elo', threshold: 1100 },
+  { id: 'elo_1200', label: '1200 Elo', icon: 'emoji-events', metric: 'max_global_elo', threshold: 1200 },
+  { id: 'elo_1500', label: '1500 Elo', icon: 'emoji-events', metric: 'max_global_elo', threshold: 1500 },
+  { id: 'opinionated', label: 'Opinionated', icon: 'chat', metric: 'comment_count', threshold: 5 },
+  { id: 'popular', label: 'Popular', icon: 'people', metric: 'friend_count', threshold: 10 },
+];
+
 describe('ProfileHeaderCard', () => {
   it('renders the handle and streak beneath the display name', () => {
     const styles = createProfileStyles(colors);
@@ -59,6 +70,7 @@ describe('ProfileAchievementsCard', () => {
     const styles = createProfileStyles(colors);
     const { getByText } = render(
       <ProfileAchievementsCard
+        achievementCatalog={achievementCatalog}
         earnedAchievements={[
           { id: 'photos_10', earned_at: '2026-04-18T00:00:00.000Z' },
         ]}

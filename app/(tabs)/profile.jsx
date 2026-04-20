@@ -26,6 +26,7 @@ export default function UserProfileScreen() {
     friends,
     stats,
     statsLoading,
+    achievementCatalog,
     refreshStats,
     topPhotos,
     topPhotosLoading,
@@ -161,6 +162,7 @@ export default function UserProfileScreen() {
         </View>
 
         <ProfileAchievementsCard
+          achievementCatalog={achievementCatalog}
           earnedAchievements={stats?.earned_achievements}
           earnedBadgeIds={stats?.earned_badges}
           colors={colors}

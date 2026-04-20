@@ -22,6 +22,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 jest.mock('@/lib/api', () => ({
+  fetchAchievementCatalog: jest.fn(() => Promise.resolve([])),
   fetchUsersByUID: jest.fn(),
   fetchFriends: jest.fn(() => Promise.resolve([])),
   fetchFriendRequests: jest.fn(() => Promise.resolve({ incoming: [], outgoing: [] })),
@@ -30,7 +31,7 @@ jest.mock('@/lib/api', () => ({
   fetchUserTopPhotos: jest.fn(() => Promise.resolve([])),
 }));
 
-const { fetchUsersByUID } = require('@/lib/api');
+const { fetchAchievementCatalog, fetchUsersByUID } = require('@/lib/api');
 const AsyncStorage = require('@react-native-async-storage/async-storage');
 describe('AuthProvider', () => {
   beforeEach(() => {
@@ -39,10 +40,31 @@ describe('AuthProvider', () => {
     AsyncStorage.getItem.mockResolvedValue(null);
     AsyncStorage.setItem.mockResolvedValue();
     AsyncStorage.removeItem.mockResolvedValue();
+    fetchAchievementCatalog.mockResolvedValue([]);
     delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL;
     delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL_STEP;
     delete global.__DEV_FORCE_APP_TUTORIAL__;
     delete global.__DEV_FORCE_APP_TUTORIAL_STEP__;
+  });
+
+  it('hydrates a cached achievement catalog without waiting on a network fetch', async () => {
+    const cachedCatalog = [
+      { id: 'photos_1', label: 'First Photo', icon: 'camera-alt', metric: 'photo_count', threshold: 1 },
+    ];
+    AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
+      key === 'achievement_catalog_cache_v1'
+        ? JSON.stringify({ catalog: cachedCatalog, fetchedAt: Date.now() })
+        : null
+    ));
+
+    const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
+    const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.achievementCatalog).toEqual(cachedCatalog);
+    });
+
+    expect(fetchAchievementCatalog).not.toHaveBeenCalled();
   });
 
   it('loads profile when user with uid is set and clears when unset', async () => {

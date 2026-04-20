@@ -14,6 +14,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeUploadQueue } from '@/lib/uploadQueue';
 import { AchievementCelebrationModal } from '@/components/ui/AchievementCelebrationModal';
+import { getAchievementDefinition } from '@/lib/achievements';
 
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
@@ -23,6 +24,7 @@ function RootLayoutContent() {
     profile,
     loadingAuth,
     loadingProfile,
+    achievementCatalog,
     achievementCelebration,
     dismissAchievementCelebration,
   } = useContext(AuthContext);
@@ -52,9 +54,9 @@ function RootLayoutContent() {
   }, [user?.uid]);
 
   useEffect(() => {
-    if (!achievementCelebration) return;
+    if (!getAchievementDefinition(achievementCatalog, achievementCelebration?.id)) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-  }, [achievementCelebration]);
+  }, [achievementCatalog, achievementCelebration]);
 
   const shouldShowCreateUsernameGate = Boolean(user?.uid && !loadingProfile && !profile?.handle);
   const shouldShieldAuthedApp = Boolean(user?.uid && (loadingProfile || shouldShowCreateUsernameGate));
@@ -97,8 +99,9 @@ function RootLayoutContent() {
             {shouldShowCreateUsernameGate ? <View style={styles.gateWrap}><CreateUsernameScreen /></View> : null}
             <AchievementCelebrationModal
               achievement={achievementCelebration}
+              achievementCatalog={achievementCatalog}
               colors={colors}
-              visible={!!achievementCelebration}
+              visible={!!getAchievementDefinition(achievementCatalog, achievementCelebration?.id)}
               onClose={dismissAchievementCelebration}
             />
           </View>

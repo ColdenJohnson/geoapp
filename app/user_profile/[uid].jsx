@@ -48,6 +48,7 @@ export default function PublicUserProfileScreen() {
     friends,
     friendsLoading,
     friendRequests,
+    achievementCatalog,
     refreshFriends,
     applyUploadResult,
   } = useContext(AuthContext);
@@ -291,6 +292,7 @@ export default function PublicUserProfileScreen() {
               </View>
             ) : null}
             <ProfileAchievementsCard
+              achievementCatalog={achievementCatalog}
               earnedAchievements={statsData?.earned_achievements}
               earnedBadgeIds={statsData?.earned_badges}
               colors={colors}

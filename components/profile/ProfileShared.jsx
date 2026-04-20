@@ -3,11 +3,9 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 
 import emptyPfp from '@/assets/images/empty_pfp.png';
-import { ACHIEVEMENT_CATALOG, getEarnedAchievementIds } from '@/lib/achievements';
+import { getEarnedAchievementIds } from '@/lib/achievements';
 import { spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
-
-export const PROFILE_BADGES = ACHIEVEMENT_CATALOG;
 
 export function ProfileHeaderCard({
   profile,
@@ -50,16 +48,21 @@ export function ProfileHeaderCard({
 }
 
 export function ProfileAchievementsCard({
+  achievementCatalog,
   earnedAchievements,
   earnedBadgeIds,
   colors,
   styles,
 }) {
+  const profileBadges = Array.isArray(achievementCatalog) ? achievementCatalog : [];
+  if (!profileBadges.length) {
+    return null;
+  }
   const earnedIds = Array.isArray(earnedAchievements)
     ? getEarnedAchievementIds(earnedAchievements)
     : earnedBadgeIds;
   const earnedBadgeIdSet = new Set(Array.isArray(earnedIds) ? earnedIds : []);
-  const earnedBadgeCount = PROFILE_BADGES.filter((badge) => earnedBadgeIdSet.has(badge.id)).length;
+  const earnedBadgeCount = profileBadges.filter((badge) => earnedBadgeIdSet.has(badge.id)).length;
 
   return (
     <View style={styles.badgesCard}>
@@ -68,12 +71,12 @@ export function ProfileAchievementsCard({
         <View style={styles.badgesCountPill}>
           <MaterialIcons name="emoji-events" size={14} color={colors.primary} />
           <Text style={styles.badgesCountText}>
-            {earnedBadgeCount}/{PROFILE_BADGES.length}
+            {earnedBadgeCount}/{profileBadges.length}
           </Text>
         </View>
       </View>
       <View style={styles.badgesGrid}>
-        {PROFILE_BADGES.map((badge) => {
+        {profileBadges.map((badge) => {
           const isEarned = earnedBadgeIdSet.has(badge.id);
           return (
             <View key={badge.id} style={styles.badgeItem}>

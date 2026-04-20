@@ -7,13 +7,18 @@ import { textStyles } from '@/theme/typography';
 
 export function AchievementCelebrationModal({
   achievement,
+  achievementCatalog,
   colors,
   visible,
   onClose,
 }) {
-  const definition = getAchievementDefinition(achievement?.id);
-  const achievementLabel = definition?.label || achievement?.id || 'Achievement';
-  const achievementIcon = definition?.icon || 'emoji-events';
+  const definition = getAchievementDefinition(achievementCatalog, achievement?.id);
+  if (!definition) {
+    return null;
+  }
+
+  const achievementLabel = definition.label;
+  const achievementIcon = definition.icon;
 
   return (
     <Modal

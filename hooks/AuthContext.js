@@ -2,7 +2,19 @@ import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';  // TODO: for production prefer expo-secure-store for tokens, or similar -- asyncstorage is plain key-value
 import auth from '@react-native-firebase/auth';
-import { fetchUsersByUID, fetchFriends, fetchFriendRequests, fetchFriendActivity, fetchUserStats, fetchUserTopPhotos } from '@/lib/api';
+import {
+  fetchAchievementCatalog,
+  fetchUsersByUID,
+  fetchFriends,
+  fetchFriendRequests,
+  fetchFriendActivity,
+  fetchUserStats,
+  fetchUserTopPhotos,
+} from '@/lib/api';
+import {
+  getAchievementDefinition,
+  normalizeAchievementCatalog,
+} from '@/lib/achievements';
 import {
   DEFAULT_THEME_PREFERENCE,
   getThemePreferenceStorageKey,
@@ -14,6 +26,8 @@ export const AuthContext = createContext();
 const TOP_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const FRIEND_ACTIVITY_TTL_MS = 10 * 60 * 1000;
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
+const ACHIEVEMENT_CATALOG_CACHE_KEY = 'achievement_catalog_cache_v1';
+const ACHIEVEMENT_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 export const APP_TUTORIAL_STEPS = Object.freeze({
   QUESTS_TAB: 'quests_tab',
   MAP_CREATE: 'map_create',
@@ -114,6 +128,51 @@ function mergeActivityItems(existingItems, incomingItems) {
     });
 }
 
+function parseAchievementCatalogCache(rawValue) {
+  if (typeof rawValue !== 'string' || !rawValue.trim()) {
+    return { catalog: null, fetchedAt: null };
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    const catalog = normalizeAchievementCatalog(parsed?.catalog);
+    const fetchedAt = Number(parsed?.fetchedAt);
+    return {
+      catalog: catalog.length ? catalog : null,
+      fetchedAt: Number.isFinite(fetchedAt) ? fetchedAt : null,
+    };
+  } catch (error) {
+    console.warn('Failed to parse cached achievement catalog', error);
+    return { catalog: null, fetchedAt: null };
+  }
+}
+
+function isAchievementCatalogFresh(fetchedAt, now = Date.now()) {
+  return Number.isFinite(fetchedAt) && now - fetchedAt < ACHIEVEMENT_CATALOG_TTL_MS;
+}
+
+function collectAchievementIds(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => (typeof item?.id === 'string' ? item.id : null))
+    .filter(Boolean);
+}
+
+function collectAchievementIdsFromStats(stats) {
+  return collectAchievementIds(stats?.earned_achievements);
+}
+
+function isAchievementCatalogMissingIds(catalog, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return false;
+  if (!Array.isArray(catalog) || catalog.length === 0) return true;
+  const knownIds = new Set(
+    catalog
+      .map((item) => (typeof item?.id === 'string' ? item.id : null))
+      .filter(Boolean)
+  );
+  return ids.some((id) => !knownIds.has(id));
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);           // Firebase user
   const [profile, setProfile] = useState(null);     // Mongo profile
@@ -127,6 +186,9 @@ export function AuthProvider({ children }) {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsDirty, setStatsDirty] = useState(false);
+  const [achievementCatalog, setAchievementCatalog] = useState(null);
+  const [achievementCatalogFetchedAt, setAchievementCatalogFetchedAt] = useState(null);
+  const [achievementCatalogCacheReady, setAchievementCatalogCacheReady] = useState(false);
   const [achievementCelebrationQueue, setAchievementCelebrationQueue] = useState([]);
   const [topPhotos, setTopPhotos] = useState([]);
   const [topPhotosLoading, setTopPhotosLoading] = useState(false);
@@ -149,6 +211,7 @@ export function AuthProvider({ children }) {
   const friendRequestsHasLoadedRef = useRef(false);
   const friendActivityInFlightRef = useRef(false);
   const friendActivityHasLoadedRef = useRef(false);
+  const achievementCatalogRefreshInFlightRef = useRef(null);
 
   const friendsCacheKey = (uid) => `friends_cache_${uid}`;
   const statsCacheKey = (uid) => `stats_cache_${uid}`;
@@ -169,6 +232,49 @@ export function AuthProvider({ children }) {
     }
     return nextStats;
   }, [user?.uid]);
+
+  const refreshAchievementCatalog = useCallback(async ({ force = false } = {}) => {
+    if (!user?.uid) {
+      return Array.isArray(achievementCatalog) ? achievementCatalog : [];
+    }
+
+    const hasFreshCatalog = Array.isArray(achievementCatalog)
+      && achievementCatalog.length > 0
+      && isAchievementCatalogFresh(achievementCatalogFetchedAt);
+    if (!force && hasFreshCatalog) {
+      return achievementCatalog;
+    }
+
+    if (achievementCatalogRefreshInFlightRef.current) {
+      return achievementCatalogRefreshInFlightRef.current;
+    }
+
+    const request = (async () => {
+      try {
+        const nextCatalog = normalizeAchievementCatalog(await fetchAchievementCatalog());
+        if (!nextCatalog.length) {
+          return Array.isArray(achievementCatalog) ? achievementCatalog : [];
+        }
+
+        const fetchedAt = Date.now();
+        setAchievementCatalog(nextCatalog);
+        setAchievementCatalogFetchedAt(fetchedAt);
+        await AsyncStorage.setItem(
+          ACHIEVEMENT_CATALOG_CACHE_KEY,
+          JSON.stringify({ catalog: nextCatalog, fetchedAt })
+        );
+        return nextCatalog;
+      } catch (error) {
+        console.warn('Failed to refresh achievement catalog', error);
+        return Array.isArray(achievementCatalog) ? achievementCatalog : [];
+      } finally {
+        achievementCatalogRefreshInFlightRef.current = null;
+      }
+    })();
+
+    achievementCatalogRefreshInFlightRef.current = request;
+    return request;
+  }, [achievementCatalog, achievementCatalogFetchedAt, user?.uid]);
 
   const queueAchievementCelebrations = useCallback((items) => {
     const nextItems = Array.isArray(items)
@@ -197,12 +303,25 @@ export function AuthProvider({ children }) {
   }, []);
 
   const applyUploadResult = useCallback(async (result) => {
+    const achievementIds = Array.from(
+      new Set([
+        ...collectAchievementIds(result?.newly_earned_achievements),
+        ...collectAchievementIdsFromStats(result?.stats),
+      ])
+    );
+    let resolvedCatalog = achievementCatalog;
+    if (achievementIds.length > 0 && isAchievementCatalogMissingIds(resolvedCatalog, achievementIds)) {
+      resolvedCatalog = await refreshAchievementCatalog({ force: true });
+    }
     if (result?.stats) {
       await applyStatsSnapshot(result.stats);
     }
-    queueAchievementCelebrations(result?.newly_earned_achievements);
+    const queueableAchievements = Array.isArray(result?.newly_earned_achievements)
+      ? result.newly_earned_achievements.filter((item) => getAchievementDefinition(resolvedCatalog, item?.id))
+      : [];
+    queueAchievementCelebrations(queueableAchievements);
     return result?.stats || null;
-  }, [applyStatsSnapshot, queueAchievementCelebrations]);
+  }, [achievementCatalog, applyStatsSnapshot, queueAchievementCelebrations, refreshAchievementCatalog]);
 
   const prefetchTopPhotoUrls = (photos) => {
     if (!Array.isArray(photos)) return;
@@ -214,6 +333,32 @@ export function AuthProvider({ children }) {
       });
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAchievementCatalogCache() {
+      try {
+        const rawValue = await AsyncStorage.getItem(ACHIEVEMENT_CATALOG_CACHE_KEY);
+        if (cancelled) return;
+        const { catalog, fetchedAt } = parseAchievementCatalogCache(rawValue);
+        setAchievementCatalog(catalog);
+        setAchievementCatalogFetchedAt(fetchedAt);
+      } catch (error) {
+        console.warn('Failed to load cached achievement catalog', error);
+      } finally {
+        if (!cancelled) {
+          setAchievementCatalogCacheReady(true);
+        }
+      }
+    }
+
+    loadAchievementCatalogCache();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -302,6 +447,22 @@ export function AuthProvider({ children }) {
       cancelled = true;
     };
   }, [user?.uid]);
+
+  useEffect(() => {
+    if (!achievementCatalogCacheReady || !user?.uid) return;
+    if (Array.isArray(achievementCatalog) && achievementCatalog.length > 0 && isAchievementCatalogFresh(achievementCatalogFetchedAt)) {
+      return;
+    }
+    refreshAchievementCatalog({ force: true }).catch((error) => {
+      console.warn('Failed to refresh achievement catalog from auth bootstrap', error);
+    });
+  }, [
+    achievementCatalog,
+    achievementCatalogCacheReady,
+    achievementCatalogFetchedAt,
+    refreshAchievementCatalog,
+    user?.uid,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -617,6 +778,9 @@ export function AuthProvider({ children }) {
     try {
       const data = await fetchUserStats(user.uid);
       if (data) {
+        if (isAchievementCatalogMissingIds(achievementCatalog, collectAchievementIdsFromStats(data))) {
+          await refreshAchievementCatalog({ force: true });
+        }
         await applyStatsSnapshot(data);
       }
       return data;
@@ -757,6 +921,7 @@ export function AuthProvider({ children }) {
       friendsLoading,
       stats,
       statsLoading,
+      achievementCatalog,
       achievementCelebration,
       topPhotos,
       topPhotosLoading,
