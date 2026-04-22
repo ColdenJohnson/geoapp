@@ -49,10 +49,17 @@ describe('AuthProvider', () => {
 
   it('hydrates a cached achievement catalog without waiting on a network fetch', async () => {
     const cachedCatalog = [
-      { id: 'photos_1', label: 'First Photo', icon: 'camera-alt', metric: 'photo_count', threshold: 1 },
+      {
+        id: 'photos_1',
+        label: 'First Photo',
+        description: 'Upload your first photo',
+        icon: 'camera-alt',
+        metric: 'photo_count',
+        threshold: 1,
+      },
     ];
     AsyncStorage.getItem.mockImplementation((key) => Promise.resolve(
-      key === 'achievement_catalog_cache_v1'
+      key === 'achievement_catalog_cache_v2'
         ? JSON.stringify({ catalog: cachedCatalog, fetchedAt: Date.now() })
         : null
     ));

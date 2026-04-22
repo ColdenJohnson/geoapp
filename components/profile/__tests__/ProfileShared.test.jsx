@@ -85,4 +85,24 @@ describe('ProfileAchievementsCard', () => {
     expect(getByText('Opinionated')).toBeTruthy();
     expect(getByText('Popular')).toBeTruthy();
   });
+
+  it('can limit profile badge previews while preserving total progress', () => {
+    const styles = createProfileStyles(colors);
+    const { getByText, queryByText } = render(
+      <ProfileAchievementsCard
+        achievementCatalog={achievementCatalog}
+        earnedBadgeIds={['photos_1', 'opinionated']}
+        maxVisible={4}
+        showViewAllHint={true}
+        colors={colors}
+        styles={styles}
+      />
+    );
+
+    expect(getByText('2/8')).toBeTruthy();
+    expect(getByText('1100 Elo')).toBeTruthy();
+    expect(queryByText('1200 Elo')).toBeNull();
+    expect(queryByText('Popular')).toBeNull();
+    expect(getByText('Tap to view all achievements')).toBeTruthy();
+  });
 });

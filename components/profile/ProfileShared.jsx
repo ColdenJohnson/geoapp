@@ -51,6 +51,9 @@ export function ProfileAchievementsCard({
   achievementCatalog,
   earnedAchievements,
   earnedBadgeIds,
+  maxVisible = null,
+  onPress = null,
+  showViewAllHint = false,
   colors,
   styles,
 }) {
@@ -63,9 +66,16 @@ export function ProfileAchievementsCard({
     : earnedBadgeIds;
   const earnedBadgeIdSet = new Set(Array.isArray(earnedIds) ? earnedIds : []);
   const earnedBadgeCount = profileBadges.filter((badge) => earnedBadgeIdSet.has(badge.id)).length;
+  const normalizedMaxVisible = Number.isFinite(maxVisible)
+    ? Math.max(0, Math.floor(maxVisible))
+    : null;
+  const displayedBadges = normalizedMaxVisible === null
+    ? profileBadges
+    : profileBadges.slice(0, normalizedMaxVisible);
+  const hasHiddenBadges = displayedBadges.length < profileBadges.length;
 
-  return (
-    <View style={styles.badgesCard}>
+  const content = (
+    <>
       <View style={styles.badgesHeaderRow}>
         <Text style={styles.sectionTitle}>Achievements</Text>
         <View style={styles.badgesCountPill}>
@@ -76,7 +86,7 @@ export function ProfileAchievementsCard({
         </View>
       </View>
       <View style={styles.badgesGrid}>
-        {profileBadges.map((badge) => {
+        {displayedBadges.map((badge) => {
           const isEarned = earnedBadgeIdSet.has(badge.id);
           return (
             <View key={badge.id} style={styles.badgeItem}>
@@ -99,6 +109,28 @@ export function ProfileAchievementsCard({
           );
         })}
       </View>
+      {showViewAllHint && hasHiddenBadges ? (
+        <Text style={styles.badgesHintText}>Tap to view all achievements</Text>
+      ) : null}
+    </>
+  );
+
+  if (typeof onPress === 'function') {
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.badgesCard, pressed && styles.badgesCardPressed]}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Open achievements"
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.badgesCard}>
+      {content}
     </View>
   );
 }
@@ -376,6 +408,9 @@ export function createProfileStyles(colors) {
     badgesCard: {
       marginBottom: spacing.xl,
     },
+    badgesCardPressed: {
+      opacity: 0.92,
+    },
     topPhotosCard: {
       marginBottom: spacing.xl,
     },
@@ -443,6 +478,13 @@ export function createProfileStyles(colors) {
       textAlign: 'center',
       letterSpacing: 0.7,
       lineHeight: 13,
+    },
+    badgesHintText: {
+      ...textStyles.chipSmall,
+      marginTop: spacing.sm,
+      color: colors.textMuted,
+      textAlign: 'center',
+      letterSpacing: 0.4,
     },
     topPhotosGrid: {
       flexDirection: 'row',

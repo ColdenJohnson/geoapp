@@ -15,6 +15,7 @@ import { goBackOrHome } from '@/lib/navigation';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
+import { AchievementsCatalogModal } from '@/components/ui/AchievementsCatalogModal';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import AppHeader from '@/components/ui/AppHeader';
 import {
@@ -61,6 +62,7 @@ export default function PublicUserProfileScreen() {
   const [optimisticFriendshipStatus, setOptimisticFriendshipStatus] = useState(null);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState(null);
+  const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createProfileStyles(colors), [colors]);
@@ -136,6 +138,12 @@ export default function PublicUserProfileScreen() {
   }, [friendshipStatus, optimisticFriendshipStatus]);
 
   const effectiveFriendshipStatus = optimisticFriendshipStatus || friendshipStatus;
+  const onOpenAchievementsModal = useCallback(() => {
+    setAchievementsModalVisible(true);
+  }, []);
+  const onCloseAchievementsModal = useCallback(() => {
+    setAchievementsModalVisible(false);
+  }, []);
 
   const onPressAddFriend = useCallback(async () => {
     if (!targetUid) return;
@@ -295,6 +303,8 @@ export default function PublicUserProfileScreen() {
               achievementCatalog={achievementCatalog}
               earnedAchievements={statsData?.earned_achievements}
               earnedBadgeIds={statsData?.earned_badges}
+              maxVisible={4}
+              onPress={onOpenAchievementsModal}
               colors={colors}
               styles={styles}
             />
@@ -315,6 +325,15 @@ export default function PublicUserProfileScreen() {
         visible={viewerVisible}
         imageUrl={selectedUrl}
         onClose={() => setViewerVisible(false)}
+      />
+      <AchievementsCatalogModal
+        achievementCatalog={achievementCatalog}
+        earnedAchievements={statsData?.earned_achievements}
+        earnedBadgeIds={statsData?.earned_badges}
+        profileStyles={styles}
+        colors={colors}
+        visible={achievementsModalVisible}
+        onClose={onCloseAchievementsModal}
       />
     </SafeAreaView>
   );

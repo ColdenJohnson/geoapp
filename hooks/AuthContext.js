@@ -26,7 +26,7 @@ export const AuthContext = createContext();
 const TOP_PHOTOS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const FRIEND_ACTIVITY_TTL_MS = 10 * 60 * 1000;
 const FRIEND_ACTIVITY_PAGE_SIZE = 12;
-const ACHIEVEMENT_CATALOG_CACHE_KEY = 'achievement_catalog_cache_v1';
+const ACHIEVEMENT_CATALOG_CACHE_KEY = 'achievement_catalog_cache_v2';
 const ACHIEVEMENT_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 export const APP_TUTORIAL_STEPS = Object.freeze({
   QUESTS_TAB: 'quests_tab',
@@ -173,6 +173,13 @@ function isAchievementCatalogMissingIds(catalog, ids) {
   return ids.some((id) => !knownIds.has(id));
 }
 
+function isAchievementCatalogMissingDescriptions(catalog) {
+  if (!Array.isArray(catalog) || catalog.length === 0) return true;
+  return catalog.some(
+    (item) => typeof item?.description !== 'string' || !item.description.trim()
+  );
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);           // Firebase user
   const [profile, setProfile] = useState(null);     // Mongo profile
@@ -240,7 +247,8 @@ export function AuthProvider({ children }) {
 
     const hasFreshCatalog = Array.isArray(achievementCatalog)
       && achievementCatalog.length > 0
-      && isAchievementCatalogFresh(achievementCatalogFetchedAt);
+      && isAchievementCatalogFresh(achievementCatalogFetchedAt)
+      && !isAchievementCatalogMissingDescriptions(achievementCatalog);
     if (!force && hasFreshCatalog) {
       return achievementCatalog;
     }
@@ -450,7 +458,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!achievementCatalogCacheReady || !user?.uid) return;
-    if (Array.isArray(achievementCatalog) && achievementCatalog.length > 0 && isAchievementCatalogFresh(achievementCatalogFetchedAt)) {
+    if (
+      Array.isArray(achievementCatalog)
+      && achievementCatalog.length > 0
+      && isAchievementCatalogFresh(achievementCatalogFetchedAt)
+      && !isAchievementCatalogMissingDescriptions(achievementCatalog)
+    ) {
       return;
     }
     refreshAchievementCatalog({ force: true }).catch((error) => {

@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { usePalette } from '@/hooks/usePalette';
 import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { TutorialCallout } from '@/components/ui/TutorialCallout';
+import { AchievementsCatalogModal } from '@/components/ui/AchievementsCatalogModal';
 import {
   createProfileStyles,
   ProfileAchievementsCard,
@@ -37,6 +38,7 @@ export default function UserProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState(null);
+  const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createProfileStyles(colors), [colors]);
@@ -111,6 +113,14 @@ export default function UserProfileScreen() {
     router.push('/edit_profile');
   }, [advanceAppTutorial, router, showProfileEditTutorial]);
 
+  const onOpenAchievementsModal = useCallback(() => {
+    setAchievementsModalVisible(true);
+  }, []);
+
+  const onCloseAchievementsModal = useCallback(() => {
+    setAchievementsModalVisible(false);
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -165,6 +175,9 @@ export default function UserProfileScreen() {
           achievementCatalog={achievementCatalog}
           earnedAchievements={stats?.earned_achievements}
           earnedBadgeIds={stats?.earned_badges}
+          maxVisible={4}
+          onPress={onOpenAchievementsModal}
+          showViewAllHint={true}
           colors={colors}
           styles={styles}
         />
@@ -183,6 +196,15 @@ export default function UserProfileScreen() {
         visible={viewerVisible}
         imageUrl={selectedUrl}
         onClose={() => setViewerVisible(false)}
+      />
+      <AchievementsCatalogModal
+        achievementCatalog={achievementCatalog}
+        earnedAchievements={stats?.earned_achievements}
+        earnedBadgeIds={stats?.earned_badges}
+        profileStyles={styles}
+        colors={colors}
+        visible={achievementsModalVisible}
+        onClose={onCloseAchievementsModal}
       />
     </SafeAreaView>
   );
