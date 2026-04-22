@@ -102,6 +102,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-video",
       [
         "expo-notifications",
         {
