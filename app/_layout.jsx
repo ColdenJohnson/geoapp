@@ -21,6 +21,7 @@ import { AchievementCelebrationModal } from '@/components/ui/AchievementCelebrat
 import { getAchievementDefinition } from '@/lib/achievements';
 
 const INTRO_VIDEO_SEEN_STORAGE_KEY = 'app_intro_video_seen_v2';
+const FORCE_INTRO_VIDEO = process.env.EXPO_PUBLIC_FORCE_STARTUP_VIDEO === 'true';
 
 function IntroVideoGate({ onComplete }) {
   const [didFinishVideo, setDidFinishVideo] = useState(false);
@@ -123,7 +124,7 @@ function RootLayoutContent() {
         if (!isActive) {
           return;
         }
-        setShouldShowIntroGate(hasSeenIntroVideo !== 'true');
+        setShouldShowIntroGate(FORCE_INTRO_VIDEO || hasSeenIntroVideo !== 'true');
       } catch (error) {
         if (!isActive) {
           return;
@@ -172,7 +173,7 @@ function RootLayoutContent() {
   }, [achievementCatalog, achievementCelebration]);
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!user?.uid || FORCE_INTRO_VIDEO) {
       return;
     }
     setShouldShowIntroGate(false);
