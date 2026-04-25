@@ -137,6 +137,8 @@ describe('ActiveChallengesScreen search', () => {
         created_by_handle: 'maker',
         created_by_name: 'Maker',
         photo_count: 3,
+        tags: ['nature'],
+        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       },
       {
         _id: 'quest-2',
@@ -144,6 +146,8 @@ describe('ActiveChallengesScreen search', () => {
         created_by_handle: 'maker',
         created_by_name: 'Maker',
         photo_count: 5,
+        tags: ['common', 'food', 'social'],
+        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
       },
     ]);
   });
@@ -172,6 +176,52 @@ describe('ActiveChallengesScreen search', () => {
     fireEvent.changeText(searchInput, 'xyz');
 
     await waitFor(() => expect(queryByText(/No quests found for that search./)).toBeTruthy());
+  });
+
+  it('filters quests by stored tag chips', async () => {
+    const { getByTestId, queryByText } = renderScreen();
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+
+    fireEvent.press(getByTestId('quest-filter-food'));
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeNull());
+    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+
+    fireEvent.press(getByTestId('quest-filter-all'));
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+  });
+
+  it('applies computed new and stored common quest filters', async () => {
+    const { getByTestId, queryByText } = renderScreen();
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+
+    fireEvent.press(getByTestId('quest-filter-new'));
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+    expect(queryByText(/AB non-location locked/)).toBeNull();
+
+    fireEvent.press(getByTestId('quest-filter-common'));
+
+    await waitFor(() => expect(queryByText(/AB non-location locked/)).toBeTruthy());
+    fireEvent.press(getByTestId('quest-card-save-button-quest-2'));
+
+    await waitFor(() => expect(saveQuest).toHaveBeenCalledWith('quest-2'));
+  });
+
+  it('renders computed and stored quest tags on cards instead of creator handles', async () => {
+    const { getByTestId, queryByText } = renderScreen();
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+
+    expect(getByTestId('quest-card-tag-quest-1-new')).toBeTruthy();
+    expect(getByTestId('quest-card-tag-quest-1-nature')).toBeTruthy();
+    expect(queryByText('@maker')).toBeNull();
   });
 
   it('toggles the active quest saved state from the card save button', async () => {

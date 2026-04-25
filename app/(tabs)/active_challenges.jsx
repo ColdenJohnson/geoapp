@@ -6,6 +6,7 @@ import {
   PanResponder,
   Pressable,
   SafeAreaView,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -69,6 +70,27 @@ const SESSION_SAVED_PIN_IDS = new Set();
 const SESSION_DEFERRED_CHALLENGE_PIN_IDS = [];
 const rankedQuestCacheKey = (uid) => `ranked_quests_cache_${uid}`;
 const QUEST_IMAGE_PREFETCH_LIMIT = 6;
+const NEW_QUEST_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const STORED_QUEST_TAGS = [
+  { id: 'common', label: 'Common' },
+  { id: 'crazy', label: 'Crazy' },
+  { id: 'social', label: 'Social' },
+  { id: 'fitness', label: 'Fitness' },
+  { id: 'nature', label: 'Nature' },
+  { id: 'food', label: 'Food' },
+  { id: 'travel', label: 'Travel' },
+  { id: 'misc', label: 'Misc' },
+];
+const STORED_QUEST_TAG_SET = new Set(STORED_QUEST_TAGS.map((tag) => tag.id));
+const QUEST_TAG_LABEL_BY_ID = STORED_QUEST_TAGS.reduce((labels, tag) => {
+  labels[tag.id] = tag.label;
+  return labels;
+}, { new: 'New' });
+const QUEST_FILTERS = [
+  { id: 'all', label: 'All', type: 'all' },
+  { id: 'new', label: 'New', type: 'new' },
+  ...STORED_QUEST_TAGS.map((tag) => ({ ...tag, type: 'tag' })),
+];
 
 function resetSessionChallengeCache(uid) {
   const normalizedUid = uid || null;
@@ -119,7 +141,9 @@ async function readRankedQuestCache(uid) {
     }
 
     const parsed = JSON.parse(raw);
-    const challenges = Array.isArray(parsed?.challenges) ? parsed.challenges : null;
+    const challenges = Array.isArray(parsed?.challenges)
+      ? parsed.challenges.map(normalizeCachedChallenge).filter(Boolean)
+      : null;
     if (!challenges) {
       return { challenges: null, hadCache: false };
     }
@@ -231,6 +255,91 @@ function normalizeTeaserComment(comment) {
   };
 }
 
+function normalizeQuestTags(rawTags, context = 'quest') {
+  if (!Array.isArray(rawTags)) {
+    return [];
+  }
+
+  const normalizedTags = [];
+  const strippedTags = [];
+  const seenTags = new Set();
+  const seenStrippedTags = new Set();
+
+  rawTags.forEach((rawTag) => {
+    const normalized = typeof rawTag === 'string' ? rawTag.trim().toLowerCase() : '';
+    if (!normalized || !STORED_QUEST_TAG_SET.has(normalized)) {
+      const warningValue = normalized || String(rawTag);
+      if (!seenStrippedTags.has(warningValue)) {
+        strippedTags.push(warningValue);
+        seenStrippedTags.add(warningValue);
+      }
+      return;
+    }
+    if (!seenTags.has(normalized)) {
+      normalizedTags.push(normalized);
+      seenTags.add(normalized);
+    }
+  });
+
+  if (strippedTags.length) {
+    console.warn('[quest_tags] stripped unknown quest tags on client', {
+      context,
+      strippedTags,
+    });
+  }
+
+  return normalizedTags;
+}
+
+function parseQuestCreatedAtMs(createdAt) {
+  if (!createdAt) {
+    return 0;
+  }
+  if (createdAt instanceof Date) {
+    const timestamp = createdAt.getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+  const timestamp = Date.parse(createdAt);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function isNewQuest(challenge, nowMs = Date.now()) {
+  return Number.isFinite(challenge?.createdAtMs)
+    && challenge.createdAtMs >= nowMs - NEW_QUEST_WINDOW_MS;
+}
+
+function getQuestDisplayTagIds(challenge, nowMs = Date.now()) {
+  const displayTags = [];
+  if (isNewQuest(challenge, nowMs)) {
+    displayTags.push('new');
+  }
+  if (Array.isArray(challenge?.tags)) {
+    challenge.tags.forEach((tag) => {
+      if (!displayTags.includes(tag)) {
+        displayTags.push(tag);
+      }
+    });
+  }
+  return displayTags;
+}
+
+function normalizeCachedChallenge(challenge) {
+  if (!challenge || typeof challenge !== 'object') {
+    return null;
+  }
+
+  const createdAtMs = Number.isFinite(challenge?.createdAtMs)
+    ? challenge.createdAtMs
+    : parseQuestCreatedAtMs(challenge?.createdAt);
+
+  return {
+    ...challenge,
+    tags: normalizeQuestTags(challenge?.tags, challenge?.pinId || 'cached quest'),
+    createdAt: challenge?.createdAt || null,
+    createdAtMs,
+  };
+}
+
 function formatFriendParticipationLabel(count) {
   if (!Number.isFinite(count) || count <= 0) return null;
   return count === 1 ? '1 friend' : `${count} friends`;
@@ -314,6 +423,8 @@ function normalizeChallengePin(pin, index, { isSaved = false } = {}) {
   const teaserTopComment = teaserPhotoId
     ? normalizeTeaserComment(pin?.top_global_photo?.top_comment)
     : null;
+  const tags = normalizeQuestTags(pin?.tags, pinId);
+  const createdAtMs = parseQuestCreatedAtMs(pin?.createdAt);
 
   return {
     pinId,
@@ -327,6 +438,9 @@ function normalizeChallengePin(pin, index, { isSaved = false } = {}) {
     teaserPhotoId,
     teaserTopComment,
     friendParticipantCount,
+    tags,
+    createdAt: pin?.createdAt || null,
+    createdAtMs,
     isSaved,
   };
 }
@@ -355,6 +469,7 @@ export default function ActiveChallengesScreen() {
   const [activeChallengeOptionId, setActiveChallengeOptionId] = useState(null);
   const [questSearchInput, setQuestSearchInput] = useState('');
   const [forceQuestSearch, setForceQuestSearch] = useState(false);
+  const [selectedQuestFilter, setSelectedQuestFilter] = useState('all');
   const [showSavedQueueHint, setShowSavedQueueHint] = useState(false);
   const cardPan = useRef(new Animated.ValueXY()).current;
   const swipeAnimatingPinId = useRef(null);
@@ -437,11 +552,28 @@ export default function ActiveChallengesScreen() {
     [questSearchInput]
   );
   const questSearchEnabled = normalizedQuestSearchInput.length > 0 && (forceQuestSearch || liveQuestSearchEnabled);
-  const filteredChallenges = useMemo(() => (
-    questSearchEnabled
+  const selectedQuestFilterOption = useMemo(
+    () => QUEST_FILTERS.find((filter) => filter.id === selectedQuestFilter) || QUEST_FILTERS[0],
+    [selectedQuestFilter]
+  );
+  const filteredChallenges = useMemo(() => {
+    const searchedChallenges = questSearchEnabled
       ? filterChallengesByPrompt(challenges, questSearchInput)
-      : challenges
-  ), [challenges, questSearchEnabled, questSearchInput]);
+      : challenges;
+
+    if (selectedQuestFilterOption.type === 'new') {
+      return searchedChallenges.filter((challenge) => isNewQuest(challenge));
+    }
+
+    if (selectedQuestFilterOption.type === 'tag') {
+      return searchedChallenges.filter((challenge) => (
+        Array.isArray(challenge?.tags) && challenge.tags.includes(selectedQuestFilterOption.id)
+      ));
+    }
+
+    return searchedChallenges;
+  }, [challenges, questSearchEnabled, questSearchInput, selectedQuestFilterOption]);
+  const hasActiveQuestFilter = selectedQuestFilterOption.type !== 'all';
   const showOfflineBanner = queueMode === 'all' && isOffline && challenges.length > 0 && !loading;
   const showRefreshingBanner = queueMode === 'all' && refreshing && challenges.length > 0 && !loading && !isOffline;
   const stack = filteredChallenges.slice(0, STACK_DEPTH);
@@ -726,6 +858,11 @@ export default function ActiveChallengesScreen() {
     if (!normalizedQuestSearchInput) return;
     setForceQuestSearch(true);
   }, [normalizedQuestSearchInput]);
+
+  const handleQuestFilterPress = useCallback((filterId) => {
+    if (!filterId) return;
+    setSelectedQuestFilter(filterId);
+  }, []);
 
   const handleQueueModeToggle = useCallback(() => {
     setShowSavedQueueHint(false);
@@ -1176,6 +1313,7 @@ export default function ActiveChallengesScreen() {
     const friendParticipationLabel = formatFriendParticipationLabel(challenge.friendParticipantCount);
     const teaserComment = challenge.teaserTopComment;
     const showsBottomTeaser = !!friendParticipationLabel || !!teaserComment?.text;
+    const challengeTags = getQuestDisplayTagIds(challenge);
 
     return (
       <Animated.View
@@ -1223,8 +1361,27 @@ export default function ActiveChallengesScreen() {
 
           <View style={styles.dimLayer} pointerEvents="none" />
           <View style={styles.topMeta}>
-            <View style={styles.handleChip}>
-              <Text style={styles.handleChipText}>{challenge.featuredPhotoHandle}</Text>
+            <View style={styles.cardTagRail}>
+              {challengeTags.length ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.cardTagList}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {challengeTags.map((tag) => (
+                    <View
+                      key={tag}
+                      style={styles.cardTagChip}
+                      testID={`quest-card-tag-${challenge.pinId}-${tag}`}
+                    >
+                      <Text style={styles.cardTagChipText}>
+                        {QUEST_TAG_LABEL_BY_ID[tag] || tag}
+                      </Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              ) : null}
             </View>
             <View style={styles.cardActionRow}>
               <Pressable
@@ -1354,7 +1511,39 @@ export default function ActiveChallengesScreen() {
           ) : null}
 
           <View style={styles.headerRow}>
-            <Text style={styles.headerTitle}>Quests</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={[styles.questFilterScroller, { width: cardWidth }]}
+              contentContainerStyle={styles.questFilterContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {QUEST_FILTERS.map((filter) => {
+                const selected = filter.id === selectedQuestFilter;
+                return (
+                  <Pressable
+                    key={filter.id}
+                    style={({ pressed }) => [
+                      styles.questFilterChip,
+                      selected && styles.questFilterChipSelected,
+                      pressed && !selected ? styles.questFilterChipPressed : null,
+                    ]}
+                    onPress={() => handleQuestFilterPress(filter.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`Filter quests by ${filter.label}`}
+                    testID={`quest-filter-${filter.id}`}
+                  >
+                    <Text style={[
+                      styles.questFilterChipText,
+                      selected && styles.questFilterChipTextSelected,
+                    ]}>
+                      {filter.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
             <View style={[styles.headerControlsRow, { width: cardWidth }]}>
               <View style={styles.headerSearchRow}>
                 <Pressable
@@ -1445,7 +1634,9 @@ export default function ActiveChallengesScreen() {
                 <Text style={styles.stateText}>
                   {questSearchEnabled && challenges.length > 0
                     ? 'No quests found for that search.'
-                    : queueMode === 'saved'
+                    : hasActiveQuestFilter && challenges.length > 0
+                      ? 'No quests found for that filter.'
+                      : queueMode === 'saved'
                       ? 'No saved challenges yet.'
                       : 'No non-geo challenges yet.'}
                 </Text>
@@ -1537,6 +1728,42 @@ function createStyles(colors) {
       alignItems: 'center',
       marginBottom: spacing.sm,
       gap: spacing.xs,
+    },
+    questFilterScroller: {
+      alignSelf: 'center',
+      flexGrow: 0,
+    },
+    questFilterContent: {
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: 2,
+      paddingRight: spacing.md,
+    },
+    questFilterChip: {
+      minHeight: 32,
+      paddingHorizontal: 11,
+      paddingVertical: 6,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    questFilterChipSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary,
+    },
+    questFilterChipPressed: {
+      opacity: 0.78,
+    },
+    questFilterChipText: {
+      ...textStyles.buttonSmall,
+      color: colors.primary,
+      letterSpacing: 0.2,
+    },
+    questFilterChipTextSelected: {
+      color: colors.primaryTextOn || '#FFFFFF',
     },
     iconButton: {
       width: 44,
@@ -1699,6 +1926,30 @@ function createStyles(colors) {
       justifyContent: 'space-between',
       alignItems: 'center',
       gap: spacing.xs,
+    },
+    cardTagRail: {
+      flex: 1,
+      minWidth: 0,
+      marginRight: spacing.xs,
+    },
+    cardTagList: {
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingRight: spacing.xs,
+    },
+    cardTagChip: {
+      borderRadius: radii.pill,
+      backgroundColor: 'rgba(0,0,0,0.25)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.22)',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    cardTagChipText: {
+      ...textStyles.eyebrow,
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 1.1,
     },
     creatorChip: {
       borderRadius: radii.pill,
