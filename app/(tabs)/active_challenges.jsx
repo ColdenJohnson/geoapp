@@ -1754,7 +1754,7 @@ function createStyles(colors) {
     },
     questFilterContent: {
       alignItems: 'center',
-      gap: spacing.xs,
+      gap: spacing.sm,
       paddingVertical: 2,
       paddingRight: spacing.md,
     },
