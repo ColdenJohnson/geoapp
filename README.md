@@ -218,6 +218,8 @@ npx expo prebuild --clean
 
 `npx expo run` & select `(ios)` or
 `npx expo run --device`
+`npx expo start`
+
 
 After this process, the app can be started normally using `npx expo start`
 
