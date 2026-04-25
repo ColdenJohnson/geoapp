@@ -52,7 +52,8 @@ function IntroVideoGate({ onComplete }) {
 
   const handleReplay = useCallback(() => {
     setDidFinishVideo(false);
-    introPlayer.replay();
+    introPlayer.currentTime = 0;
+    introPlayer.play();
   }, [introPlayer]);
 
   return (
