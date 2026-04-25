@@ -3,9 +3,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useSilentSwitch } from 'react-native-volume-manager';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext, AuthProvider } from '../hooks/AuthContext';
@@ -25,25 +24,13 @@ const FORCE_INTRO_VIDEO = process.env.EXPO_PUBLIC_FORCE_STARTUP_VIDEO === 'true'
 
 function IntroVideoGate({ onComplete }) {
   const [didFinishVideo, setDidFinishVideo] = useState(false);
-  const [hasManualSoundOverride, setHasManualSoundOverride] = useState(false);
-  const [isSoundEnabled, setIsSoundEnabled] = useState(Platform.OS !== 'ios');
-  const silentSwitchStatus = useSilentSwitch(2);
-  const isDeviceSilent = Platform.OS === 'ios'
-    ? (typeof silentSwitchStatus?.isMuted === 'boolean' ? silentSwitchStatus.isMuted : true)
-    : false;
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const introPlayer = useVideoPlayer(require('../assets/videos/intro.mp4'), (player) => {
     player.loop = false;
     player.audioMixingMode = 'auto';
     player.staysActiveInBackground = false;
     player.play();
   });
-
-  useEffect(() => {
-    if (hasManualSoundOverride) {
-      return;
-    }
-    setIsSoundEnabled(!isDeviceSilent);
-  }, [hasManualSoundOverride, isDeviceSilent]);
 
   useEffect(() => {
     introPlayer.muted = !isSoundEnabled;
@@ -60,7 +47,6 @@ function IntroVideoGate({ onComplete }) {
   }, [introPlayer]);
 
   const handleToggleSound = useCallback(() => {
-    setHasManualSoundOverride(true);
     setIsSoundEnabled((prev) => !prev);
   }, []);
 
