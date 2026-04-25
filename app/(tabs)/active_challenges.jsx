@@ -91,6 +91,10 @@ const QUEST_FILTERS = [
   { id: 'new', label: 'New', type: 'new' },
   ...STORED_QUEST_TAGS.map((tag) => ({ ...tag, type: 'tag' })),
 ];
+const ADMIN_UIDS = String(process.env.EXPO_PUBLIC_ADMIN_UIDS || process.env.EXPO_PUBLIC_ADMIN_UID || '')
+  .split(',')
+  .map((uid) => uid.trim())
+  .filter(Boolean);
 
 function resetSessionChallengeCache(uid) {
   const normalizedUid = uid || null;
@@ -109,6 +113,10 @@ function resetSessionChallengeCache(uid) {
 
 function isOfflineState(state) {
   return state?.isConnected === false || state?.isInternetReachable === false;
+}
+
+function isAdminUid(uid) {
+  return !!uid && ADMIN_UIDS.includes(uid);
 }
 
 function prefetchChallengeTeaserPhotos(challengeItems) {
@@ -579,6 +587,7 @@ export default function ActiveChallengesScreen() {
   const stack = filteredChallenges.slice(0, STACK_DEPTH);
   const activeChallenge = stack[0] ?? null;
   const showQuestTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB);
+  const showAdminQuestTools = isAdminUid(user?.uid);
   const panTargetPinId = swipeAnimatingPinId.current ?? activeChallenge?.pinId ?? null;
   const questTutorialWidth = Math.min(360, Math.max(300, windowWidth - 40));
   const challengeOptionsPosition = useMemo(() => {
@@ -1574,6 +1583,16 @@ export default function ActiveChallengesScreen() {
                 />
               </View>
               <View style={styles.headerActions}>
+                {showAdminQuestTools ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.55 : 1 }]}
+                    onPress={() => router.push('/admin/quest-tags')}
+                    accessibilityLabel="Open admin quest tagging"
+                    testID="quest-admin-tags-button"
+                  >
+                    <MaterialIcons name="admin-panel-settings" size={22} color={colors.text} />
+                  </Pressable>
+                ) : null}
                 <Pressable
                   style={({ pressed }) => [styles.iconButton, { opacity: pressed || interactionLocked ? 0.55 : 1 }]}
                   onPress={handleQueueModeToggle}

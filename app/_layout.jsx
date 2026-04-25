@@ -209,6 +209,7 @@ function RootLayoutContent() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false, title:"Map"}} />
               <Stack.Screen name="edit_profile" options={{ headerShown: false }} />
               <Stack.Screen name="friends" options={{ headerShown: false }} />
+              <Stack.Screen name="admin/quest-tags" options={{ headerShown: false }} />
               <Stack.Screen name="user_profile/[uid]" options={{ headerShown: false }} />
               <Stack.Screen name="enter_message" options={{ title: 'Create a new Quest' }} />
               <Stack.Screen name="upload" options={{ title: 'Upload Photo' }} />
