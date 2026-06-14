@@ -75,7 +75,7 @@ const rankedQuestCacheKey = (uid) => `ranked_quests_cache_${uid}`;
 const QUEST_IMAGE_PREFETCH_LIMIT = 6;
 const NEW_QUEST_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const STORED_QUEST_TAGS = [
-  { id: 'common', label: 'Common' },
+  { id: 'common', label: 'Popular' },
   { id: 'crazy', label: 'Crazy' },
   { id: 'social', label: 'Social' },
   { id: 'fitness', label: 'Fitness' },

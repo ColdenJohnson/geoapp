@@ -4,10 +4,12 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -29,9 +31,12 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import {
+  addPhotoReaction,
   createPhotoComment,
   deletePhoto,
+  deletePhotoReaction,
   fetchPhotoComments,
+  fetchPhotoReactions,
   fetchPhotosByPinId,
   likePhotoComment,
   unlikePhotoComment,
@@ -64,6 +69,8 @@ import { radii, shadows, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
 const COMMENT_MAX_LENGTH = 200;
+const EMOJI_PICKER_W = 190;
+const EMOJI_PICKER_H = 102;
 const MENTION_PICKER_WIDTH = 248;
 const MENTION_PICKER_ROW_HEIGHT = 58;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -205,6 +212,151 @@ function estimateMentionAnchorOffset(text, mentionStart, inputWidth) {
   }
 
   return spacing.md + Math.min(innerWidth, column * estimatedCharWidth);
+}
+
+const REACTION_EMOJIS = ['🔥', '❤️', '😂', '😮', '👏', '😢', '💀', '🫡'];
+
+function applyOptimisticReaction(groups, prevEmoji, nextEmoji, viewerHandle) {
+  let updated = groups.map((g) => ({ ...g, reactors: [...(g.reactors || [])] }));
+
+  if (prevEmoji) {
+    const prevIdx = updated.findIndex((g) => g.emoji === prevEmoji);
+    if (prevIdx !== -1) {
+      const newCount = Math.max(0, (updated[prevIdx].count || 0) - 1);
+      if (newCount === 0) {
+        updated = updated.filter((_, i) => i !== prevIdx);
+      } else {
+        updated[prevIdx] = {
+          ...updated[prevIdx],
+          count: newCount,
+          reactors: viewerHandle
+            ? updated[prevIdx].reactors.filter((r) => r !== viewerHandle)
+            : updated[prevIdx].reactors,
+        };
+      }
+    }
+  }
+
+  if (nextEmoji) {
+    const nextIdx = updated.findIndex((g) => g.emoji === nextEmoji);
+    if (nextIdx !== -1) {
+      updated[nextIdx] = {
+        ...updated[nextIdx],
+        count: (updated[nextIdx].count || 0) + 1,
+        reactors: viewerHandle && !updated[nextIdx].reactors.includes(viewerHandle)
+          ? [...updated[nextIdx].reactors, viewerHandle]
+          : updated[nextIdx].reactors,
+      };
+    } else {
+      updated = [...updated, { emoji: nextEmoji, count: 1, reactors: viewerHandle ? [viewerHandle] : [] }];
+    }
+  }
+
+  return updated;
+}
+
+function ReactionsStrip({ groups, viewerEmoji, onChipPress, onChipLongPress, styles }) {
+  if (groups.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.reactionsRow}
+    >
+      {groups.map((group) => {
+        const isOwn = viewerEmoji === group.emoji;
+        return (
+          <Pressable
+            key={group.emoji}
+            onPress={() => onChipPress(group.emoji)}
+            onLongPress={() => onChipLongPress(group)}
+            delayLongPress={400}
+            style={({ pressed }) => [
+              styles.reactionChip,
+              isOwn && styles.reactionChipOwn,
+              pressed && { opacity: 0.72 },
+            ]}
+          >
+            <Text style={styles.reactionEmoji}>{group.emoji}</Text>
+            {group.count > 1 ? (
+              <Text style={styles.reactionCount}>{group.count}</Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+function EmojiPickerModal({ visible, viewerEmoji, anchorPoint, onSelect, onClose, styles }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const SCREEN_MARGIN = 10;
+  const left = anchorPoint
+    ? Math.max(SCREEN_MARGIN, Math.min(anchorPoint.x - EMOJI_PICKER_W / 2, screenWidth - EMOJI_PICKER_W - SCREEN_MARGIN))
+    : (screenWidth - EMOJI_PICKER_W) / 2;
+  const showAbove = anchorPoint ? anchorPoint.y > screenHeight / 2 : false;
+  const top = anchorPoint
+    ? showAbove
+      ? Math.max(SCREEN_MARGIN, anchorPoint.y - EMOJI_PICKER_H - 14)
+      : Math.min(anchorPoint.y + 14, screenHeight - EMOJI_PICKER_H - SCREEN_MARGIN)
+    : (screenHeight - EMOJI_PICKER_H) / 2;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <Pressable style={styles.emojiPickerBackdrop} onPress={onClose} />
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+        <View style={[styles.emojiPickerPill, { left, top }]}>
+          {REACTION_EMOJIS.map((emoji) => (
+            <Pressable
+              key={emoji}
+              onPress={() => onSelect(emoji)}
+              style={({ pressed }) => [
+                styles.emojiPickerBtn,
+                viewerEmoji === emoji && styles.emojiPickerBtnActive,
+                pressed && { opacity: 0.72 },
+              ]}
+            >
+              <Text style={styles.emojiPickerBtnText}>{emoji}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ReactorsPopoverModal({ group, onClose, styles }) {
+  return (
+    <Modal
+      visible={Boolean(group)}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <Pressable style={styles.emojiPickerBackdrop} onPress={onClose} />
+      <View style={styles.reactorsPopoverAnchor} pointerEvents="box-none">
+        <View style={styles.reactorsPopoverCard}>
+          <Text style={styles.reactorsPopoverEmoji}>{group?.emoji}</Text>
+          <Text style={styles.reactorsPopoverCount}>
+            {group?.count === 1 ? '1 reaction' : `${group?.count || 0} reactions`}
+          </Text>
+          {Array.isArray(group?.reactors) && group.reactors.slice(0, 10).map((handle, idx) => (
+            <Text key={idx} style={styles.reactorsPopoverHandle}>@{handle}</Text>
+          ))}
+          {Array.isArray(group?.reactors) && group.reactors.length > 10 ? (
+            <Text style={styles.reactorsPopoverMore}>+{group.reactors.length - 10} more</Text>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 function UserAvatar({ uri, label, size, styles }) {
@@ -411,6 +563,11 @@ export default function ViewPhotoScreen() {
   const [mentionPickerAnchor, setMentionPickerAnchor] = useState(null);
   const [mentionPickerScrollOffset, setMentionPickerScrollOffset] = useState(0);
   const [activeDraggedMentionUid, setActiveDraggedMentionUid] = useState(null);
+  const [photoReactionGroups, setPhotoReactionGroups] = useState([]);
+  const [viewerEmoji, setViewerEmoji] = useState(null);
+  const [reactionPickerVisible, setReactionPickerVisible] = useState(false);
+  const [reactionPickerAnchor, setReactionPickerAnchor] = useState(null);
+  const [reactionPopoverGroup, setReactionPopoverGroup] = useState(null);
 
   const photosRef = useRef([]);
   const pendingCommentIdsRef = useRef(new Set());
@@ -425,6 +582,8 @@ export default function ViewPhotoScreen() {
   const commentInputRef = useRef(null);
   const mentionDragMovedRef = useRef(false);
   const mentionPickerScrollOffsetRef = useRef(0);
+  const reactionPendingRef = useRef(false);
+  const reactionAddButtonRef = useRef(null);
 
   const router = useRouter();
   const { message: toastMessage, show: showToast } = useToast(3500);
@@ -535,6 +694,28 @@ export default function ViewPhotoScreen() {
     setMentionPickerScrollOffset(0);
     setActiveDraggedMentionUid(null);
   }, [selectedPhotoId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPhotoReactionGroups([]);
+    setViewerEmoji(null);
+    setReactionPickerVisible(false);
+    setReactionPopoverGroup(null);
+
+    if (!selectedPhotoId || !selectedPhotoCanComment) {
+      return () => {};
+    }
+
+    fetchPhotoReactions(selectedPhotoId).then((data) => {
+      if (cancelled) return;
+      setPhotoReactionGroups(Array.isArray(data?.groups) ? data.groups : []);
+      setViewerEmoji(typeof data?.viewer_emoji === 'string' ? data.viewer_emoji : null);
+    }).catch((error) => {
+      console.error('Failed to load reactions for photo', selectedPhotoId, error);
+    });
+
+    return () => { cancelled = true; };
+  }, [selectedPhotoId, selectedPhotoCanComment]);
 
   const measureMentionPickerAnchor = useCallback(() => {
     const safeNode = detailSafeRef.current;
@@ -843,6 +1024,71 @@ export default function ViewPhotoScreen() {
       setCommentsRefreshing(false);
     }
   }, [mergeServerCommentsWithPending, selectedPhotoCanComment, selectedPhotoId]);
+
+  const refreshReactionsFromServer = useCallback(async () => {
+    if (!selectedPhotoId) return;
+    try {
+      const data = await fetchPhotoReactions(selectedPhotoId);
+      if (!isMountedRef.current) return;
+      setPhotoReactionGroups(Array.isArray(data?.groups) ? data.groups : []);
+      setViewerEmoji(typeof data?.viewer_emoji === 'string' ? data.viewer_emoji : null);
+    } catch (error) {
+      console.error('Failed to refresh reactions for photo', selectedPhotoId, error);
+    }
+  }, [selectedPhotoId]);
+
+  const handleSetReaction = useCallback(async (emoji) => {
+    if (!selectedPhotoId || reactionPendingRef.current) return;
+
+    const prevEmoji = viewerEmoji;
+    const nextEmoji = prevEmoji === emoji ? null : emoji;
+
+    setViewerEmoji(nextEmoji);
+    setPhotoReactionGroups((current) => applyOptimisticReaction(current, prevEmoji, nextEmoji, currentUserHandle));
+    setReactionPickerVisible(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+
+    reactionPendingRef.current = true;
+    try {
+      const ok = nextEmoji
+        ? await addPhotoReaction(selectedPhotoId, nextEmoji)
+        : await deletePhotoReaction(selectedPhotoId);
+      if (!ok && isMountedRef.current) {
+        setViewerEmoji(prevEmoji);
+        setPhotoReactionGroups((current) => applyOptimisticReaction(current, nextEmoji, prevEmoji, currentUserHandle));
+        showToast('Failed to update reaction.', 2500);
+        return;
+      }
+      await refreshReactionsFromServer();
+    } catch (error) {
+      console.error('Failed to set reaction', error);
+      if (isMountedRef.current) {
+        setViewerEmoji(prevEmoji);
+        setPhotoReactionGroups((current) => applyOptimisticReaction(current, nextEmoji, prevEmoji, currentUserHandle));
+        showToast('Failed to update reaction.', 2500);
+      }
+    } finally {
+      reactionPendingRef.current = false;
+    }
+  }, [currentUserHandle, refreshReactionsFromServer, selectedPhotoId, showToast, viewerEmoji]);
+
+  const handleChipPress = useCallback((emoji) => {
+    handleSetReaction(emoji);
+  }, [handleSetReaction]);
+
+  const handleChipLongPress = useCallback((group) => {
+    setReactionPopoverGroup(group);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, []);
+
+  const handleReactionAddButtonPress = useCallback(() => {
+    if (!selectedPhotoCanComment) return;
+    reactionAddButtonRef.current?.measureInWindow((x, y, width, height) => {
+      setReactionPickerAnchor({ x: x + width / 2, y: y + height });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      setReactionPickerVisible(true);
+    });
+  }, [selectedPhotoCanComment]);
 
   const closePhotoDetail = useCallback(() => {
     setDetailImageZoomLocked(false);
@@ -1483,6 +1729,15 @@ export default function ViewPhotoScreen() {
                 </View>
               </View>
               */}
+              {selectedPhotoCanComment ? (
+                <ReactionsStrip
+                  groups={photoReactionGroups}
+                  viewerEmoji={viewerEmoji}
+                  onChipPress={handleChipPress}
+                  onChipLongPress={handleChipLongPress}
+                  styles={styles}
+                />
+              ) : null}
               {selectedPhoto?.optimistic ? (
                 <View style={styles.uploadStateCard}>
                   <Text style={styles.uploadStateEyebrow}>Upload status</Text>
@@ -1512,10 +1767,30 @@ export default function ViewPhotoScreen() {
                   ) : null}
                 </View>
               ) : null}
-              <View style={styles.commentsSectionHeader}>
-                <Text style={styles.commentsSectionTitle}>Comments</Text>
+              <Pressable
+                onLongPress={(event) => {
+                  if (!selectedPhotoCanComment) return;
+                  const { pageX, pageY } = event.nativeEvent;
+                  setReactionPickerAnchor({ x: pageX, y: pageY });
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  setReactionPickerVisible(true);
+                }}
+                delayLongPress={120}
+                style={styles.commentsSectionHeader}
+              >
+                <View style={styles.commentsSectionLeft}>
+                  <Text style={styles.commentsSectionTitle}>Comments</Text>
+                  <Pressable
+                    ref={reactionAddButtonRef}
+                    onPress={handleReactionAddButtonPress}
+                    hitSlop={8}
+                    style={styles.reactionAddInlineBtn}
+                  >
+                    <Text style={styles.reactionAddInlineText}>+</Text>
+                  </Pressable>
+                </View>
                 <Text style={styles.commentsSectionSubtitle}>{`${photoComments.length} total`}</Text>
-              </View>
+              </Pressable>
               {!selectedPhotoCanComment ? (
                 <View style={styles.pendingCommentNotice}>
                   <Text style={styles.pendingCommentText}>
@@ -1660,6 +1935,19 @@ export default function ViewPhotoScreen() {
         </>
       ) : null}
 
+      <EmojiPickerModal
+        visible={reactionPickerVisible}
+        viewerEmoji={viewerEmoji}
+        anchorPoint={reactionPickerAnchor}
+        onSelect={handleSetReaction}
+        onClose={() => { setReactionPickerVisible(false); setReactionPickerAnchor(null); }}
+        styles={styles}
+      />
+      <ReactorsPopoverModal
+        group={reactionPopoverGroup}
+        onClose={() => setReactionPopoverGroup(null)}
+        styles={styles}
+      />
       <Toast message={toastMessage} bottomOffset={100} />
     </SafeAreaView>
   );
@@ -1765,14 +2053,14 @@ function createStyles(colors) {
     },
     detailListContent: {
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
+      paddingTop: spacing.sm,
       paddingBottom: spacing.xl,
       gap: 0,
     },
     detailHeroSection: {
       position: 'relative',
-      gap: spacing.lg,
-      marginBottom: spacing.md,
+      gap: 6,
+      marginBottom: 2,
     },
     detailImageFrame: {
       position: 'relative',
@@ -1885,11 +2173,24 @@ function createStyles(colors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: spacing.sm,
+    },
+    commentsSectionLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
     },
     commentsSectionTitle: {
       ...textStyles.title,
       color: colors.text,
+    },
+    reactionAddInlineBtn: {
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+    },
+    reactionAddInlineText: {
+      ...textStyles.bodySmallStrong,
+      color: colors.textMuted,
+      lineHeight: 20,
     },
     commentsSectionSubtitle: {
       ...textStyles.sectionTitleSm,
@@ -2087,6 +2388,103 @@ function createStyles(colors) {
     },
     mentionHandleText: {
       ...textStyles.body2xsBold,
+      color: colors.textMuted,
+    },
+    reactionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: 2,
+    },
+    reactionChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 5,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    reactionChipOwn: {
+      borderColor: colors.barBorder,
+      backgroundColor: colors.bg,
+    },
+    reactionEmoji: {
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    reactionCount: {
+      ...textStyles.chipSmall,
+      color: colors.textMuted,
+    },
+    emojiPickerBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    },
+    emojiPickerPill: {
+      position: 'absolute',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      width: EMOJI_PICKER_W,
+      gap: 6,
+      padding: 10,
+      borderRadius: radii.lg,
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.chip,
+    },
+    emojiPickerBtn: {
+      width: 38,
+      height: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.sm,
+      backgroundColor: colors.surface,
+    },
+    emojiPickerBtnActive: {
+      backgroundColor: colors.bg,
+      borderWidth: 1.5,
+      borderColor: colors.barBorder,
+    },
+    emojiPickerBtnText: {
+      fontSize: 20,
+    },
+    reactorsPopoverAnchor: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.xl,
+    },
+    reactorsPopoverCard: {
+      backgroundColor: colors.bg,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: spacing.lg,
+      gap: spacing.xs,
+      alignItems: 'center',
+      minWidth: 160,
+      ...shadows.chip,
+    },
+    reactorsPopoverEmoji: {
+      fontSize: 36,
+      marginBottom: spacing.xs,
+    },
+    reactorsPopoverCount: {
+      ...textStyles.sectionTitleSm,
+      color: colors.textMuted,
+      letterSpacing: 0.6,
+      marginBottom: spacing.xs,
+    },
+    reactorsPopoverHandle: {
+      ...textStyles.bodySmallStrong,
+      color: colors.text,
+    },
+    reactorsPopoverMore: {
+      ...textStyles.bodyXs,
       color: colors.textMuted,
     },
   });

@@ -27,7 +27,7 @@ const ADMIN_UIDS = String(process.env.EXPO_PUBLIC_ADMIN_UIDS || process.env.EXPO
   .filter(Boolean);
 
 const QUEST_TAGS = [
-  { id: 'common', label: 'Common' },
+  { id: 'common', label: 'Popular' },
   { id: 'crazy', label: 'Crazy' },
   { id: 'social', label: 'Social' },
   { id: 'fitness', label: 'Fitness' },
