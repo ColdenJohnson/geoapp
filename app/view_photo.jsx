@@ -215,7 +215,7 @@ function estimateMentionAnchorOffset(text, mentionStart, inputWidth) {
   return spacing.md + Math.min(innerWidth, column * estimatedCharWidth);
 }
 
-const REACTION_EMOJIS = ['🔥', '❤️', '😂', '😮', '👏', '😢', '💀', '🫡'];
+const REACTION_EMOJIS = ['🔥', '❤️', '😂', '😮', '🦆', '🫠', '💀', '🏆'];
 
 function applyOptimisticReaction(groups, prevEmoji, nextEmoji, viewerHandle) {
   let updated = groups.map((g) => ({ ...g, reactors: [...(g.reactors || [])] }));
