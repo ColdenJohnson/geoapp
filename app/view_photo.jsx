@@ -15,7 +15,9 @@ import {
   View,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
+import * as MediaLibrary from 'expo-media-library';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -399,6 +401,7 @@ export default function ViewPhotoScreen() {
   const [photoSourceSettled, setPhotoSourceSettled] = useState(false);
   const [commentsRefreshing, setCommentsRefreshing] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
   const [detailImageZoomLocked, setDetailImageZoomLocked] = useState(false);
   const [photoComments, setPhotoComments] = useState([]);
   const [commentsHydrated, setCommentsHydrated] = useState(false);
@@ -932,6 +935,31 @@ export default function ViewPhotoScreen() {
     );
   }, [executeDeleteSelectedPhoto, photos, selectedPhotoCanDelete, selectedPhotoDeletePending]);
 
+  const saveSelectedPhotoToLibrary = useCallback(async () => {
+    const url = selectedPhoto?.file_url;
+    if (!url || savingToLibrary) return;
+
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      showToast('Camera roll access is required to save photos.', 2500);
+      return;
+    }
+
+    setSavingToLibrary(true);
+    const localUri = `${FileSystem.cacheDirectory}geo_save_${Date.now()}.jpg`;
+    try {
+      const download = await FileSystem.downloadAsync(url, localUri);
+      await MediaLibrary.saveToLibraryAsync(download.uri);
+      showToast('Saved to camera roll.', 2000);
+    } catch (error) {
+      console.error('Failed to save photo to library', error);
+      showToast('Failed to save photo.', 2500);
+    } finally {
+      setSavingToLibrary(false);
+      FileSystem.deleteAsync(localUri, { idempotent: true }).catch(() => {});
+    }
+  }, [selectedPhoto?.file_url, savingToLibrary, showToast]);
+
   const retrySelectedPhotoUpload = useCallback(async () => {
     if (!selectedPhotoQueueId) return;
     try {
@@ -1417,6 +1445,25 @@ export default function ViewPhotoScreen() {
                     )}
                   </Pressable>
                 ) : null}
+                {selectedPhotoCanDelete ? (
+                  <Pressable
+                    onPress={saveSelectedPhotoToLibrary}
+                    disabled={savingToLibrary}
+                    accessibilityRole="button"
+                    accessibilityLabel="Save photo to camera roll"
+                    hitSlop={10}
+                    style={[
+                      styles.detailSaveButton,
+                      savingToLibrary && styles.detailDeleteButtonDisabled,
+                    ]}
+                  >
+                    {savingToLibrary ? (
+                      <ActivityIndicator size="small" color={colors.textMuted} />
+                    ) : (
+                      <MaterialIcons name="file-download" size={18} color={colors.textMuted} />
+                    )}
+                  </Pressable>
+                ) : null}
               </View>
               {/*  THIS INFORMATION IS REDUNDANT, RE-ADD WHEN IT WILL BE USEFUL
               <View style={styles.detailMetricRow}>
@@ -1695,6 +1742,20 @@ function createStyles(colors) {
     },
     detailDeleteButtonDisabled: {
       opacity: 0.55,
+    },
+    detailSaveButton: {
+      position: 'absolute',
+      bottom: spacing.sm,
+      right: spacing.sm,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.chip,
     },
     detailList: {
       flex: 1,
