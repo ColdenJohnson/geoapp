@@ -655,18 +655,6 @@ export default function ViewPhotoChallengeScreen() {
             ListHeaderComponent={(
               <View style={styles.headerIconRow}>
                 <Pressable
-                  onPress={onToggleSortMode}
-                  style={({ pressed }) => [styles.sortChip, pressed && styles.headerIconBtnPressed]}
-                  hitSlop={8}
-                >
-                  <MaterialIcons
-                    name={sortMode === SORT_MODE_ELO ? 'emoji-events' : 'schedule'}
-                    size={20}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.sortChipText}>{sortChipLabel}</Text>
-                </Pressable>
-                <Pressable
                   onPress={openQuestMap}
                   style={({ pressed }) => [styles.headerIconBtn, pressed && styles.headerIconBtnPressed]}
                   accessibilityRole="button"
@@ -697,6 +685,18 @@ export default function ViewPhotoChallengeScreen() {
                   hitSlop={8}
                 >
                   <MaterialIcons name="send" size={20} color={isGeoLocked || !friends?.length ? colors.textMuted : colors.primary} />
+                </Pressable>
+                <Pressable
+                  onPress={onToggleSortMode}
+                  style={({ pressed }) => [styles.sortChip, pressed && styles.headerIconBtnPressed]}
+                  hitSlop={8}
+                >
+                  <MaterialIcons
+                    name={sortMode === SORT_MODE_ELO ? 'emoji-events' : 'schedule'}
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.sortChipText}>{sortChipLabel}</Text>
                 </Pressable>
               </View>
             )}
