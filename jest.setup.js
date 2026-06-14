@@ -13,6 +13,7 @@ import { View } from 'react-native';
 jest.mock('expo-router', () => {
   const routerMock = {
     push: jest.fn(),
+    navigate: jest.fn(),
     replace: jest.fn(),
     back: jest.fn(),
     canGoBack: jest.fn(() => true),

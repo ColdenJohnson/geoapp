@@ -19,6 +19,10 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light' },
 }));
 
+jest.mock('@/lib/uploadQueue', () => ({
+  subscribeUploadQueue: jest.fn(() => jest.fn()),
+}));
+
 jest.mock('@/lib/api', () => ({
   fetchRankedQuests: jest.fn(),
   fetchSavedQuests: jest.fn(),

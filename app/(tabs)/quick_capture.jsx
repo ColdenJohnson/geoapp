@@ -261,7 +261,6 @@ export default function QuickCaptureScreen({ initialUri = null }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch(() => {});
     setUploading(true);
-    showToast('Uploading...', 60000);
     try {
       const queuedItem = await enqueueNewChallengeUpload({
         sourceUri: uri,
@@ -269,29 +268,24 @@ export default function QuickCaptureScreen({ initialUri = null }) {
         location: { coords: challengeCoords },
         photoLocation: { coords: challengeCoords },
       });
-      const created = await waitForUploadQueueItem(queuedItem.id);
-      if (!created?.pinId) {
-        throw new Error('Queued challenge did not return a pinId');
-      }
-      await applyUploadResult?.(created);
-      showToast('Upload Sucess', 2200);
+
+      void waitForUploadQueueItem(queuedItem.id)
+        .then((result) => { void applyUploadResult?.(result); })
+        .catch((queueError) => {
+          console.warn('New challenge upload failed in background', queueError);
+        });
+
       setUri(null);
       router.navigate('/(tabs)/active_challenges');
-      router.push(buildViewPhotoChallengeRoute({
-        pinId: created.pinId,
-        message: trimmed,
-        createdByHandle: created.pin?.created_by_handle || '',
-      }));
     } catch (error) {
-      console.error('Failed to create quick capture quest', error);
+      console.error('Failed to queue new challenge', error);
       Alert.alert('Upload failed', 'Unable to queue this challenge right now. Please try again.');
-      showToast('Upload Failed', 2500);
     } finally {
       if (isMounted.current) {
         setUploading(false);
       }
     }
-  }, [applyUploadResult, ensureLocationForCreate, message, router, showToast, uploading, uri]);
+  }, [applyUploadResult, ensureLocationForCreate, message, router, uploading, uri]);
 
   const handleAddToQuest = useCallback(async () => {
     if (!uri || uploading || !selectedQuest) return;

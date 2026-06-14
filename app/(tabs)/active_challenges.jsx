@@ -35,6 +35,7 @@ import {
 } from '@/lib/api';
 import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { setUploadSubmitResolver } from '@/lib/promiseStore';
+import { subscribeUploadQueue } from '@/lib/uploadQueue';
 import { readPinCommentsCache } from '@/lib/pinChallengeCache';
 import { getTopRankedPhotoComment } from '@/lib/photoCommentRanking';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
@@ -483,6 +484,7 @@ export default function ActiveChallengesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [pendingNewChallengeCount, setPendingNewChallengeCount] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [uploadingPinId, setUploadingPinId] = useState(null);
   const [queueMode, setQueueMode] = useState('all');
@@ -604,6 +606,7 @@ export default function ActiveChallengesScreen() {
   const hasActiveQuestFilter = selectedQuestFilterOption.type !== 'all';
   const showOfflineBanner = queueMode === 'all' && isOffline && challenges.length > 0 && !loading;
   const showRefreshingBanner = queueMode === 'all' && refreshing && challenges.length > 0 && !loading && !isOffline;
+  const showPendingQuestBanner = queueMode === 'all' && pendingNewChallengeCount > 0 && !loading;
   const stack = filteredChallenges.slice(0, STACK_DEPTH);
   const activeChallenge = stack[0] ?? null;
   const showQuestTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB);
@@ -871,6 +874,20 @@ export default function ActiveChallengesScreen() {
   useEffect(() => {
     loadChallenges({ showSpinner: true, mode: queueMode });
   }, [loadChallenges, queueMode]);
+
+  useEffect(() => {
+    let prevCount = 0;
+    const unsubscribe = subscribeUploadQueue((items) => {
+      const count = items.filter((item) => item?.type === 'new_challenge').length;
+      setPendingNewChallengeCount(count);
+      if (prevCount > 0 && count === 0) {
+        showToast('Quest created!', 2200);
+        void loadChallenges({ showSpinner: false, force: true });
+      }
+      prevCount = count;
+    });
+    return unsubscribe;
+  }, [loadChallenges, showToast]);
 
   useEffect(() => {
     closeChallengeOptions();
@@ -1689,7 +1706,7 @@ export default function ActiveChallengesScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.safe}>
         <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
-          {showOfflineBanner || showRefreshingBanner ? (
+          {showOfflineBanner || showRefreshingBanner || showPendingQuestBanner ? (
             <View pointerEvents="none" style={styles.statusBannerOverlay}>
               {showOfflineBanner ? (
                 <View style={[styles.statusBanner, styles.statusBannerOffline]}>
@@ -1704,6 +1721,14 @@ export default function ActiveChallengesScreen() {
                   <ActivityIndicator size="small" color={colors.primary} />
                   <Text style={styles.statusBannerText}>
                     Updating quests…
+                  </Text>
+                </View>
+              ) : null}
+              {showPendingQuestBanner ? (
+                <View style={styles.statusBanner}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.statusBannerText}>
+                    Uploading new quest…
                   </Text>
                 </View>
               ) : null}

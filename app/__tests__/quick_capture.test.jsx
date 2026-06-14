@@ -76,34 +76,31 @@ describe('QuickCaptureScreen', () => {
     expect(getByTestId('quick-capture-mode-existing')).toHaveAccessibilityState({ selected: false });
   });
 
-  it('queues a new quest from the captured photo', async () => {
+  it('queues a new quest and navigates away optimistically without waiting for upload', async () => {
     enqueueNewChallengeUpload.mockResolvedValue({ id: 'queue-1' });
     waitForUploadQueueItem.mockResolvedValue({
       pinId: 'pin-1',
       pin: { created_by_handle: 'tester' },
     });
 
-    const { getByPlaceholderText, getByTestId } = render(<QuickCaptureScreen initialUri="file://mock.jpg" />);
+    const { getByPlaceholderText, getByTestId, getAllByText } = render(<QuickCaptureScreen initialUri="file://mock.jpg" />);
 
     await flushInitialEffects();
+    fireEvent.press(getByTestId('quick-capture-mode-create'));
+    await flushInitialEffects();
     fireEvent.changeText(getByPlaceholderText(/challenge prompt/i), '  hello world  ');
-    fireEvent.press(getByTestId('quick-capture-create-submit'));
+    // Mode toggle also renders 'Create'; the submit button is the last match
+    const createButtons = getAllByText('Create');
+    fireEvent.press(createButtons[createButtons.length - 1]);
 
     await waitFor(() => expect(enqueueNewChallengeUpload).toHaveBeenCalledWith({
       sourceUri: 'file://mock.jpg',
       message: 'hello world',
       location: { coords: { latitude: 11, longitude: 22 } },
-      isGeoLocked: false,
       photoLocation: { coords: { latitude: 11, longitude: 22 } },
     }));
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith({
-      pathname: '/view_photochallenge',
-      params: {
-        pinId: 'pin-1',
-        message: 'hello world',
-        created_by_handle: 'tester',
-      },
-    }));
+    await waitFor(() => expect(router.navigate).toHaveBeenCalledWith('/(tabs)/active_challenges'));
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it('hides blocked ranked quests from the existing quest search results', async () => {
