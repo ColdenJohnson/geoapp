@@ -1,3 +1,4 @@
+/* eslint-env jest */
 import React from 'react';
 import { Share } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -85,6 +86,7 @@ const { unsaveQuest } = require('@/lib/api');
 const AsyncStorage = require('@react-native-async-storage/async-storage');
 const NetInfo = require('@react-native-community/netinfo');
 const Haptics = require('expo-haptics');
+const { router } = require('expo-router');
 const { AuthContext } = require('@/hooks/AuthContext');
 const {
   default: ActiveChallengesScreen,
@@ -129,6 +131,7 @@ describe('ActiveChallengesScreen search', () => {
     AsyncStorage.setItem.mockResolvedValue();
     NetInfo.fetch.mockResolvedValue({ isConnected: true, isInternetReachable: true });
     NetInfo.addEventListener.mockImplementation(() => jest.fn());
+    router.push.mockClear();
     fetchSavedQuests.mockResolvedValue([]);
     fetchRankedQuests.mockResolvedValue([
       {
@@ -268,6 +271,23 @@ describe('ActiveChallengesScreen search', () => {
 
     fireEvent.press(getByTestId('quest-card-save-button-quest-1'));
     await waitFor(() => expect(Haptics.selectionAsync).toHaveBeenCalledTimes(2));
+  });
+
+  it('opens quest photos from the card photo count chip', async () => {
+    const { getByTestId, queryByText } = renderScreen();
+
+    await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
+
+    fireEvent.press(getByTestId('quest-card-view-photos-button-quest-1'));
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: '/view_photochallenge',
+      params: {
+        pinId: 'quest-1',
+        message: 'Cat quest',
+        created_by_handle: 'maker',
+      },
+    });
   });
 
   it('renders cached quests before the fresh network response resolves', async () => {

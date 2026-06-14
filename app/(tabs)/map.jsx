@@ -1,284 +1,165 @@
-import { Platform, StyleSheet, View, Pressable, Text, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import MapView from 'react-native-maps';
-import { Marker, Callout, CalloutSubview } from 'react-native-maps';
+import { Callout, CalloutSubview, Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import * as Haptics from 'expo-haptics';
-import { useEffect, useState, useRef, useCallback, useMemo, useContext } from 'react';
+import { Image } from 'expo-image';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { setUploadResolver } from '../../lib/promiseStore'; // for upload promise
-import { useRouter} from 'expo-router';
-
-import { fetchAllLocationPins, fetchFriendPrivateLocationPins } from '../../lib/api';
+import { fetchChallengeByPinId, fetchPhotosByPinId } from '../../lib/api';
 import { isInMainlandChina, shouldConvertToGcj02, wgs84ToGcj02 } from '../../lib/geo';
-import { buildViewPhotoChallengeRoute } from '../../lib/navigation';
-import { ensurePreloadedGlobalDuels, DEFAULT_PRELOAD_COUNT } from '@/lib/globalDuelQueue';
-import {
-  canViewChallenge,
-  getChallengeUploadBlockedMessage,
-  getChallengeViewBlockedMessage,
-  normalizeChallengeCoordinate,
-} from '@/lib/challengeGeoAccess';
-import { waitForUploadQueueItem } from '@/lib/uploadQueue';
+import { buildViewPhotoChallengePhotoRoute, goBackOrHome } from '../../lib/navigation';
 import {
   clusterMapPins,
   DEFAULT_PIN_COLLISION_DISTANCE_PX,
 } from '@/lib/mapPinClustering';
 import QuestMapPin from '@/components/map/QuestMapPin';
-import { resolveMapPinTheme } from '@/theme/mapPins';
+import { getMapPinTheme } from '@/theme/mapPins';
 import { darkMapStyle } from '@/theme/mapStyle';
 
 import { Toast, useToast } from '../../components/ui/Toast';
-import { TutorialCallout } from '@/components/ui/TutorialCallout';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePalette } from '@/hooks/usePalette';
-import { APP_TUTORIAL_STEPS, AuthContext } from '@/hooks/AuthContext';
+import { AuthContext } from '@/hooks/AuthContext';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
+import { radii, shadows, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
 const MARKER_REFRESH_WINDOW_MS = 240;
+const DEFAULT_REGION = {
+  latitude: 31.416077,
+  longitude: 120.901488,
+  latitudeDelta: 0.5,
+  longitudeDelta: 0.5,
+};
 
-export default function HomeScreen() {
+function normalizeParamText(value) {
+  if (Array.isArray(value)) {
+    return normalizeParamText(value[0]);
+  }
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function normalizeCoordinate(value) {
+  const latitude = Number(value?.latitude ?? value?.coords?.latitude);
+  const longitude = Number(value?.longitude ?? value?.coords?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+  return { latitude, longitude };
+}
+
+function formatShortDate(value) {
+  const parsed = value ? new Date(value) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return 'Unknown date';
+  }
+  return parsed.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function buildPhotoMarker(photo) {
+  const location = normalizeCoordinate(photo?.location);
+  if (!photo?._id || !location) {
+    return null;
+  }
+
+  return {
+    ...photo,
+    _id: String(photo._id),
+    location,
+    photo_count: 1,
+  };
+}
+
+function getPhotoHandle(photo) {
+  const handle = typeof photo?.created_by_handle === 'string'
+    ? photo.created_by_handle.trim()
+    : '';
+  return handle ? `@${handle}` : 'anon';
+}
+
+function buildRegionForCoordinate(coordinate) {
+  return {
+    latitude: coordinate.latitude,
+    longitude: coordinate.longitude,
+    latitudeDelta: 0.08,
+    longitudeDelta: 0.08,
+  };
+}
+
+function getPhotoPinTheme(colors, { isFriendPhoto = false } = {}) {
+  const baseTheme = getMapPinTheme(isFriendPhoto ? 'open' : 'location', colors);
+  return {
+    ...baseTheme,
+    glyphName: 'photo-camera',
+  };
+}
+
+export default function QuestPhotoMapScreen() {
+  const {
+    pinId: pinIdParam,
+    message: promptParam,
+    created_by_handle: handleParam,
+  } = useLocalSearchParams();
+  const pinId = normalizeParamText(pinIdParam);
+  const promptParamText = normalizeParamText(promptParam);
+  const handleParamText = normalizeParamText(handleParam);
   const [location, setLocation] = useState(null);
-  const [pins, setPins] = useState([]); // for all pins
-  const [pressedUploadPinId, setPressedUploadPinId] = useState(null);
-  const router = useRouter();
-  const mapRef = useRef(null);
-  const pressedUploadResetTimeoutRef = useRef(null);
-  const markerRefreshTimeoutRef = useRef(null);
-  const [didCenter, setDidCenter] = useState(false);
+  const [photos, setPhotos] = useState([]);
+  const [challengeMeta, setChallengeMeta] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showFriendsOnly, setShowFriendsOnly] = useState(false);
   const [mapLayout, setMapLayout] = useState({ width: 0, height: 0 });
   const [markerTracksViewChanges, setMarkerTracksViewChanges] = useState(true);
-
-  const [showFriendsOnly, setShowFriendsOnly] = useState(false);
+  const [mapRegion, setMapRegion] = useState(DEFAULT_REGION);
+  const mapRef = useRef(null);
+  const markerRefreshTimeoutRef = useRef(null);
+  const didFitPhotosKeyRef = useRef(null);
+  const watchRef = useRef(null);
+  const router = useRouter();
   const { message: toastMessage, show: showToast } = useToast(3500);
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
-  const { user, friends, applyUploadResult, isAppTutorialStepVisible, advanceAppTutorial } = useContext(AuthContext);
   const colorScheme = useColorScheme();
   const colors = usePalette();
-  const showMapCreateTutorial = isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE);
-  const mapTutorialVisitedRef = useRef(false);
+  const { user, friends } = useContext(AuthContext);
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
-  function getPinDisplayHandle(pin) {
-    const topPhotoHandle = typeof pin?.top_global_photo?.created_by_handle === 'string'
-      ? pin.top_global_photo.created_by_handle.trim()
-      : '';
-    if (topPhotoHandle) {
-      return topPhotoHandle;
-    }
-    const creatorHandle = typeof pin?.created_by_handle === 'string'
-      ? pin.created_by_handle.trim()
-      : '';
-    return creatorHandle;
-  }
-
-  function uploadPhotoToChallenge(pin) {
-    if (!pin?._id) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      showToast('No valid challenge selected.');
-      return;
-    }
-    const uploadBlockedMessage = getChallengeUploadBlockedMessage({
-      challenge: pin,
-      userLocation: userCoords,
-    });
-    if (uploadBlockedMessage) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      showToast(uploadBlockedMessage, 2500);
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const pinId = String(pin._id);
-    const uploadRequestId = `map-upload-${pinId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    router.push({
-      pathname: '/upload',
-      params: {
-        next: '/view_photochallenge',
-        pinId,
-        prompt: pin?.message || '',
-        created_by_handle: getPinDisplayHandle(pin),
-        uploadRequestId,
-      },
-    });
-  }
-
-  function handleUploadPhotoPress(pin) {
-    const pinId = String(pin?._id || '');
-    if (!pinId) {
-      uploadPhotoToChallenge(pin);
-      return;
-    }
-    if (pressedUploadResetTimeoutRef.current) {
-      clearTimeout(pressedUploadResetTimeoutRef.current);
-    }
-    setPressedUploadPinId(pinId);
-    pressedUploadResetTimeoutRef.current = setTimeout(() => {
-      setPressedUploadPinId((current) => (current === pinId ? null : current));
-      pressedUploadResetTimeoutRef.current = null;
-    }, 90);
-    uploadPhotoToChallenge(pin);
-  }
-
-  useEffect(() => {
-    (async () => {
-      const [geoLockedPins, nonGeoLockedPins, privateGeoLockedPins, privateNonGeoLockedPins] = await Promise.all([
-        fetchAllLocationPins({ isGeoLocked: true }),
-        fetchAllLocationPins({ isGeoLocked: false }),
-        fetchFriendPrivateLocationPins({ isGeoLocked: true }),
-        fetchFriendPrivateLocationPins({ isGeoLocked: false }),
-      ]);
-      const combined = [
-        ...(Array.isArray(geoLockedPins) ? geoLockedPins : []),
-        ...(Array.isArray(nonGeoLockedPins) ? nonGeoLockedPins : []),
-        ...(Array.isArray(privateGeoLockedPins) ? privateGeoLockedPins : []),
-        ...(Array.isArray(privateNonGeoLockedPins) ? privateNonGeoLockedPins : []),
-      ];
-      const deduped = Array.from(
-        new Map(combined.filter((pin) => pin?._id).map((pin) => [String(pin._id), pin])).values()
-      );
-      setPins(deduped);
-    })();
-  }, []);
+  const promptText = promptParamText || challengeMeta?.message || 'Quest Map';
+  const handleText = handleParamText || challengeMeta?.created_by_handle || null;
 
   useEffect(() => () => {
-    if (pressedUploadResetTimeoutRef.current) {
-      clearTimeout(pressedUploadResetTimeoutRef.current);
-      pressedUploadResetTimeoutRef.current = null;
-    }
     if (markerRefreshTimeoutRef.current) {
-      clearTimeout(markerRefreshTimeoutRef.current);
+      globalThis.clearTimeout(markerRefreshTimeoutRef.current);
       markerRefreshTimeoutRef.current = null;
     }
   }, []);
 
-  const userCoords = useMemo(() => {
-    return normalizeChallengeCoordinate(location);
-  }, [location]);
-
-  const userIsInMainland = useMemo(() => {
-    if (!userCoords) return false;
-    return isInMainlandChina(userCoords.latitude, userCoords.longitude);
-  }, [userCoords]);
-
-  const derivedUserCenter = useMemo(() => {
-    if (!userCoords) return null;
-    return userIsInMainland
-      ? wgs84ToGcj02(userCoords.latitude, userCoords.longitude)
-      : userCoords;
-  }, [userCoords, userIsInMainland]);
-  const initialMapRegion = useMemo(() => ({
-    latitude: derivedUserCenter?.latitude ?? 31.416077,
-    longitude: derivedUserCenter?.longitude ?? 120.901488,
-    latitudeDelta: derivedUserCenter ? 0.01 : 0.5,
-    longitudeDelta: derivedUserCenter ? 0.01 : 0.5,
-  }), [derivedUserCenter]);
-  const [mapRegion, setMapRegion] = useState(initialMapRegion);
-  const handleCenterOnUser = useCallback(() => {
-    if (!derivedUserCenter || !mapRef.current) return;
-
-    const nextRegion = {
-      latitude: derivedUserCenter.latitude,
-      longitude: derivedUserCenter.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    };
-    setMapRegion(nextRegion);
-    mapRef.current.animateToRegion(nextRegion, 300);
-  }, [derivedUserCenter]);
-  const friendUidSet = useMemo(() => {
-    if (!Array.isArray(friends)) return new Set();
-    return new Set(
-      friends
-        .map((friend) => friend?.uid)
-        .filter((uid) => typeof uid === 'string' && uid.length > 0)
-    );
-  }, [friends]);
-
-  const isFriendOrOwnPin = useCallback((pin) => {
-    const createdBy = typeof pin?.created_by === 'string' ? pin.created_by : '';
-    if (createdBy) {
-      if (createdBy === user?.uid) return true;
-      return friendUidSet.has(createdBy);
-    }
-    return pin?.is_friend_pin === true;
-  }, [friendUidSet, user?.uid]);
-  const isFriendPin = useCallback((pin) => {
-    const createdBy = typeof pin?.created_by === 'string' ? pin.created_by : '';
-    if (createdBy) {
-      return createdBy !== user?.uid && friendUidSet.has(createdBy);
-    }
-    return pin?.is_friend_pin === true;
-  }, [friendUidSet, user?.uid]);
-
-  const pinsForDisplay = useMemo(() => {
-    if (!Array.isArray(pins)) {
-      return [];
-    }
-
-    return pins.map((pin) => {
-      const topPhotoLocation = pin?.top_global_photo?.location;
-      const hasValidTopPhotoLocation =
-        Number.isFinite(topPhotoLocation?.latitude)
-        && Number.isFinite(topPhotoLocation?.longitude);
-      const baseCoords = pin?.isGeoLocked === false
-        ? (hasValidTopPhotoLocation ? topPhotoLocation : pin?.location)
-        : pin?.location;
-      if (!baseCoords) {
-        return pin;
-      }
-
-      const needsConversion = shouldConvertToGcj02(userCoords, baseCoords, {
-        userIsInMainland,
-        pinIsInMainland:
-          typeof baseCoords?.latitude === 'number' && typeof baseCoords?.longitude === 'number'
-            ? isInMainlandChina(baseCoords.latitude, baseCoords.longitude)
-            : undefined,
-      });
-
-      return {
-        ...pin,
-        displayCoords: needsConversion
-          ? wgs84ToGcj02(baseCoords.latitude, baseCoords.longitude)
-          : baseCoords,
-      };
-    });
-  }, [pins, userCoords, userIsInMainland]);
-  const visiblePins = useMemo(() => {
-    if (!showFriendsOnly) return pinsForDisplay;
-    return pinsForDisplay.filter((pin) => isFriendOrOwnPin(pin));
-  }, [isFriendOrOwnPin, pinsForDisplay, showFriendsOnly]);
-  const pinCollisionGroups = useMemo(() => clusterMapPins(visiblePins, {
-    region: mapRegion,
-    mapSize: mapLayout,
-    collisionDistancePx: DEFAULT_PIN_COLLISION_DISTANCE_PX,
-  }), [mapLayout, mapRegion, visiblePins]);
-  const handleFriendsFilterPress = useCallback(() => {
-    if (!showFriendsOnly && friendUidSet.size === 0) {
-      showToast('Add some friends to see their pins!');
-      return;
-    }
-    setShowFriendsOnly((prev) => !prev);
-  }, [friendUidSet, showFriendsOnly, showToast]);
-
-  // TODO: To make location watcher run app-wide, put this into a LocationProvider at app root/some type of API (not sure, figure this out)
-  // TODO: UseFocusEffect vs UseEffect -- usefocuseffect stops when user navigates away from the screen
-  const watchRef = useRef(null);
-  useFocusEffect( 
+  useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
-        let { status } = await Location.requestForegroundPermissionsAsync();
+        const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          console.warn('Permission to access location was denied');
           return;
         }
         const sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
-          (loc) => { if (!cancelled) setLocation(loc); }
+          (loc) => {
+            if (!cancelled) {
+              setLocation(loc);
+            }
+          }
         );
         watchRef.current = sub;
       })();
@@ -292,149 +173,120 @@ export default function HomeScreen() {
     }, [])
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!showMapCreateTutorial) {
-        mapTutorialVisitedRef.current = false;
-        return undefined;
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadQuestMap() {
+      if (!pinId) {
+        setPhotos([]);
+        setChallengeMeta(null);
+        setLoading(false);
+        return;
       }
 
-      mapTutorialVisitedRef.current = true;
-
-      return () => {
-        if (!mapTutorialVisitedRef.current) {
-          return;
+      setLoading(true);
+      try {
+        const [photoRows, meta] = await Promise.all([
+          fetchPhotosByPinId(pinId),
+          fetchChallengeByPinId(pinId),
+        ]);
+        if (cancelled) return;
+        setPhotos(Array.isArray(photoRows) ? photoRows : []);
+        setChallengeMeta(meta || null);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load quest map', error);
+          showToast('Unable to load quest map', 2500);
         }
-        mapTutorialVisitedRef.current = false;
-        advanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
-      };
-    }, [advanceAppTutorial, showMapCreateTutorial])
-  );
-
-  useEffect(() => {
-    ensurePreloadedGlobalDuels(DEFAULT_PRELOAD_COUNT).catch((error) =>
-      console.error('Failed to warm global duel queue', error)
-    );
-  }, []);
-
-  useEffect(() => {
-    if (!didCenter && userCoords && mapRef.current) {
-      handleCenterOnUser();
-      setDidCenter(true);
-    }
-  }, [didCenter, handleCenterOnUser, userCoords]);
-
-  function handleCreateChallengePress() {
-    if (showMapCreateTutorial) {
-      mapTutorialVisitedRef.current = false;
-      advanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
-    }
-
-    if (!location) {
-      showToast('Location unavailable. Try again once we have your position.');
-      return;
-    }
-
-    const uploadPromise = new Promise((resolve) => {
-      setUploadResolver(resolve);
-    });
-    const messagePromise = new Promise((resolve) => {
-      const { setMessageResolver } = require('../../lib/promiseStore');
-      setMessageResolver(resolve);
-    });
-    const geoLockPromise = new Promise((resolve) => {
-      const { setGeoLockResolver } = require('../../lib/promiseStore');
-      setGeoLockResolver(resolve);
-    });
-
-    router.push({
-      pathname: '/enter_message',
-      params: {
-        latitude: location?.coords?.latitude,
-        longitude: location?.coords?.longitude,
-      },
-    });
-
-    Promise.all([uploadPromise, messagePromise, geoLockPromise])
-      .then(async ([uploadResult, message, isGeoLocked]) => {
-        const queueId = typeof uploadResult?.queueId === 'string' ? uploadResult.queueId : '';
-        if (!queueId) {
-          return;
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
-        showToast('Uploading...', 60000);
-        const created = await waitForUploadQueueItem(queueId);
-        if (!created) {
-          throw new Error('Queued challenge returned falsey');
-        }
-        if (created?.pin) {
-          const nextPin = {
-            ...created.pin,
-            created_by: created.pin?.created_by || user?.uid || null,
-          };
-          setPins((prev) => {
-            if (!Array.isArray(prev)) return [nextPin];
-            if (prev.find((pin) => pin?._id === nextPin._id)) return prev;
-            return [nextPin, ...prev];
-          });
-        }
-        await applyUploadResult?.(created);
-        showToast('Upload Sucess', 2200);
-        router.push(buildViewPhotoChallengeRoute({
-          pinId: created.pinId,
-          message,
-          createdByHandle: created.pin?.created_by_handle || '',
-        }));
-      })
-      .catch((error) => {
-        console.error('Failed to create challenge after upload', error);
-        showToast('Upload Failed', 2500);
-      });
-  }
-
-  async function viewPhotoChallenge(pin) {
-    if (!pin?.location) {
-      showToast('Location unavailable. Unable to open this challenge.');
-      return;
+      }
     }
-    const viewBlockedMessage = getPinViewBlockedMessage(pin);
-    if (viewBlockedMessage) {
-      showToast(viewBlockedMessage);
-      return;
-    }
-    router.push(buildViewPhotoChallengeRoute({
-      pinId: pin._id,
-      message: pin?.message || '',
-      createdByHandle: getPinDisplayHandle(pin),
-    }));
-  }
 
-  const canViewerAccessPin = useCallback((pin) => {
-    return canViewChallenge({
-      challenge: pin,
-      userLocation: userCoords,
-      viewerUid: user?.uid,
-    });
-  }, [user?.uid, userCoords]);
-  const getPinViewBlockedMessage = useCallback((pin) => {
-    return getChallengeViewBlockedMessage({
-      challenge: pin,
-      userLocation: userCoords,
-      viewerUid: user?.uid,
-    });
-  }, [user?.uid, userCoords]);
-  const getPinUploadBlockedMessage = useCallback((pin) => {
-    return getChallengeUploadBlockedMessage({
-      challenge: pin,
-      userLocation: userCoords,
-    });
+    loadQuestMap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pinId, showToast]);
+
+  const userCoords = useMemo(() => normalizeCoordinate(location), [location]);
+  const userIsInMainland = useMemo(() => {
+    if (!userCoords) return false;
+    return isInMainlandChina(userCoords.latitude, userCoords.longitude);
   }, [userCoords]);
+  const derivedUserCenter = useMemo(() => {
+    if (!userCoords) return null;
+    return userIsInMainland
+      ? wgs84ToGcj02(userCoords.latitude, userCoords.longitude)
+      : userCoords;
+  }, [userCoords, userIsInMainland]);
+
+  const photoMarkers = useMemo(() => (
+    photos
+      .map(buildPhotoMarker)
+      .filter(Boolean)
+      .map((photo) => {
+        const baseCoords = photo.location;
+        const needsConversion = shouldConvertToGcj02(userCoords, baseCoords, {
+          userIsInMainland,
+          pinIsInMainland: isInMainlandChina(baseCoords.latitude, baseCoords.longitude),
+        });
+
+        return {
+          ...photo,
+          displayCoords: needsConversion
+            ? wgs84ToGcj02(baseCoords.latitude, baseCoords.longitude)
+            : baseCoords,
+        };
+      })
+  ), [photos, userCoords, userIsInMainland]);
+  const friendUidSet = useMemo(() => {
+    if (!Array.isArray(friends)) return new Set();
+    return new Set(
+      friends
+        .map((friend) => friend?.uid)
+        .filter((uid) => typeof uid === 'string' && uid.length > 0)
+    );
+  }, [friends]);
+  const isFriendPhoto = useCallback((photo) => {
+    const createdBy = typeof photo?.created_by === 'string' ? photo.created_by : '';
+    return Boolean(createdBy && createdBy !== user?.uid && friendUidSet.has(createdBy));
+  }, [friendUidSet, user?.uid]);
+  const isFriendOrOwnPhoto = useCallback((photo) => {
+    const createdBy = typeof photo?.created_by === 'string' ? photo.created_by : '';
+    if (createdBy) {
+      if (createdBy === user?.uid) return true;
+      return friendUidSet.has(createdBy);
+    }
+    return false;
+  }, [friendUidSet, user?.uid]);
+  const visiblePhotoMarkers = useMemo(() => {
+    if (!showFriendsOnly) return photoMarkers;
+    return photoMarkers.filter((photo) => isFriendOrOwnPhoto(photo));
+  }, [isFriendOrOwnPhoto, photoMarkers, showFriendsOnly]);
+
+  const pinCollisionGroups = useMemo(() => clusterMapPins(visiblePhotoMarkers, {
+    region: mapRegion,
+    mapSize: mapLayout,
+    collisionDistancePx: DEFAULT_PIN_COLLISION_DISTANCE_PX,
+  }), [mapLayout, mapRegion, visiblePhotoMarkers]);
+  const handleFriendsFilterPress = useCallback(() => {
+    if (!showFriendsOnly && friendUidSet.size === 0) {
+      showToast('Add some friends to see their photos!');
+      return;
+    }
+    setShowFriendsOnly((prev) => !prev);
+  }, [friendUidSet, showFriendsOnly, showToast]);
 
   const refreshMarkerSnapshots = useCallback(() => {
     setMarkerTracksViewChanges(true);
     if (markerRefreshTimeoutRef.current) {
-      clearTimeout(markerRefreshTimeoutRef.current);
+      globalThis.clearTimeout(markerRefreshTimeoutRef.current);
     }
-    markerRefreshTimeoutRef.current = setTimeout(() => {
+    markerRefreshTimeoutRef.current = globalThis.setTimeout(() => {
       setMarkerTracksViewChanges(false);
       markerRefreshTimeoutRef.current = null;
     }, MARKER_REFRESH_WINDOW_MS);
@@ -460,29 +312,81 @@ export default function HomeScreen() {
     refreshMarkerSnapshots();
   }, [pinCollisionGroups, refreshMarkerSnapshots]);
 
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  useEffect(() => {
+    if (!mapRef.current || photoMarkers.length === 0) return;
+    if (!Number.isFinite(mapLayout.width) || !Number.isFinite(mapLayout.height) || mapLayout.width <= 0 || mapLayout.height <= 0) {
+      return;
+    }
+    const fitKey = photoMarkers.map((photo) => photo._id).sort().join(':');
+    if (didFitPhotosKeyRef.current === fitKey) return;
+    didFitPhotosKeyRef.current = fitKey;
+
+    const coordinates = photoMarkers
+      .map((photo) => photo.displayCoords || photo.location)
+      .filter(Boolean);
+    if (coordinates.length === 1) {
+      const nextRegion = buildRegionForCoordinate(coordinates[0]);
+      setMapRegion(nextRegion);
+      mapRef.current.animateToRegion(nextRegion, 300);
+      return;
+    }
+    mapRef.current.fitToCoordinates(coordinates, {
+      animated: true,
+      edgePadding: {
+        top: 120 + insets.top,
+        right: 64,
+        bottom: 120 + insets.bottom + bottomTabOverflow,
+        left: 64,
+      },
+    });
+  }, [bottomTabOverflow, insets.bottom, insets.top, mapLayout.height, mapLayout.width, photoMarkers]);
+
+  const handleCenterOnUser = useCallback(() => {
+    if (!derivedUserCenter || !mapRef.current) {
+      showToast('Location unavailable. Try again once we have your position.', 2500);
+      return;
+    }
+
+    const nextRegion = {
+      latitude: derivedUserCenter.latitude,
+      longitude: derivedUserCenter.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+    setMapRegion(nextRegion);
+    mapRef.current.animateToRegion(nextRegion, 300);
+  }, [derivedUserCenter, showToast]);
+
+  const openPhotoDetail = useCallback((photo) => {
+    if (!photo?._id || !pinId) return;
+    router.push(buildViewPhotoChallengePhotoRoute({
+      pinId,
+      photoId: photo._id,
+    }));
+  }, [pinId, router]);
+
   const calloutWidth = useMemo(
-    () => Math.max(252, Math.min(windowWidth - 48, 320)),
+    () => Math.max(276, Math.min(windowWidth - 48, 340)),
     [windowWidth]
   );
   const calloutCardStyle = useMemo(() => ({
     width: calloutWidth,
   }), [calloutWidth]);
-  const calloutContentPressableStyle = useMemo(() => ({
-    width: Math.max(156, calloutWidth - 92),
-  }), [calloutWidth]);
   const controlsBottomOffset = 20 + insets.bottom + bottomTabOverflow;
   const toastBottomOffset = controlsBottomOffset + 96;
-  const topRightControlsTop = 16 + insets.top;
+  const topControlsTop = 16 + insets.top;
+  const initialRegion = derivedUserCenter ? buildRegionForCoordinate(derivedUserCenter) : DEFAULT_REGION;
+  const locatedPhotoCount = photoMarkers.length;
+  const visibleLocatedPhotoCount = visiblePhotoMarkers.length;
+  const missingLocationCount = Math.max(0, photos.length - locatedPhotoCount);
 
-  
   return (
-    <View style={styles.map_container}>
+    <View style={styles.mapContainer}>
       {/* If breaking during deployment, it is because it needs an API https://docs.expo.dev/versions/latest/sdk/map-view/
       Github docs are also very helpful: https://github.com/react-native-maps/react-native-maps
       */}
       <MapView
-        key={`map-${pins.length} > 0`} // This line fixes map loading in without pins. It forces a remount of the map when pins.length changes to greater than 0.
+        key={`map-${visibleLocatedPhotoCount} > 0`} // This fixes map loading without markers by remounting once mapped photos are available.
         style={styles.map}
         showsUserLocation={true}
         userInterfaceStyle={colorScheme}
@@ -491,121 +395,101 @@ export default function HomeScreen() {
         ref={mapRef}
         onLayout={handleMapLayout}
         onRegionChangeComplete={handleRegionChangeComplete}
-        initialRegion={{
-          latitude: initialMapRegion.latitude,
-          longitude: initialMapRegion.longitude,
-          latitudeDelta: initialMapRegion.latitudeDelta,
-          longitudeDelta: initialMapRegion.longitudeDelta,
-        }}
+        initialRegion={initialRegion}
       >
+        {/* Optional explicit user marker (MapView already showsUserLocation) */}
+        {false && location?.coords && (
+          <Marker
+            coordinate={{
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            }}
+            title="Your Location"
+            description="You are here"
+            pinColor={colors.pinOpen}
+          />
+        )}
+        {pinCollisionGroups.map((group) => {
+          const photo = group?.representativePin;
+          if (!photo || !group?.representativeCoordinate) return null;
+          const photoPinTheme = getPhotoPinTheme(colors, {
+            isFriendPhoto: isFriendPhoto(photo),
+          });
 
-{/* Optional explicit user marker (MapView already showsUserLocation) */}
-{false && location?.coords && (
-  <Marker
-    coordinate={{
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    }}
-    title="Your Location"
-    description="You are here"
-    pinColor={colors.pinOpen}
-  />
-)}
-  {pinCollisionGroups.map((group) => {
-    const pin = group?.representativePin;
-    if (!pin || !group?.representativeCoordinate) return null;
-
-    const pinId = String(pin._id);
-    const pinDisplayHandle = getPinDisplayHandle(pin);
-    const handleLabel = pinDisplayHandle ? `@${pinDisplayHandle}` : 'anon';
-    const isFriendStyledPin = isFriendPin(pin);
-    const uploadBlockedMessage = getPinUploadBlockedMessage(pin);
-    const uploadLocked = Boolean(uploadBlockedMessage);
-    const pinTheme = resolveMapPinTheme(pin, colors, {
-      isFriendPin: isFriendStyledPin,
-      isUnlocked: canViewerAccessPin(pin),
-    });
-    const markerKey = `representative:${pinId}`;
-
-    return (
-      <Marker
-        key={markerKey}
-        coordinate={group.representativeCoordinate}
-        anchor={{ x: 0.5, y: 1 }}
-        calloutOffset={{ x: 0, y: 12 }}
-        tracksViewChanges={markerTracksViewChanges}
-        title="Photo Challenge"
-        description={pin.message || 'Geo Pin'}
-      >
-        <QuestMapPin
-          theme={pinTheme}
-          badgeCount={group.memberCount}
-        />
-        <Callout tooltip>
-          <View style={[styles.calloutCard, calloutCardStyle]}>
-            <CalloutSubview
-              onPress={() => viewPhotoChallenge(pin)}
-              style={[styles.calloutContentPressable, calloutContentPressableStyle]}
+          return (
+            <Marker
+              key={`representative:${photo._id}`}
+              coordinate={group.representativeCoordinate}
+              anchor={{ x: 0.5, y: 1 }}
+              calloutOffset={{ x: 0, y: 12 }}
+              tracksViewChanges={markerTracksViewChanges}
+              title="Quest Photo"
+              description={getPhotoHandle(photo)}
             >
-              <View style={styles.calloutContent}>
-                <Text style={styles.calloutLabel}>Challenge</Text>
-                <Text style={styles.calloutPrompt} numberOfLines={3}>
-                  {pin.message || '???'}
-                </Text>
-                <View style={styles.calloutDivider} />
-                <Text style={styles.calloutMeta}>
-                  By {handleLabel}
-                </Text>
-                <Text style={styles.calloutMeta}>
-                  Photos: {Number.isFinite(pin?.photo_count) ? pin.photo_count : 0}
-                </Text>
-                {group.memberCount > 1 ? (
-                  <Text style={styles.calloutMeta}>
-                    Most popular of {group.memberCount} Quests
-                  </Text>
-                ) : null}
-              </View>
-            </CalloutSubview>
-            <CalloutSubview
-              onPress={() => {
-                if (uploadBlockedMessage) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-                  showToast(uploadBlockedMessage);
-                  return;
-                }
-                handleUploadPhotoPress(pin);
-              }}
-            >
-              <View
-                style={[
-                  styles.button,
-                  uploadLocked ? styles.calloutActionButtonLocked : styles.buttonTakePhoto,
-                  styles.calloutActionButton,
-                  !uploadLocked && pressedUploadPinId === pinId ? styles.calloutActionButtonPressed : null,
-                ]}
-              >
-                <MaterialIcons
-                  name="add-a-photo"
-                  size={27}
-                  color={uploadLocked ? colors.textMuted : colors.primaryTextOn}
-                />
-              </View>
-            </CalloutSubview>
-          </View>
-        </Callout>
-      </Marker>
-    );
-  })}
-
+              <QuestMapPin
+                theme={photoPinTheme}
+                badgeCount={group.memberCount}
+              />
+              <Callout tooltip>
+                <CalloutSubview
+                  onPress={() => openPhotoDetail(photo)}
+                  style={[styles.calloutCard, calloutCardStyle]}
+                >
+                  <Image
+                    source={{ uri: photo.file_url }}
+                    style={styles.calloutThumbnail}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
+                  <View style={styles.calloutContent}>
+                    <Text style={styles.calloutLabel}>Quest Photo</Text>
+                    <Text style={styles.calloutHandle} numberOfLines={1}>
+                      {getPhotoHandle(photo)}
+                    </Text>
+                    <Text style={styles.calloutMeta}>
+                      Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
+                    </Text>
+                    <Text style={styles.calloutMeta}>
+                      Uploaded {formatShortDate(photo?.createdAt)}
+                    </Text>
+                    {group.memberCount > 1 ? (
+                      <Text style={styles.calloutMeta}>
+                        Most recent of {group.memberCount} photos
+                      </Text>
+                    ) : null}
+                  </View>
+                  <MaterialIcons name="chevron-right" size={24} color={colors.textMuted} />
+                </CalloutSubview>
+              </Callout>
+            </Marker>
+          );
+        })}
       </MapView>
-      <View style={[styles.topRightOverlay, { top: topRightControlsTop }]} pointerEvents="box-none">
+
+      <View style={[styles.topOverlay, { top: topControlsTop }]} pointerEvents="box-none">
+        <Pressable
+          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+          onPress={() => goBackOrHome(router, '/active_challenges')}
+          accessibilityRole="button"
+          accessibilityLabel="Back to quest"
+        >
+          <MaterialIcons name="arrow-back" size={26} color={colors.text} />
+        </Pressable>
+        <View style={styles.titlePill}>
+          <Text style={styles.titleText} numberOfLines={1}>{promptText}</Text>
+          <Text style={styles.subtitleText} numberOfLines={1}>
+            {handleText ? `@${handleText}` : 'anon'} - {locatedPhotoCount} mapped
+          </Text>
+        </View>
+      </View>
+
+      <View style={[styles.topRightOverlay, { top: topControlsTop }]} pointerEvents="box-none">
         <View style={styles.controlStackVertical}>
           <Pressable
-            style={({ pressed }) => [
-              styles.button,
-              { opacity: pressed ? 0.5 : 1 },
-            ]}
+            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
             onPress={handleCenterOnUser}
+            accessibilityRole="button"
+            accessibilityLabel="Center on your location"
           >
             <MaterialIcons name="my-location" size={26} color={colors.text} />
           </Pressable>
@@ -613,9 +497,11 @@ export default function HomeScreen() {
             style={({ pressed }) => [
               styles.button,
               showFriendsOnly ? styles.filterButtonActive : null,
-              { opacity: pressed ? 0.5 : 1 },
+              pressed && styles.buttonPressed,
             ]}
             onPress={handleFriendsFilterPress}
+            accessibilityRole="button"
+            accessibilityLabel="Show friend photos"
           >
             <MaterialIcons
               name="people"
@@ -626,38 +512,50 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={[styles.controlsOverlay, { bottom: controlsBottomOffset }]} pointerEvents="box-none">
-        <View style={styles.controlGroup}>
-          <View style={styles.createButtonWrap}>
-            {showMapCreateTutorial ? (
-              <TutorialCallout
-                title="Map"
-                body="Create a Quest"
-                style={styles.inlineTutorialWrap}
-                bubbleStyle={{
-                  minWidth: 120,
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                }}
-                arrowSide="right"
-                arrowOffset={26}
-              />
-            ) : null}
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                styles.buttonCreate,
-                styles.buttonCreateLarge,
-                { opacity: pressed ? 0.5 : 1 },
-              ]}
-              onPress={handleCreateChallengePress}
-              testID="map-create-quest-button"
-            >
-              <MaterialIcons name="add-location-alt" size={32} color={colors.primary} />
-            </Pressable>
-          </View>
+      {loading ? (
+        <View style={styles.centerOverlay} pointerEvents="none">
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </View>
+      ) : null}
+
+      {!loading && !pinId ? (
+        <View style={styles.emptyOverlay}>
+          <MaterialIcons name="map" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>No quest selected</Text>
+        </View>
+      ) : null}
+
+      {!loading && pinId && photos.length > 0 && locatedPhotoCount === 0 ? (
+        <View style={styles.emptyOverlay}>
+          <MaterialIcons name="location-off" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>No mapped photos yet</Text>
+          <Text style={styles.emptyText}>Photos without saved locations are hidden from this map.</Text>
+        </View>
+      ) : null}
+
+      {!loading && pinId && locatedPhotoCount > 0 && visibleLocatedPhotoCount === 0 ? (
+        <View style={styles.emptyOverlay}>
+          <MaterialIcons name="people" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>No friend photos mapped</Text>
+          <Text style={styles.emptyText}>Turn off the friends filter to see all mapped photos for this quest.</Text>
+        </View>
+      ) : null}
+
+      {!loading && pinId && photos.length === 0 ? (
+        <View style={styles.emptyOverlay}>
+          <MaterialIcons name="photo-library" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>No photos yet</Text>
+        </View>
+      ) : null}
+
+      {!loading && missingLocationCount > 0 && locatedPhotoCount > 0 ? (
+        <View style={[styles.bottomNote, { bottom: controlsBottomOffset }]}>
+          <Text style={styles.bottomNoteText}>
+            {missingLocationCount} {missingLocationCount === 1 ? 'photo is' : 'photos are'} hidden without location.
+          </Text>
+        </View>
+      ) : null}
+
       <Toast message={toastMessage} bottomOffset={toastBottomOffset} />
     </View>
   );
@@ -669,7 +567,7 @@ function createStyles(colors) {
       width: '100%',
       flex: 1,
     },
-    map_container: {
+    mapContainer: {
       flex: 1,
       width: '100%',
       backgroundColor: colors.surface,
@@ -690,58 +588,50 @@ function createStyles(colors) {
       shadowRadius: 16,
       shadowOpacity: 0.12,
     },
+    buttonPressed: {
+      opacity: 0.5,
+    },
     filterButtonActive: {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
-    buttonCreate: {
-      borderColor: colors.primary,
-      borderWidth: 2,
-      backgroundColor: colors.bg,
-    },
-    buttonCreateLarge: {
-      width: 69,
-      height: 69,
-      borderRadius: 23,
-      padding: 12,
-    },
-    buttonTakePhoto: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primary,
+    topOverlay: {
+      position: 'absolute',
+      left: 18,
+      right: 92,
+      zIndex: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
     },
     topRightOverlay: {
       position: 'absolute',
       right: 18,
       zIndex: 10,
     },
-    controlsOverlay: {
-      position: 'absolute',
-      left: 18,
-      right: 18,
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      alignItems: 'center',
-      zIndex: 10,
-    },
-    controlGroup: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-    },
-    createButtonWrap: {
-      position: 'relative',
-      alignItems: 'flex-end',
-    },
-    inlineTutorialWrap: {
-      position: 'absolute',
-      right: 0,
-      bottom: 78,
-      alignItems: 'flex-end',
-      zIndex: 5,
-    },
     controlStackVertical: {
       alignItems: 'center',
       gap: 12,
+    },
+    titlePill: {
+      flex: 1,
+      minWidth: 0,
+      borderRadius: radii.lg,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.barBorder,
+      ...shadows.chip,
+    },
+    titleText: {
+      ...textStyles.bodySmallStrong,
+      color: colors.text,
+    },
+    subtitleText: {
+      ...textStyles.bodyXsStrong,
+      color: colors.textMuted,
+      marginTop: 2,
     },
     calloutCard: {
       flexDirection: 'row',
@@ -759,14 +649,15 @@ function createStyles(colors) {
       shadowOffset: { width: 0, height: 12 },
       elevation: 12,
     },
-    calloutContentPressable: {
-      flexShrink: 1,
-      minWidth: 0,
+    calloutThumbnail: {
+      width: 74,
+      height: 74,
+      borderRadius: 16,
+      backgroundColor: colors.border,
     },
     calloutContent: {
-      flexShrink: 1,
+      flex: 1,
       minWidth: 0,
-      paddingLeft: 6,
       paddingVertical: 4,
     },
     calloutLabel: {
@@ -774,30 +665,66 @@ function createStyles(colors) {
       color: colors.primary,
       marginBottom: 6,
     },
-    calloutPrompt: {
+    calloutHandle: {
       ...textStyles.bodyStrong,
       fontSize: 15,
       lineHeight: 20,
       color: colors.text,
     },
-    calloutDivider: {
-      height: 1,
-      backgroundColor: colors.border,
-      marginVertical: 10,
-    },
     calloutMeta: {
       ...textStyles.bodyXsStrong,
       color: colors.textMuted,
+      marginTop: 2,
     },
-    calloutActionButton: {
-      flexShrink: 0,
+    centerOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    calloutActionButtonLocked: {
+    emptyOverlay: {
+      position: 'absolute',
+      left: spacing.lg,
+      right: spacing.lg,
+      top: '36%',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.xl,
+      borderRadius: radii.lg,
+      backgroundColor: colors.bg,
+      borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.surface,
+      ...shadows.chip,
     },
-    calloutActionButtonPressed: {
-      opacity: 0.5,
+    emptyTitle: {
+      ...textStyles.title,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    emptyText: {
+      ...textStyles.bodySmallStrong,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    bottomNote: {
+      position: 'absolute',
+      left: 18,
+      right: 18,
+      alignItems: 'center',
+      zIndex: 10,
+    },
+    bottomNoteText: {
+      ...textStyles.bodyXsStrong,
+      color: colors.textMuted,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.pill,
+      backgroundColor: colors.bg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
     },
   });
 }

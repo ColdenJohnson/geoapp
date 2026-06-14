@@ -1464,12 +1464,29 @@ export default function ActiveChallengesScreen() {
             </View>
           ) : null}
 
-          <View style={styles.bottomPhotoCount}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.bottomPhotoCount,
+              pressed && isTop ? styles.bottomPhotoCountPressed : null,
+              !isTop && styles.cardIconButtonInactive,
+            ]}
+            onPress={(event) => {
+              event?.stopPropagation?.();
+              handleViewPhotos(challenge);
+            }}
+            onPressIn={(event) => {
+              event?.stopPropagation?.();
+            }}
+            disabled={!isTop || interactionLocked}
+            hitSlop={8}
+            accessibilityLabel="View quest photos"
+            testID={`quest-card-view-photos-button-${challenge.pinId}`}
+          >
             <View style={styles.photoCountChip}>
               <MaterialIcons name="photo-library" size={13} color="#FFFFFF" />
               <Text style={styles.photoCountText}>{challenge.uploadsCount}</Text>
             </View>
-          </View>
+          </Pressable>
         </View>
       </Animated.View>
     );
@@ -1489,6 +1506,7 @@ export default function ActiveChallengesScreen() {
     challengeOptions,
     queueMode,
     styles,
+    handleViewPhotos,
     handleShareChallenge,
     interactionLocked,
     toggleChallengeSavedState,
@@ -1554,45 +1572,7 @@ export default function ActiveChallengesScreen() {
               })}
             </ScrollView>
             <View style={[styles.headerControlsRow, { width: cardWidth }]}>
-              <View style={styles.headerSearchRow}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    { opacity: pressed || !normalizedQuestSearchInput ? 0.55 : 1 },
-                  ]}
-                  onPress={handleQuestSearchSubmit}
-                  disabled={!normalizedQuestSearchInput}
-                  accessibilityLabel="Search quests"
-                  testID="quest-search-button"
-                >
-                  <MaterialIcons name="search" size={22} color={colors.text} />
-                </Pressable>
-                <TextInput
-                  style={[formStyles.input, styles.headerSearchInput]}
-                  placeholder="Search quests"
-                  value={questSearchInput}
-                  onChangeText={handleQuestSearchInputChange}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="search"
-                  onSubmitEditing={handleQuestSearchSubmit}
-                  placeholderTextColor={colors.textMuted}
-                  selectionColor={colors.primary}
-                  cursorColor={colors.text}
-                  testID="quest-search-input"
-                />
-              </View>
               <View style={styles.headerActions}>
-                {showAdminQuestTools ? (
-                  <Pressable
-                    style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.55 : 1 }]}
-                    onPress={() => router.push('/admin/quest-tags')}
-                    accessibilityLabel="Open admin quest tagging"
-                    testID="quest-admin-tags-button"
-                  >
-                    <MaterialIcons name="admin-panel-settings" size={22} color={colors.text} />
-                  </Pressable>
-                ) : null}
                 <Pressable
                   style={({ pressed }) => [styles.iconButton, { opacity: pressed || interactionLocked ? 0.55 : 1 }]}
                   onPress={handleQueueModeToggle}
@@ -1626,6 +1606,44 @@ export default function ActiveChallengesScreen() {
                 >
                   <MaterialIcons name="refresh" size={22} color={colors.text} />
                 </Pressable>
+                {showAdminQuestTools ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.55 : 1 }]}
+                    onPress={() => router.push('/admin/quest-tags')}
+                    accessibilityLabel="Open admin quest tagging"
+                    testID="quest-admin-tags-button"
+                  >
+                    <MaterialIcons name="admin-panel-settings" size={22} color={colors.text} />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={styles.headerSearchRow}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    { opacity: pressed || !normalizedQuestSearchInput ? 0.55 : 1 },
+                  ]}
+                  onPress={handleQuestSearchSubmit}
+                  disabled={!normalizedQuestSearchInput}
+                  accessibilityLabel="Search quests"
+                  testID="quest-search-button"
+                >
+                  <MaterialIcons name="search" size={22} color={colors.text} />
+                </Pressable>
+                <TextInput
+                  style={[formStyles.input, styles.headerSearchInput, styles.headerSearchInputMinimal]}
+                  placeholder="Search quests"
+                  value={questSearchInput}
+                  onChangeText={handleQuestSearchInputChange}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  onSubmitEditing={handleQuestSearchSubmit}
+                  placeholderTextColor={colors.textMuted}
+                  selectionColor={colors.primary}
+                  cursorColor={colors.text}
+                  testID="quest-search-input"
+                />
               </View>
             </View>
           </View>
@@ -1669,45 +1687,6 @@ export default function ActiveChallengesScreen() {
                   return renderChallengeCard(challenge, stackIndex);
                 })
             )}
-          </View>
-
-          <View style={styles.footerButtons}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.footerButton,
-                styles.skipFooterButton,
-                { opacity: pressed || interactionLocked || !activeChallenge ? 0.6 : 1 },
-              ]}
-              onPress={() => commitSwipe('skip')}
-              accessibilityLabel="Skip quest"
-              disabled={interactionLocked || !activeChallenge}
-            >
-              <MaterialIcons name="close" size={28} color={colors.textMuted} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.footerButton,
-                styles.viewFooterButton,
-                { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
-              ]}
-              onPress={() => handleViewPhotos(activeChallenge)}
-              accessibilityLabel="View quest photos"
-              disabled={interactionLocked || !activeChallenge}
-            >
-              <MaterialIcons name="photo-library" size={28} color={colors.textMuted} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.footerButton,
-                styles.cameraFooterButton,
-                { opacity: pressed || interactionLocked || !activeChallenge ? 0.75 : 1 },
-              ]}
-              onPress={() => commitSwipe('accept')}
-              accessibilityLabel="Add photo to quest"
-              disabled={interactionLocked || !activeChallenge}
-            >
-              <MaterialIcons name="photo-camera" size={28} color={colors.primaryTextOn} />
-            </Pressable>
           </View>
 
           <PressHoldActionMenu
@@ -1813,6 +1792,7 @@ function createStyles(colors) {
       flexDirection: 'row',
       alignItems: 'center',
       alignSelf: 'center',
+      justifyContent: 'center',
       gap: spacing.sm,
     },
     headerActions: {
@@ -1858,13 +1838,19 @@ function createStyles(colors) {
       flexDirection: 'row',
       alignItems: 'center',
       flex: 1,
-      gap: spacing.xs,
+      gap: spacing.sm,
+      minWidth: 0,
     },
     headerSearchInput: {
       flex: 1,
       height: 44,
       borderRadius: 16,
       paddingVertical: 0,
+    },
+    headerSearchInputMinimal: {
+      borderWidth: 0,
+      backgroundColor: 'transparent',
+      paddingHorizontal: 0,
     },
     headerToggleButton: {
       minHeight: 44,
@@ -2058,6 +2044,9 @@ function createStyles(colors) {
       bottom: 20,
       alignItems: 'flex-end',
     },
+    bottomPhotoCountPressed: {
+      opacity: 0.72,
+    },
     bottomTeaserRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -2128,38 +2117,6 @@ function createStyles(colors) {
       ...textStyles.buttonCaps,
       color: '#FFFFFF',
       letterSpacing: 0.6,
-    },
-    footerButtons: {
-      marginTop: spacing.md,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: spacing.xl,
-    },
-    footerButton: {
-      width: 68,
-      height: 68,
-      borderRadius: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 14,
-      shadowOpacity: 0.12,
-      elevation: 8,
-    },
-    skipFooterButton: {
-      borderColor: colors.border,
-      backgroundColor: colors.bg,
-    },
-    viewFooterButton: {
-      borderColor: colors.border,
-      backgroundColor: colors.bg,
-    },
-    cameraFooterButton: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primary,
     },
   });
 }

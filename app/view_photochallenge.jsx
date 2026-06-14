@@ -530,6 +530,18 @@ export default function ViewPhotoChallengeScreen() {
     }
   }, [pinId, promptText, showToast]);
 
+  const openQuestMap = useCallback(() => {
+    if (!pinId) return;
+    router.push({
+      pathname: '/map',
+      params: {
+        pinId,
+        message: promptText || '',
+        created_by_handle: handleText || '',
+      },
+    });
+  }, [handleText, pinId, promptText, router]);
+
   const openPhotoDetail = useCallback((photo) => {
     if (!photo?._id || !pinId) return;
     router.push({
@@ -621,6 +633,15 @@ export default function ViewPhotoChallengeScreen() {
                         color={colors.primary}
                       />
                       <Text style={styles.gallerySummaryChipText}>{sortChipLabel}</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={openQuestMap}
+                      style={styles.gallerySummaryChip}
+                      accessibilityRole="button"
+                      accessibilityLabel="View quest photo map"
+                    >
+                      <MaterialIcons name="map" size={16} color={colors.primary} />
+                      <Text style={styles.gallerySummaryChipText}>Map</Text>
                     </Pressable>
                     <Pressable
                       onPress={handleShareChallenge}
