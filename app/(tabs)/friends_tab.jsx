@@ -1462,25 +1462,36 @@ export default function FriendsTabScreen() {
         <View style={[styles.activityEntry, styles.challengeCardRow]}>
           {/* Left: avatar + header + prompt */}
           <View style={styles.challengeCardLeft}>
-            <Pressable
-              onPress={() => ch.sender_uid ? openUserProfile(ch.sender_uid) : null}
-              style={({ pressed }) => [styles.activityUserPressable, pressed && styles.pressed]}
-            >
-              <UserAvatar
-                uri={ch.sender_photo_url || null}
-                label={senderLabel.charAt(0).toUpperCase()}
-                size={42}
-                styles={styles}
-              />
+            <View style={styles.activityUserPressable}>
+              <Pressable
+                onPress={() => ch.sender_uid ? openUserProfile(ch.sender_uid) : null}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <UserAvatar
+                  uri={ch.sender_photo_url || null}
+                  label={senderLabel.charAt(0).toUpperCase()}
+                  size={42}
+                  styles={styles}
+                />
+              </Pressable>
               <View style={styles.activityHeaderText}>
-                <View style={styles.activityMetaRow}>
+                <View style={styles.challengeMetaRow}>
                   <Text style={styles.activityHeadlineName}>{senderLabel}</Text>
                   <Text style={styles.activityMetaDot}>•</Text>
                   <Text style={styles.activityTimestamp}>{formatRelativeTime(ch.created_at)}</Text>
+                  <Text style={styles.activityMetaDot}>•</Text>
+                  <Pressable
+                    onPress={() => handleDeclineChallenge(ch)}
+                    accessibilityLabel="Decline challenge"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={({ pressed }) => pressed && styles.pressed}
+                  >
+                    <MaterialIcons name="close" size={18} color={colors.textMuted} />
+                  </Pressable>
                 </View>
                 <Text style={styles.activityHeadline}>Challenged you</Text>
               </View>
-            </Pressable>
+            </View>
             <Pressable
               disabled={!ch.can_open}
               onPress={() => handleViewChallengeQuest(ch)}
@@ -1493,15 +1504,8 @@ export default function FriendsTabScreen() {
             </Pressable>
           </View>
 
-          {/* Right: two full-height action halves */}
+          {/* Right: camera */}
           <View style={styles.challengeCardActions}>
-            <Pressable
-              onPress={() => handleDeclineChallenge(ch)}
-              style={({ pressed }) => [styles.challengeCardActionHalf, pressed && styles.pressed]}
-              accessibilityLabel="Decline challenge"
-            >
-              <MaterialIcons name="close" size={44} color={colors.textMuted} />
-            </Pressable>
             <Pressable
               onPress={() => handleUploadForChallenge(ch)}
               style={({ pressed }) => [styles.challengeCardActionHalf, pressed && styles.pressed]}
@@ -2222,8 +2226,12 @@ function createStyles(colors) {
       flex: 1,
       minWidth: 0,
     },
+    challengeMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
     challengeCardActions: {
-      width: 100,
+      width: 56,
       flexDirection: 'row',
       marginLeft: 0,
     },
