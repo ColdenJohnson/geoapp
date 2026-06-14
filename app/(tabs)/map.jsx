@@ -592,10 +592,13 @@ function createStyles(colors) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
+      borderRadius: radii.md,
+      overflow: 'hidden',
     },
     calloutThumbnail: {
       width: 72,
       height: 72,
+      borderRadius: radii.md,
     },
     centerOverlay: {
       ...StyleSheet.absoluteFillObject,
