@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { getEarnedAchievementIds } from '@/lib/achievements';
 import { useToast } from '@/components/ui/Toast';
@@ -26,14 +28,30 @@ export function AchievementsCatalogModal({
   const shouldConstrainScroll = rowCount > 3;
   const { message: toastMessage, show: showToast } = useToast(2500);
 
+  const opacity = useSharedValue(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      opacity.value = withTiming(1, { duration: 150 });
+    } else {
+      opacity.value = withTiming(0, { duration: 40 }, (finished) => {
+        if (finished) runOnJS(setMounted)(false);
+      });
+    }
+  }, [visible, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
   return (
     <Modal
-      animationType="fade"
+      animationType="none"
       transparent={true}
-      visible={visible}
+      visible={mounted}
       onRequestClose={onClose}
     >
-      <View style={styles.backdrop}>
+      <Animated.View style={[styles.backdrop, animatedStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -121,7 +139,7 @@ export function AchievementsCatalogModal({
             </View>
           ) : null}
         </View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }

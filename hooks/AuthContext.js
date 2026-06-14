@@ -10,6 +10,7 @@ import {
   fetchFriendActivity,
   fetchUserStats,
   fetchUserTopPhotos,
+  dismissFriendSuggestion,
 } from '@/lib/api';
 import {
   getAchievementDefinition,
@@ -206,6 +207,7 @@ export function AuthProvider({ children }) {
   const [topPhotosFetchedAt, setTopPhotosFetchedAt] = useState(null);
   const [friendActivityItems, setFriendActivityItems] = useState([]);
   const [friendActivitySuggestions, setFriendActivitySuggestions] = useState([]);
+  const [friendActivityInteractionSuggestions, setFriendActivityInteractionSuggestions] = useState([]);
   const [friendActivityPendingChallenges, setFriendActivityPendingChallenges] = useState([]);
   const [friendActivityLoading, setFriendActivityLoading] = useState(false);
   const [friendActivityLoadingMore, setFriendActivityLoadingMore] = useState(false);
@@ -539,6 +541,7 @@ export function AuthProvider({ children }) {
     friendActivityHasLoadedRef.current = false;
     setFriendActivityItems([]);
     setFriendActivitySuggestions([]);
+    setFriendActivityInteractionSuggestions([]);
     setFriendActivityLoading(false);
     setFriendActivityLoadingMore(false);
     setFriendActivityNextCursor(null);
@@ -741,12 +744,14 @@ export function AuthProvider({ children }) {
       const payload = await fetchFriendActivity({ limit: FRIEND_ACTIVITY_PAGE_SIZE });
       const nextItems = Array.isArray(payload?.items) ? payload.items : [];
       const nextSuggestions = Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+      const nextInteractionSuggestions = Array.isArray(payload?.interactionSuggestions) ? payload.interactionSuggestions : [];
       const nextPendingChallenges = Array.isArray(payload?.pendingChallenges) ? payload.pendingChallenges : [];
       const nextCursor = payload?.nextCursor || null;
       const fetchedAt = Date.now();
 
       setFriendActivityItems(nextItems);
       setFriendActivitySuggestions(nextSuggestions);
+      setFriendActivityInteractionSuggestions(nextInteractionSuggestions);
       setFriendActivityPendingChallenges(nextPendingChallenges);
       setFriendActivityNextCursor(nextCursor);
       setFriendActivityFetchedAt(fetchedAt);
@@ -760,11 +765,17 @@ export function AuthProvider({ children }) {
         setHasUnseenFriendActivity(false);
       }
 
-      return { items: nextItems, suggestions: nextSuggestions, pendingChallenges: nextPendingChallenges, nextCursor };
+      return { items: nextItems, suggestions: nextSuggestions, interactionSuggestions: nextInteractionSuggestions, pendingChallenges: nextPendingChallenges, nextCursor };
     } finally {
       friendActivityInFlightRef.current = false;
       if (showLoading) setFriendActivityLoading(false);
     }
+  }
+
+  async function dismissInteractionSuggestion(targetUid) {
+    if (!targetUid) return;
+    setFriendActivityInteractionSuggestions((prev) => prev.filter((s) => s?.uid !== targetUid));
+    await dismissFriendSuggestion(targetUid);
   }
 
   async function loadMoreFriendActivity() {
@@ -959,6 +970,7 @@ export function AuthProvider({ children }) {
       topPhotosLoading,
       friendActivityItems,
       friendActivitySuggestions,
+      friendActivityInteractionSuggestions,
       friendActivityPendingChallenges,
       friendActivityLoading,
       friendActivityLoadingMore,
@@ -972,6 +984,7 @@ export function AuthProvider({ children }) {
       refreshFriendRequests,
       refreshFriendActivity,
       loadMoreFriendActivity,
+      dismissInteractionSuggestion,
       markFriendActivitySeen,
       advanceAppTutorial,
       refreshStats,

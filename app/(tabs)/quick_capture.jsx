@@ -335,7 +335,7 @@ export default function QuickCaptureScreen({ initialUri = null }) {
       ]}
     >
       <ChallengeCameraStage
-        helperText="Snap a photo, then choose where it goes."
+        helperText=""
         onPhotoCaptured={handlePhotoCaptured}
         disabled={uploading}
       />

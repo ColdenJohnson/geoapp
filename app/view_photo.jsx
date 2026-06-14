@@ -29,6 +29,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import {
   addPhotoReaction,
@@ -69,8 +70,8 @@ import { radii, shadows, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
 const COMMENT_MAX_LENGTH = 200;
-const EMOJI_PICKER_W = 190;
-const EMOJI_PICKER_H = 102;
+const EMOJI_PICKER_W = 200;
+const EMOJI_PICKER_H = 104;
 const MENTION_PICKER_WIDTH = 248;
 const MENTION_PICKER_ROW_HEIGHT = 58;
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -290,6 +291,22 @@ function ReactionsStrip({ groups, viewerEmoji, onChipPress, onChipLongPress, sty
 
 function EmojiPickerModal({ visible, viewerEmoji, anchorPoint, onSelect, onClose, styles }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const opacity = useSharedValue(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      opacity.value = withTiming(1, { duration: 150 });
+    } else {
+      opacity.value = withTiming(0, { duration: 40 }, (finished) => {
+        if (finished) runOnJS(setMounted)(false);
+      });
+    }
+  }, [visible, opacity]);
+
+  const animatedOverlayStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
   const SCREEN_MARGIN = 10;
   const left = anchorPoint
     ? Math.max(SCREEN_MARGIN, Math.min(anchorPoint.x - EMOJI_PICKER_W / 2, screenWidth - EMOJI_PICKER_W - SCREEN_MARGIN))
@@ -303,30 +320,32 @@ function EmojiPickerModal({ visible, viewerEmoji, anchorPoint, onSelect, onClose
 
   return (
     <Modal
-      visible={visible}
+      visible={mounted}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable style={styles.emojiPickerBackdrop} onPress={onClose} />
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
-        <View style={[styles.emojiPickerPill, { left, top }]}>
-          {REACTION_EMOJIS.map((emoji) => (
-            <Pressable
-              key={emoji}
-              onPress={() => onSelect(emoji)}
-              style={({ pressed }) => [
-                styles.emojiPickerBtn,
-                viewerEmoji === emoji && styles.emojiPickerBtnActive,
-                pressed && { opacity: 0.72 },
-              ]}
-            >
-              <Text style={styles.emojiPickerBtnText}>{emoji}</Text>
-            </Pressable>
-          ))}
+      <Animated.View style={[StyleSheet.absoluteFillObject, animatedOverlayStyle]}>
+        <Pressable style={styles.emojiPickerBackdrop} onPress={onClose} />
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
+          <View style={[styles.emojiPickerPill, { left, top }]}>
+            {REACTION_EMOJIS.map((emoji) => (
+              <Pressable
+                key={emoji}
+                onPress={() => onSelect(emoji)}
+                style={({ pressed }) => [
+                  styles.emojiPickerBtn,
+                  viewerEmoji === emoji && styles.emojiPickerBtnActive,
+                  pressed && { opacity: 0.72 },
+                ]}
+              >
+                <Text style={styles.emojiPickerBtnText}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -1768,6 +1787,13 @@ export default function ViewPhotoScreen() {
                 </View>
               ) : null}
               <Pressable
+                onPress={(event) => {
+                  if (!selectedPhotoCanComment) return;
+                  const { pageX, pageY } = event.nativeEvent;
+                  setReactionPickerAnchor({ x: pageX, y: pageY });
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setReactionPickerVisible(true);
+                }}
                 onLongPress={(event) => {
                   if (!selectedPhotoCanComment) return;
                   const { pageX, pageY } = event.nativeEvent;
@@ -1940,7 +1966,7 @@ export default function ViewPhotoScreen() {
         viewerEmoji={viewerEmoji}
         anchorPoint={reactionPickerAnchor}
         onSelect={handleSetReaction}
-        onClose={() => { setReactionPickerVisible(false); setReactionPickerAnchor(null); }}
+        onClose={() => setReactionPickerVisible(false)}
         styles={styles}
       />
       <ReactorsPopoverModal

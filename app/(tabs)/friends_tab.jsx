@@ -154,12 +154,14 @@ export default function FriendsTabScreen() {
     markFriendActivitySeen,
     friendActivityItems: activityItems,
     friendActivitySuggestions: activitySuggestions,
+    friendActivityInteractionSuggestions: interactionSuggestions,
     friendActivityPendingChallenges: pendingChallenges,
     friendActivityLoading: activityLoading,
     friendActivityLoadingMore: activityLoadingMore,
     friendActivityFetchedAt,
     refreshFriendActivity,
     loadMoreFriendActivity,
+    dismissInteractionSuggestion,
     removePendingChallenge,
     isAppTutorialStepVisible,
     advanceAppTutorial,
@@ -247,26 +249,29 @@ export default function FriendsTabScreen() {
       rowType: 'activity',
       item,
     }));
-    const shouldInsertSuggestions = !activityLoading && (baseRows.length > 0 || activitySuggestions.length > 0);
+    const hasInteractionSuggestions = interactionSuggestions.length > 0;
+    const shouldInsertSuggestions = !activityLoading && (baseRows.length > 0 || activitySuggestions.length > 0 || hasInteractionSuggestions);
 
     if (!shouldInsertSuggestions) {
       return [...challengeRows, ...baseRows];
     }
 
     const insertionIndex = Math.min(FRIEND_ACTIVITY_PAGE_SIZE, baseRows.length);
+    const interactionRow = hasInteractionSuggestions ? { key: 'activity-interaction-suggestions', rowType: 'interaction-suggestions' } : null;
     const suggestionRow = { key: 'activity-suggestions', rowType: 'suggestions' };
 
     if (baseRows.length === 0) {
-      return [...challengeRows, suggestionRow];
+      return [...challengeRows, ...(interactionRow ? [interactionRow] : []), suggestionRow];
     }
 
     return [
       ...challengeRows,
+      ...(interactionRow ? [interactionRow] : []),
       ...baseRows.slice(0, insertionIndex),
       suggestionRow,
       ...baseRows.slice(insertionIndex),
     ];
-  }, [activityItems, activityLoading, activitySuggestions, pendingChallenges]);
+  }, [activityItems, activityLoading, activitySuggestions, interactionSuggestions, pendingChallenges]);
 
   useEffect(() => {
     setNotificationsPermissionStatus('undetermined');
@@ -757,11 +762,12 @@ export default function FriendsTabScreen() {
       }
       refreshFriendActivity({
         force: false,
-        showLoading: !friendActivityFetchedAt && !activityItems.length && !activitySuggestions.length,
+        showLoading: !friendActivityFetchedAt && !activityItems.length && !activitySuggestions.length && !interactionSuggestions.length,
       });
     }, [
       activityItems.length,
       activitySuggestions.length,
+      interactionSuggestions.length,
       notificationsIntroHydrated,
       notificationsIntroSeen,
       contactsIntroHydrated,
@@ -1155,14 +1161,14 @@ export default function FriendsTabScreen() {
           {searchResults.map((result) => renderUserRow(result, {
             keyPrefix: 'search',
             rightAction: (user) => (
-              <CTAButton
-                title="Add"
+              <Pressable
                 onPress={() => sendFriendRequest({ handle: user.handle, clearSearch: true })}
-                variant="filled"
-                style={styles.smallButton}
-                textStyle={styles.smallButtonText}
                 disabled={friendActionBusy}
-              />
+                style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+                hitSlop={8}
+              >
+                <MaterialIcons name="person-add" size={22} color={colors.primary} />
+              </Pressable>
             ),
           }))}
         </View>
@@ -1518,6 +1524,49 @@ export default function FriendsTabScreen() {
       );
     }
 
+    if (row?.rowType === 'interaction-suggestions') {
+      return (
+        <View style={[formStyles.card, styles.sectionCard]}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recently Interacted</Text>
+            <Text style={styles.sectionCount}>{interactionSuggestions.length}</Text>
+          </View>
+          {interactionSuggestions.map((item) => {
+            const requestPending = !!pendingSuggestionRequests[item?.uid]
+              || pendingOutgoing.some((request) => request?.uid === item?.uid);
+            return renderUserRow(item, {
+              keyPrefix: 'interaction-suggestion',
+              rowMuted: requestPending,
+              metaText: 'You recently interacted with their quest',
+              rightAction: (suggestion) => (
+                <View style={styles.iconActionRow}>
+                  {requestPending ? (
+                    <MaterialIcons name="schedule" size={22} color={colors.textMuted} />
+                  ) : (
+                    <Pressable
+                      onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
+                      disabled={friendActionBusy}
+                      style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+                      hitSlop={8}
+                    >
+                      <MaterialIcons name="person-add" size={22} color={colors.primary} />
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => dismissInteractionSuggestion(suggestion.uid)}
+                    style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="close" size={22} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              ),
+            });
+          })}
+        </View>
+      );
+    }
+
     if (row?.rowType === 'suggestions') {
       return (
         <View style={[formStyles.card, styles.sectionCard]}>
@@ -1538,25 +1587,21 @@ export default function FriendsTabScreen() {
                 rightAction: (suggestion) => {
                   if (requestPending) {
                     return (
-                      <CTAButton
-                        title="Request Pending"
-                        variant="secondary"
-                        style={styles.smallButton}
-                        textStyle={styles.smallButtonText}
-                        disabled={true}
-                      />
+                      <Pressable disabled style={styles.iconActionBtn}>
+                        <MaterialIcons name="schedule" size={22} color={colors.textMuted} />
+                      </Pressable>
                     );
                   }
 
                   return (
-                    <CTAButton
-                      title="Add"
+                    <Pressable
                       onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
-                      variant="filled"
-                      style={styles.smallButton}
-                      textStyle={styles.smallButtonText}
                       disabled={friendActionBusy}
-                    />
+                      style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+                      hitSlop={8}
+                    >
+                      <MaterialIcons name="person-add" size={22} color={colors.primary} />
+                    </Pressable>
                   );
                 },
               });
@@ -1617,6 +1662,9 @@ export default function FriendsTabScreen() {
     );
   }, [
     activitySuggestions,
+    interactionSuggestions,
+    dismissInteractionSuggestion,
+    colors,
     formStyles.card,
     friendActionBusy,
     handleDeclineChallenge,
@@ -1994,6 +2042,16 @@ function createStyles(colors) {
     },
     smallButtonText: {
       ...textStyles.buttonSmall,
+    },
+    iconActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    iconActionBtn: {
+      padding: spacing.xs,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     activityEntry: {
       marginTop: spacing.md,

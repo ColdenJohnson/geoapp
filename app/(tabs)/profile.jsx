@@ -2,6 +2,7 @@ import { SafeAreaView, View, Text, ScrollView, RefreshControl, Pressable, Alert,
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { useCallback, useContext, useMemo, useRef, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import { APP_TUTORIAL_STEPS, AuthContext } from '../../hooks/AuthContext';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -112,6 +113,7 @@ export default function UserProfileScreen() {
   }, [advanceAppTutorial, router, showProfileEditTutorial]);
 
   const onOpenAchievementsModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setAchievementsModalVisible(true);
   }, []);
 
