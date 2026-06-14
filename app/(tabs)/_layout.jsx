@@ -40,23 +40,24 @@ export default function TabLayout() {
           ios: {
             // Use a transparent background on iOS to show the blur effect
             position: 'absolute',
-            height: 82,
+            height: 88,
             marginHorizontal: 14,
             marginBottom: 12,
             borderTopWidth: 0,
             borderRadius: 24,
-            overflow: 'hidden',
+            overflow: 'visible',
             shadowColor: '#000',
             shadowOpacity: 0.1,
             shadowOffset: { width: 0, height: 8 },
             shadowRadius: 20,
           },
           default: {
-            height: 70,
+            height: 76,
             borderTopWidth: 1,
             borderTopColor: colors.barBorder,
             backgroundColor: colors.surface,
             paddingBottom: 8,
+            overflow: 'visible',
           },
         }),
       }}>
@@ -70,6 +71,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="map"
         options={{
+          href: null,
           title: 'Map',
           tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "globe.americas" : "globe.americas.fill"} color={color} />,
           headerShown: false,
@@ -88,6 +90,22 @@ export default function TabLayout() {
         options={{
           title: 'Vote',
           tabBarIcon: ({ color, focused }) => <IconSymbol size={28} name={focused ? "trophy" : "trophy.fill"} color={color} />,
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="quick_capture"
+        options={{
+          title: 'Photo',
+          tabBarAccessibilityLabel: 'Quick capture',
+          tabBarLabel: () => null,
+          tabBarButton: (props) => (
+            <HapticTab {...props} style={[props.style, styles.photoTabPressable]}>
+              <PhotoTabIcon focused={props.accessibilityState?.selected} styles={styles} colors={colors} />
+            </HapticTab>
+          ),
+          tabBarItemStyle: styles.photoTabItem,
+          tabBarStyle: { display: 'none' },
           headerShown: false,
         }}
       />
@@ -118,6 +136,20 @@ export default function TabLayout() {
   );
 }
 
+function PhotoTabIcon({ focused, styles, colors }) {
+  return (
+    <View style={styles.photoTabWrap}>
+      <View style={[styles.photoTabButton, focused && styles.photoTabButtonFocused]}>
+        <IconSymbol
+          size={29}
+          name="camera.fill"
+          color={focused ? colors.primaryTextOn : colors.bg}
+        />
+      </View>
+    </View>
+  );
+}
+
 function createStyles(colors) {
   return StyleSheet.create({
     tabIconWrap: {
@@ -134,6 +166,41 @@ function createStyles(colors) {
       width: 8,
       height: 8,
       borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+    photoTabItem: {
+      paddingTop: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    photoTabPressable: {
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    photoTabWrap: {
+      position: 'relative',
+      width: 54,
+      height: 54,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    photoTabButton: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.textMuted,
+      borderWidth: 3,
+      borderColor: colors.surface,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowOffset: { width: 0, height: 7 },
+      shadowRadius: 13,
+      elevation: 8,
+    },
+    photoTabButtonFocused: {
       backgroundColor: colors.primary,
     },
   });

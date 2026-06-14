@@ -21,6 +21,8 @@ const MAPPING = {
   'flame.fill': 'local-fire-department',
   'person.2': 'people',
   'person.2.fill': 'people',
+  'camera': 'photo-camera',
+  'camera.fill': 'photo-camera',
 } as Partial<
   Record<
     import('expo-symbols').SymbolViewProps['name'],

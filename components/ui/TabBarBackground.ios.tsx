@@ -12,7 +12,7 @@ export default function BlurTabBarBackground() {
     <BlurView
       tint={colorScheme === 'dark' ? 'dark' : 'light'}
       intensity={100}
-      style={StyleSheet.absoluteFill}
+      style={styles.background}
     />
   );
 }
@@ -22,3 +22,11 @@ export function useBottomTabOverflow() {
   const { bottom } = useSafeAreaInsets();
   return tabHeight - bottom;
 }
+
+const styles = StyleSheet.create({
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+});
