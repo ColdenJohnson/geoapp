@@ -26,7 +26,7 @@ import { Toast, useToast } from '@/components/ui/Toast';
 import { AuthContext } from '@/hooks/AuthContext';
 import { usePalette } from '@/hooks/usePalette';
 import { fetchRankedQuests } from '@/lib/api';
-import { getChallengeUploadBlockedMessage, normalizeChallengeCoordinate } from '@/lib/challengeGeoAccess';
+import { normalizeChallengeCoordinate } from '@/lib/challengeGeoAccess';
 import { buildViewPhotoChallengeRoute, goBackOrHome } from '@/lib/navigation';
 import { filterChallengesByPrompt, isQuestSearchReady, normalizeQuestSearchText } from '@/lib/questSearch';
 import { enqueueAddPhotoUpload, enqueueNewChallengeUpload, waitForUploadQueueItem } from '@/lib/uploadQueue';
@@ -90,7 +90,6 @@ export default function QuickCaptureScreen({ initialUri = null }) {
   const [uri, setUri] = useState(initialUri);
   const [mode, setMode] = useState('existing');
   const [message, setMessage] = useState('');
-  const [isGeoLocked, setIsGeoLocked] = useState(false);
   const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [questSearchInput, setQuestSearchInput] = useState('');
   const [forceQuestSearch, setForceQuestSearch] = useState(false);
@@ -122,20 +121,14 @@ export default function QuickCaptureScreen({ initialUri = null }) {
     [questSearchInput]
   );
   const questSearchEnabled = normalizedQuestSearchInput.length > 0 && (forceQuestSearch || liveQuestSearchEnabled);
-  const uploadableQuests = useMemo(() => rankedQuests.filter((quest) => (
-    !getChallengeUploadBlockedMessage({
-      challenge: quest.rawPin,
-      userLocation: userCoords,
-    })
-  )), [rankedQuests, userCoords]);
   const visibleQuests = useMemo(() => (
     questSearchEnabled
-      ? filterChallengesByPrompt(uploadableQuests, questSearchInput)
-      : uploadableQuests
-  ), [questSearchEnabled, questSearchInput, uploadableQuests]);
+      ? filterChallengesByPrompt(rankedQuests, questSearchInput)
+      : rankedQuests
+  ), [questSearchEnabled, questSearchInput, rankedQuests]);
   const selectedQuest = useMemo(
-    () => uploadableQuests.find((quest) => quest.pinId === selectedQuestPinId) || null,
-    [selectedQuestPinId, uploadableQuests]
+    () => rankedQuests.find((quest) => quest.pinId === selectedQuestPinId) || null,
+    [selectedQuestPinId, rankedQuests]
   );
 
   useEffect(() => () => {
@@ -182,10 +175,10 @@ export default function QuickCaptureScreen({ initialUri = null }) {
   }, []);
 
   useEffect(() => {
-    if (selectedQuestPinId && !uploadableQuests.some((quest) => quest.pinId === selectedQuestPinId)) {
+    if (selectedQuestPinId && !rankedQuests.some((quest) => quest.pinId === selectedQuestPinId)) {
       setSelectedQuestPinId('');
     }
-  }, [selectedQuestPinId, uploadableQuests]);
+  }, [selectedQuestPinId, rankedQuests]);
 
   const renderBackButton = () => (
     <Pressable
@@ -258,7 +251,6 @@ export default function QuickCaptureScreen({ initialUri = null }) {
         sourceUri: uri,
         message: trimmed,
         location: { coords: challengeCoords },
-        isGeoLocked,
         photoLocation: { coords: challengeCoords },
       });
       const created = await waitForUploadQueueItem(queuedItem.id);
@@ -281,7 +273,7 @@ export default function QuickCaptureScreen({ initialUri = null }) {
         setUploading(false);
       }
     }
-  }, [applyUploadResult, ensureLocationForCreate, isGeoLocked, message, router, showToast, uploading, uri]);
+  }, [applyUploadResult, ensureLocationForCreate, message, router, showToast, uploading, uri]);
 
   const handleAddToQuest = useCallback(async () => {
     if (!uri || uploading || !selectedQuest) return;
@@ -388,29 +380,6 @@ export default function QuickCaptureScreen({ initialUri = null }) {
 
   const renderCreateForm = () => (
     <View style={styles.formBlock}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.geoLockToggle,
-          pressed && { opacity: 0.7 },
-          uploading && { opacity: 0.5 },
-        ]}
-        onPress={() => setIsGeoLocked((prev) => !prev)}
-        disabled={uploading}
-      >
-        <FontAwesome6
-          name={isGeoLocked ? 'square-check' : 'square'}
-          size={18}
-          color={isGeoLocked ? colors.primary : colors.textMuted}
-        />
-        <View style={styles.geoLockText}>
-          <Text style={styles.geoLockLabel}>Location locked</Text>
-          <Text style={styles.geoLockHint}>
-            {isGeoLocked
-              ? 'Only nearby users can join this challenge.'
-              : 'Anyone can join this challenge from anywhere.'}
-          </Text>
-        </View>
-      </Pressable>
       <TextInput
         ref={inputRef}
         value={message}
@@ -673,31 +642,6 @@ function createStyles(colors) {
     },
     formBlock: {
       gap: spacing.md,
-    },
-    geoLockToggle: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: spacing.sm,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radii.md,
-      backgroundColor: colors.bg,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.sm + 2,
-    },
-    geoLockText: {
-      flex: 1,
-      gap: 2,
-    },
-    geoLockLabel: {
-      ...textStyles.sectionTitle,
-      color: colors.text,
-      letterSpacing: 0.45,
-    },
-    geoLockHint: {
-      ...textStyles.body2xsBold,
-      color: colors.textMuted,
-      lineHeight: 15,
     },
     promptInput: {
       width: '100%',

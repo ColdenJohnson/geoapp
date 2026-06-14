@@ -28,7 +28,7 @@ import { spacing, radii } from '@/theme/tokens';
 import { goBackOrHome } from '@/lib/navigation';
 import { textStyles } from '@/theme/typography';
 
-import { resolveGeoLock, resolveMessage, resolveUpload } from '../lib/promiseStore';
+import { resolveMessage, resolveUpload } from '../lib/promiseStore';
 import { enqueueNewChallengeUpload } from '@/lib/uploadQueue';
 
 const MAX_LEN = 50;
@@ -40,7 +40,6 @@ export default function EnterMessageScreen({ initialUri = null }) {
   const [message, setMessage] = useState('');
   const [uri, setUri] = useState(initialUri);
   const [uploading, setUploading] = useState(false);
-  const [isGeoLocked, setIsGeoLocked] = useState(false);
   const [showEmptyMessageError, setShowEmptyMessageError] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const router = useRouter();
@@ -125,7 +124,6 @@ export default function EnterMessageScreen({ initialUri = null }) {
       if (!didSubmitUpload.current) {
         resolveMessage('');
         resolveUpload(null);
-        resolveGeoLock(false);
       }
     };
   }, [cardScale, keyboardOffset]);
@@ -165,12 +163,10 @@ export default function EnterMessageScreen({ initialUri = null }) {
         sourceUri: uri,
         message: trimmed,
         location: challengeLocation,
-        isGeoLocked,
         photoLocation: challengeLocation,
       });
       didSubmitUpload.current = true;
       resolveMessage(trimmed);
-      resolveGeoLock(isGeoLocked);
       resolveUpload({ queued: true, queueId: queuedItem.id });
       goBackOrHome(router);
     } catch (error) {
@@ -198,30 +194,6 @@ export default function EnterMessageScreen({ initialUri = null }) {
         <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
           <Image source={{ uri }} style={styles.photo} resizeMode="cover" cachePolicy="memory-disk" />
           <View style={[StyleSheet.absoluteFill, styles.cardOverlay]} pointerEvents="none" />
-          <Pressable
-            style={({ pressed }) => [
-              styles.geoLockToggle,
-              styles.geoLockToggleOverlay,
-              pressed && { opacity: 0.7 },
-              uploading && { opacity: 0.5 },
-            ]}
-            onPress={() => setIsGeoLocked((prev) => !prev)}
-            disabled={uploading}
-          >
-            <FontAwesome6
-              name={isGeoLocked ? 'square-check' : 'square'}
-              size={18}
-              color={isGeoLocked ? colors.primary : 'rgba(255,255,255,0.85)'}
-            />
-            <View style={styles.geoLockText}>
-              <Text style={[styles.geoLockLabel, styles.geoLockLabelOverlay]}>Location locked</Text>
-              <Text style={[styles.geoLockHint, styles.geoLockHintOverlay]}>
-                {isGeoLocked
-                  ? 'Only nearby users can join this challenge.'
-                  : 'Anyone can join this challenge from anywhere.'}
-              </Text>
-            </View>
-          </Pressable>
           <Pressable style={styles.closeButton} onPress={() => setUri(null)} hitSlop={12}>
             <FontAwesome6 name="xmark" size={18} color="#FFFFFF" />
           </Pressable>
@@ -391,45 +363,6 @@ function createStyles(colors) {
     },
     noteBlock: {
       width: '100%',
-    },
-    geoLockToggle: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: spacing.sm,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radii.md,
-      backgroundColor: colors.bg,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.sm + 2,
-    },
-    geoLockToggleOverlay: {
-      position: 'absolute',
-      left: spacing.sm,
-      right: spacing.sm,
-      bottom: spacing.sm,
-      backgroundColor: 'rgba(12,7,3,0.52)',
-      borderColor: 'rgba(255,255,255,0.24)',
-    },
-    geoLockText: {
-      flex: 1,
-      gap: 2,
-    },
-    geoLockLabel: {
-      ...textStyles.sectionTitle,
-      color: colors.text,
-      letterSpacing: 0.45,
-    },
-    geoLockHint: {
-      ...textStyles.body2xsBold,
-      color: colors.textMuted,
-      lineHeight: 15,
-    },
-    geoLockLabelOverlay: {
-      color: '#FFFFFF',
-    },
-    geoLockHintOverlay: {
-      color: 'rgba(255,255,255,0.84)',
     },
     input: {
       width: '100%',

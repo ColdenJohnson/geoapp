@@ -800,9 +800,6 @@ export default function FriendsTabScreen() {
   const openChallenge = useCallback((item) => {
     if (!item?.pin_id) return;
     if (!item?.can_open) {
-      if (item?.challenge_is_geo_locked) {
-        showToast('Unable to open this activity because it is location locked.', 2500);
-      }
       return;
     }
     if (item?.comment_text && item?.photo_id) {
@@ -1537,11 +1534,18 @@ export default function FriendsTabScreen() {
             return renderUserRow(item, {
               keyPrefix: 'interaction-suggestion',
               rowMuted: requestPending,
-              metaText: 'You recently interacted with their quest',
+              metaText: 'Recently interacted',
               rightAction: (suggestion) => (
                 <View style={styles.iconActionRow}>
+                  <Pressable
+                    onPress={() => dismissInteractionSuggestion(suggestion.uid)}
+                    style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="close" size={18} color={colors.textMuted} />
+                  </Pressable>
                   {requestPending ? (
-                    <MaterialIcons name="schedule" size={22} color={colors.textMuted} />
+                    <MaterialIcons name="schedule" size={26} color={colors.textMuted} />
                   ) : (
                     <Pressable
                       onPress={() => sendFriendRequest({ targetUid: suggestion.uid })}
@@ -1549,16 +1553,9 @@ export default function FriendsTabScreen() {
                       style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
                       hitSlop={8}
                     >
-                      <MaterialIcons name="person-add" size={22} color={colors.primary} />
+                      <MaterialIcons name="person-add" size={26} color={colors.primary} />
                     </Pressable>
                   )}
-                  <Pressable
-                    onPress={() => dismissInteractionSuggestion(suggestion.uid)}
-                    style={({ pressed }) => [styles.iconActionBtn, pressed && styles.pressed]}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="close" size={22} color={colors.textMuted} />
-                  </Pressable>
                 </View>
               ),
             });

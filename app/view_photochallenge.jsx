@@ -14,7 +14,6 @@ import {
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -30,10 +29,6 @@ import {
   writePinPhotosCache,
 } from '@/lib/pinChallengeCache';
 import { goBackOrHome } from '@/lib/navigation';
-import {
-  getChallengeUploadBlockedMessage,
-  normalizeChallengeCoordinate,
-} from '@/lib/challengeGeoAccess';
 import {
   subscribeUploadQueue,
   syncQueuedPhotosForPin,
@@ -144,7 +139,6 @@ export default function ViewPhotoChallengeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [challengeMeta, setChallengeMeta] = useState(null);
-  const [viewerLocation, setViewerLocation] = useState(null);
   const [sortMode, setSortMode] = useState(SORT_MODE_ELO);
   const [friendSelectorVisible, setFriendSelectorVisible] = useState(false);
   const [friendSelectorBusy, setFriendSelectorBusy] = useState(false);
@@ -176,11 +170,8 @@ export default function ViewPhotoChallengeScreen() {
     if (!challengeMeta) {
       return 'Checking challenge access...';
     }
-    return getChallengeUploadBlockedMessage({
-      challenge: challengeMeta,
-      userLocation: viewerLocation,
-    });
-  }, [challengeMeta, pinId, viewerLocation]);
+    return null;
+  }, [challengeMeta, pinId]);
   const uploadVisuallyLocked = Boolean(uploadBlockedMessage);
   const photos = serverPhotos;
   const hasPendingPhotos = useMemo(
@@ -192,39 +183,10 @@ export default function ViewPhotoChallengeScreen() {
     [photos, sortMode]
   );
   const sortChipLabel = sortMode === SORT_MODE_ELO ? 'Elo Sorted' : 'Upload Date';
-  const isGeoLocked = challengeMeta?.isGeoLocked !== false;
 
   useEffect(() => {
     serverPhotosRef.current = serverPhotos;
   }, [serverPhotos]);
-
-  const refreshViewerLocation = useCallback(async () => {
-    try {
-      const permission = await Location.getForegroundPermissionsAsync();
-      if (permission?.status !== 'granted') {
-        setViewerLocation(null);
-        return null;
-      }
-
-      const lastKnownPosition = await Location.getLastKnownPositionAsync();
-      const lastKnownCoords = normalizeChallengeCoordinate(lastKnownPosition);
-      if (lastKnownCoords) {
-        setViewerLocation(lastKnownCoords);
-        return lastKnownCoords;
-      }
-
-      const currentPosition = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const currentCoords = normalizeChallengeCoordinate(currentPosition);
-      setViewerLocation(currentCoords);
-      return currentCoords;
-    } catch (error) {
-      console.warn('Failed to refresh viewer location for challenge upload', error);
-      setViewerLocation(null);
-      return null;
-    }
-  }, []);
 
   const loadPhotos = useCallback(async ({ showSpinner = true } = {}) => {
     if (!pinId) return false;
@@ -330,12 +292,6 @@ export default function ViewPhotoChallengeScreen() {
         cancelled = true;
       };
     }, [loadPhotos, pinId])
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      void refreshViewerLocation();
-    }, [refreshViewerLocation])
   );
 
   useEffect(() => {
@@ -474,17 +430,8 @@ export default function ViewPhotoChallengeScreen() {
 
   const uploadPhotoChallenge = useCallback(async () => {
     if (uploading) return;
-    const latestViewerLocation = await refreshViewerLocation();
-    const nextUploadBlockedMessage = !pinId
-      ? 'No valid challenge selected.'
-      : !challengeMeta
-        ? 'Checking challenge access...'
-        : getChallengeUploadBlockedMessage({
-            challenge: challengeMeta,
-            userLocation: latestViewerLocation || viewerLocation,
-          });
-    if (nextUploadBlockedMessage) {
-      showToast(nextUploadBlockedMessage, 2500);
+    if (uploadBlockedMessage) {
+      showToast(uploadBlockedMessage, 2500);
       return;
     }
     setUploading(true);
@@ -498,15 +445,13 @@ export default function ViewPhotoChallengeScreen() {
     });
     setUploading(false);
   }, [
-    challengeMeta,
     handleText,
     pinId,
     promptText,
-    refreshViewerLocation,
     router,
     showToast,
+    uploadBlockedMessage,
     uploading,
-    viewerLocation,
   ]);
 
   const onToggleSortMode = useCallback(() => {
@@ -676,15 +621,15 @@ export default function ViewPhotoChallengeScreen() {
                   onPress={handleOpenChallengeFriendSelector}
                   style={({ pressed }) => [
                     styles.headerIconBtn,
-                    pressed && !isGeoLocked && friends?.length && styles.headerIconBtnPressed,
-                    (isGeoLocked || !friends?.length) && styles.headerIconBtnDisabled,
+                    pressed && friends?.length && styles.headerIconBtnPressed,
+                    !friends?.length && styles.headerIconBtnDisabled,
                   ]}
                   accessibilityRole="button"
                   accessibilityLabel="Challenge a friend"
-                  disabled={isGeoLocked || !friends?.length}
+                  disabled={!friends?.length}
                   hitSlop={8}
                 >
-                  <MaterialIcons name="send" size={20} color={isGeoLocked || !friends?.length ? colors.textMuted : colors.primary} />
+                  <MaterialIcons name="send" size={20} color={!friends?.length ? colors.textMuted : colors.primary} />
                 </Pressable>
                 <Pressable
                   onPress={onToggleSortMode}
