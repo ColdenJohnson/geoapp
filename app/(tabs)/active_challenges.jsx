@@ -1661,7 +1661,11 @@ export default function ActiveChallengesScreen() {
             <View style={[styles.headerControlsRow, { width: cardWidth }]}>
               <View style={styles.headerActions}>
                 <Pressable
-                  style={({ pressed }) => [styles.iconButton, { opacity: pressed || interactionLocked ? 0.55 : 1 }]}
+                  style={({ pressed }) => [
+                    styles.iconButton,
+                    queueMode === 'saved' && styles.iconButtonSavedActive,
+                    { opacity: pressed || interactionLocked ? 0.55 : 1 },
+                  ]}
                   onPress={handleQueueModeToggle}
                   disabled={interactionLocked}
                   accessibilityLabel={queueMode === 'saved' ? 'Show all quests' : 'Show saved quests'}
@@ -1670,7 +1674,7 @@ export default function ActiveChallengesScreen() {
                   <MaterialIcons
                     name={queueMode === 'saved' ? 'bookmark' : 'bookmark-border'}
                     size={22}
-                    color={colors.text}
+                    color={queueMode === 'saved' ? '#FFFFFF' : colors.text}
                   />
                   {showSavedQueueHint ? (
                     <View
@@ -1734,6 +1738,15 @@ export default function ActiveChallengesScreen() {
               </View>
             </View>
           </View>
+
+          {queueMode === 'saved' ? (
+            <View style={styles.savedModeBanner} pointerEvents="none">
+              <MaterialIcons name="bookmark" size={14} color={colors.primary} />
+              <Text style={styles.savedModeBannerText}>
+                Saved only — tap bookmark for all
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.stackStage} onLayout={handleStageLayout}>
             {showQuestTutorial && stack.length > 0 ? (
@@ -1935,6 +1948,23 @@ function createStyles(colors) {
       backgroundColor: colors.bg,
       position: 'relative',
       overflow: 'visible',
+    },
+    iconButtonSavedActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    savedModeBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 5,
+      paddingVertical: 6,
+      paddingHorizontal: spacing.md,
+    },
+    savedModeBannerText: {
+      ...textStyles.bodyXsStrong,
+      color: colors.textMuted,
+      textAlign: 'center',
     },
     savedQueueHintDot: {
       position: 'absolute',

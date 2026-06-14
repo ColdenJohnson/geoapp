@@ -163,10 +163,10 @@ export function ProfileTopPhotosCard({
               key={photo?._id || `${index}`}
               style={styles.topPhotoTile}
               onPress={() => {
-                if (!photo?.file_url) return;
+                if (!photo?.file_url || !photo?.pin_id) return;
                 onPressPhoto?.(photo);
               }}
-              disabled={!photo?.file_url}
+              disabled={!photo?.file_url || !photo?.pin_id}
             >
               <Image
                 source={photo?.file_url ? { uri: photo.file_url } : undefined}
@@ -174,9 +174,6 @@ export function ProfileTopPhotosCard({
                 contentFit="cover"
                 cachePolicy="memory-disk"
               />
-              <View style={styles.topPhotoRankBadge}>
-                <Text style={styles.topPhotoRankText}>#{index + 1}</Text>
-              </View>
               <View style={styles.topPhotoTileMeta}>
                 <View style={styles.topPhotoEloChip}>
                   <MaterialIcons name="emoji-events" size={13} color={colors.primary} />
@@ -497,24 +494,11 @@ export function createProfileStyles(colors) {
       backgroundColor: colors.bg,
       borderWidth: 1,
       borderColor: colors.border,
-      aspectRatio: 4 / 5,
+      aspectRatio: 1,
     },
     topPhotoImage: {
       width: '100%',
       height: '100%',
-    },
-    topPhotoRankBadge: {
-      position: 'absolute',
-      top: spacing.sm,
-      left: spacing.sm,
-      backgroundColor: 'rgba(255,255,255,0.9)',
-      borderRadius: 10,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 4,
-    },
-    topPhotoRankText: {
-      ...textStyles.chip,
-      color: colors.primary,
     },
     topPhotoTileMeta: {
       position: 'absolute',

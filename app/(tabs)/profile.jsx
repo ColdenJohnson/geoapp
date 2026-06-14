@@ -7,8 +7,8 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { usePalette } from '@/hooks/usePalette';
-import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { TutorialCallout } from '@/components/ui/TutorialCallout';
+import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
 import { AchievementsCatalogModal } from '@/components/ui/AchievementsCatalogModal';
 import {
   createProfileStyles,
@@ -36,8 +36,6 @@ export default function UserProfileScreen() {
     advanceAppTutorial,
   } = useContext(AuthContext);
   const [refreshing, setRefreshing] = useState(false);
-  const [viewerVisible, setViewerVisible] = useState(false);
-  const [selectedUrl, setSelectedUrl] = useState(null);
   const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
   const router = useRouter();
   const colors = usePalette();
@@ -184,8 +182,8 @@ export default function UserProfileScreen() {
         <ProfileTopPhotosCard
           colors={colors}
           onPressPhoto={(photo) => {
-            setSelectedUrl(photo?.file_url || null);
-            setViewerVisible(true);
+            if (!photo?.pin_id) return;
+            router.push(buildViewPhotoChallengeRoute({ pinId: String(photo.pin_id) }));
           }}
           styles={styles}
           topPhotos={topPhotos}
@@ -201,11 +199,6 @@ export default function UserProfileScreen() {
           <Text style={styles.sharePressableText}>Gallery</Text>
         </Pressable>
       </ScrollView>
-      <FullscreenImageViewer
-        visible={viewerVisible}
-        imageUrl={selectedUrl}
-        onClose={() => setViewerVisible(false)}
-      />
       <AchievementsCatalogModal
         achievementCatalog={achievementCatalog}
         earnedAchievements={stats?.earned_achievements}

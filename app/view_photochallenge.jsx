@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -19,6 +20,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   fetchChallengeByPinId,
   fetchPhotosByPinId,
+  sendQuestChallenge,
   setPinPrivacy,
 } from '@/lib/api';
 import {
@@ -47,13 +49,13 @@ import { PUBLIC_BASE_URL } from '@/lib/apiClient';
 import { radii, shadows, spacing } from '@/theme/tokens';
 import { textStyles } from '@/theme/typography';
 
-const SORT_MODE_ELO = 'elo';
-const SORT_MODE_DATE = 'date';
-
 function parseDateMs(value) {
   const ms = Date.parse(value);
   return Number.isFinite(ms) ? ms : 0;
 }
+
+const SORT_MODE_ELO = 'elo';
+const SORT_MODE_DATE = 'date';
 
 function sortPhotos(rows, mode = SORT_MODE_ELO) {
   if (!Array.isArray(rows)) return [];
@@ -62,7 +64,6 @@ function sortPhotos(rows, mode = SORT_MODE_ELO) {
     const bElo = Number.isFinite(b?.global_elo) ? b.global_elo : 1000;
     const aCreatedAtMs = parseDateMs(a?.createdAt);
     const bCreatedAtMs = parseDateMs(b?.createdAt);
-
     if (mode === SORT_MODE_DATE) {
       if (bCreatedAtMs !== aCreatedAtMs) return bCreatedAtMs - aCreatedAtMs;
       return bElo - aElo;
@@ -145,7 +146,10 @@ export default function ViewPhotoChallengeScreen() {
   const [challengeMeta, setChallengeMeta] = useState(null);
   const [viewerLocation, setViewerLocation] = useState(null);
   const [sortMode, setSortMode] = useState(SORT_MODE_ELO);
+  const [friendSelectorVisible, setFriendSelectorVisible] = useState(false);
+  const [friendSelectorBusy, setFriendSelectorBusy] = useState(false);
   const serverPhotosRef = useRef([]);
+  const sentChallengesRef = useRef({});
   const privacySyncInFlightRef = useRef(false);
   const desiredPrivacyRef = useRef(null);
   const acknowledgedPrivacyRef = useRef(null);
@@ -153,7 +157,7 @@ export default function ViewPhotoChallengeScreen() {
   const { message: toastMessage, show: showToast } = useToast(3500);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { user } = useContext(AuthContext);
+  const { user, friends } = useContext(AuthContext);
 
   const promptParamText = normalizeParamText(promptParam);
   const handleParamText = normalizeParamText(handleParam);
@@ -188,6 +192,7 @@ export default function ViewPhotoChallengeScreen() {
     [photos, sortMode]
   );
   const sortChipLabel = sortMode === SORT_MODE_ELO ? 'Elo Sorted' : 'Upload Date';
+  const isGeoLocked = challengeMeta?.isGeoLocked !== false;
 
   useEffect(() => {
     serverPhotosRef.current = serverPhotos;
@@ -506,9 +511,7 @@ export default function ViewPhotoChallengeScreen() {
 
   const onToggleSortMode = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
-    setSortMode((currentMode) => (
-      currentMode === SORT_MODE_ELO ? SORT_MODE_DATE : SORT_MODE_ELO
-    ));
+    setSortMode((current) => current === SORT_MODE_ELO ? SORT_MODE_DATE : SORT_MODE_ELO);
   }, []);
 
   const handleShareChallenge = useCallback(async () => {
@@ -541,6 +544,38 @@ export default function ViewPhotoChallengeScreen() {
       },
     });
   }, [handleText, pinId, promptText, router]);
+
+  const handleOpenChallengeFriendSelector = useCallback(() => {
+    if (!pinId) return;
+    Haptics.selectionAsync().catch(() => {});
+    setFriendSelectorVisible(true);
+  }, [pinId]);
+
+  const handleSendChallenge = useCallback(async (friend) => {
+    if (!pinId || !friend?.uid) return;
+    const alreadySent = sentChallengesRef.current[pinId]?.has(friend.uid);
+    if (alreadySent) {
+      showToast(`Already challenged ${friend.display_name || friend.handle || 'this friend'}`, 2200);
+      return;
+    }
+    setFriendSelectorBusy(true);
+    const result = await sendQuestChallenge(pinId, friend.uid);
+    setFriendSelectorBusy(false);
+    if (!result?.success) {
+      if (result?.code === 'already_sent') {
+        if (!sentChallengesRef.current[pinId]) sentChallengesRef.current[pinId] = new Set();
+        sentChallengesRef.current[pinId].add(friend.uid);
+        showToast(`Already challenged ${friend.display_name || friend.handle || 'this friend'}`, 2200);
+      } else {
+        showToast('Failed to send challenge', 2500);
+      }
+      return;
+    }
+    if (!sentChallengesRef.current[pinId]) sentChallengesRef.current[pinId] = new Set();
+    sentChallengesRef.current[pinId].add(friend.uid);
+    setFriendSelectorVisible(false);
+    showToast(`Challenge sent to ${friend.display_name || friend.handle || 'friend'}!`, 2200);
+  }, [pinId, showToast]);
 
   const openPhotoDetail = useCallback((photo) => {
     if (!photo?._id || !pinId) return;
@@ -598,6 +633,7 @@ export default function ViewPhotoChallengeScreen() {
   ), [colors.primary, openPhotoDetail, styles]);
 
   return (
+    <>
     <SafeAreaView style={styles.safe}>
       <AppHeader
         onBack={() => goBackOrHome(router)}
@@ -617,43 +653,51 @@ export default function ViewPhotoChallengeScreen() {
             contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             ListHeaderComponent={(
-              <View style={styles.galleryIntro}>
-                <View style={styles.gallerySummaryCard}>
-                  <View style={styles.gallerySummaryMeta}>
-                    <View style={styles.gallerySummaryChip}>
-                      <MaterialIcons name="photo-library" size={16} color={colors.primary} />
-                      <Text style={styles.gallerySummaryChipText}>
-                        {sortedPhotos.length} {sortedPhotos.length === 1 ? 'photo' : 'photos'}
-                      </Text>
-                    </View>
-                    <Pressable onPress={onToggleSortMode} style={styles.gallerySummaryChip}>
-                      <MaterialIcons
-                        name={sortMode === SORT_MODE_ELO ? 'emoji-events' : 'schedule'}
-                        size={16}
-                        color={colors.primary}
-                      />
-                      <Text style={styles.gallerySummaryChipText}>{sortChipLabel}</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={openQuestMap}
-                      style={styles.gallerySummaryChip}
-                      accessibilityRole="button"
-                      accessibilityLabel="View quest photo map"
-                    >
-                      <MaterialIcons name="map" size={16} color={colors.primary} />
-                      <Text style={styles.gallerySummaryChipText}>Map</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleShareChallenge}
-                      style={styles.gallerySummaryChip}
-                      accessibilityRole="button"
-                      accessibilityLabel="Share challenge"
-                    >
-                      <MaterialIcons name="share" size={16} color={colors.primary} />
-                      <Text style={styles.gallerySummaryChipText}>Share</Text>
-                    </Pressable>
-                  </View>
-                </View>
+              <View style={styles.headerIconRow}>
+                <Pressable
+                  onPress={onToggleSortMode}
+                  style={({ pressed }) => [styles.sortChip, pressed && styles.headerIconBtnPressed]}
+                  hitSlop={8}
+                >
+                  <MaterialIcons
+                    name={sortMode === SORT_MODE_ELO ? 'emoji-events' : 'schedule'}
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.sortChipText}>{sortChipLabel}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={openQuestMap}
+                  style={({ pressed }) => [styles.headerIconBtn, pressed && styles.headerIconBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="View quest photo map"
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="map" size={20} color={colors.primary} />
+                </Pressable>
+                <Pressable
+                  onPress={handleShareChallenge}
+                  style={({ pressed }) => [styles.headerIconBtn, pressed && styles.headerIconBtnPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share challenge"
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="share" size={20} color={colors.primary} />
+                </Pressable>
+                <Pressable
+                  onPress={handleOpenChallengeFriendSelector}
+                  style={({ pressed }) => [
+                    styles.headerIconBtn,
+                    pressed && !isGeoLocked && friends?.length && styles.headerIconBtnPressed,
+                    (isGeoLocked || !friends?.length) && styles.headerIconBtnDisabled,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Challenge a friend"
+                  disabled={isGeoLocked || !friends?.length}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="send" size={20} color={isGeoLocked || !friends?.length ? colors.textMuted : colors.primary} />
+                </Pressable>
               </View>
             )}
             ListEmptyComponent={(
@@ -691,6 +735,77 @@ export default function ViewPhotoChallengeScreen() {
 
       <Toast message={toastMessage} bottomOffset={140} />
     </SafeAreaView>
+
+      <Modal
+        visible={friendSelectorVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFriendSelectorVisible(false)}
+      >
+        <Pressable
+          style={styles.friendSelectorOverlay}
+          onPress={() => setFriendSelectorVisible(false)}
+        >
+          <Pressable style={styles.friendSelectorSheet} onPress={() => {}}>
+            <View style={styles.friendSelectorDragHandle} />
+            <Text style={styles.friendSelectorTitle}>Challenge a Friend</Text>
+            <Text style={styles.friendSelectorPrompt} numberOfLines={2}>
+              "{promptText}"
+            </Text>
+            {!friends?.length ? (
+              <Text style={styles.friendSelectorEmpty}>Add friends to send them challenges.</Text>
+            ) : (
+              <FlatList
+                data={friends}
+                keyExtractor={(item) => item?.uid || item?.handle || String(Math.random())}
+                renderItem={({ item: friend }) => {
+                  const alreadySent = !!(
+                    pinId && sentChallengesRef.current[pinId]?.has(friend.uid)
+                  );
+                  return (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.friendSelectorRow,
+                        alreadySent && styles.friendSelectorRowSent,
+                        pressed && !alreadySent && !friendSelectorBusy ? styles.pressed : null,
+                      ]}
+                      onPress={() => {
+                        if (alreadySent) {
+                          showToast(`Already challenged ${friend.display_name || friend.handle || 'this friend'}`, 2200);
+                          return;
+                        }
+                        if (!friendSelectorBusy) handleSendChallenge(friend);
+                      }}
+                      disabled={friendSelectorBusy}
+                    >
+                      <View style={styles.friendSelectorAvatar}>
+                        <Text style={styles.friendSelectorAvatarText}>
+                          {(friend.display_name || friend.handle || 'A').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.friendSelectorRowInfo}>
+                        <Text style={[styles.friendSelectorName, alreadySent && styles.friendSelectorNameSent]}>
+                          {friend.display_name || friend.handle || 'Friend'}
+                        </Text>
+                        {friend.handle ? (
+                          <Text style={styles.friendSelectorHandleText}>@{friend.handle}</Text>
+                        ) : null}
+                      </View>
+                      {alreadySent ? (
+                        <Text style={styles.friendSelectorSentLabel}>Sent</Text>
+                      ) : (
+                        <MaterialIcons name="send" size={18} color={colors.primary} />
+                      )}
+                    </Pressable>
+                  );
+                }}
+                style={styles.friendSelectorList}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -716,37 +831,117 @@ function createStyles(colors) {
       paddingBottom: 120,
       gap: spacing.md,
     },
-    galleryIntro: {
+    headerIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
       marginBottom: spacing.md,
     },
-    gallerySummaryCard: {
-      borderRadius: radii.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.bg,
-      padding: spacing.lg,
-      gap: spacing.sm,
-      ...shadows.chip,
-    },
-    gallerySummaryMeta: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.sm,
-    },
-    gallerySummaryChip: {
+    sortChip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: radii.pill,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
     },
-    gallerySummaryChipText: {
+    sortChipText: {
       ...textStyles.chip,
       color: colors.text,
+    },
+    headerIconBtn: {
+      padding: spacing.xs,
+    },
+    headerIconBtnPressed: {
+      opacity: 0.5,
+    },
+    headerIconBtnDisabled: {
+      opacity: 0.35,
+    },
+    pressed: {
+      opacity: 0.7,
+    },
+    friendSelectorOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    friendSelectorSheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingHorizontal: spacing.md,
+      paddingTop: 12,
+      paddingBottom: 32,
+      maxHeight: '75%',
+    },
+    friendSelectorDragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border || '#ccc',
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    friendSelectorTitle: {
+      ...textStyles.titleStrong,
+      color: colors.text,
+      marginBottom: 6,
+    },
+    friendSelectorPrompt: {
+      ...textStyles.body,
+      color: colors.textSecondary || colors.text,
+      marginBottom: 14,
+      fontStyle: 'italic',
+    },
+    friendSelectorEmpty: {
+      ...textStyles.body,
+      color: colors.textSecondary || colors.text,
+      textAlign: 'center',
+      marginTop: 24,
+      marginBottom: 24,
+    },
+    friendSelectorList: {
+      flexGrow: 0,
+    },
+    friendSelectorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border || '#eee',
+    },
+    friendSelectorRowSent: {
+      opacity: 0.45,
+    },
+    friendSelectorAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primary || '#4A90D9',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    friendSelectorAvatarText: {
+      ...textStyles.titleStrong,
+      color: '#FFFFFF',
+    },
+    friendSelectorRowInfo: {
+      flex: 1,
+    },
+    friendSelectorName: {
+      ...textStyles.body,
+      color: colors.text,
+      fontWeight: '600',
+    },
+    friendSelectorNameSent: {
+      color: colors.textSecondary || colors.text,
+    },
+    friendSelectorHandleText: {
+      ...textStyles.bodyXs,
+      color: colors.textSecondary || colors.text,
+    },
+    friendSelectorSentLabel: {
+      ...textStyles.bodyXs,
+      color: colors.textSecondary || colors.text,
     },
     galleryRow: {
       justifyContent: 'space-between',

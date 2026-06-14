@@ -11,10 +11,9 @@ import {
   removeFriend,
   requestFriend,
 } from '@/lib/api';
-import { goBackOrHome } from '@/lib/navigation';
+import { buildViewPhotoChallengeRoute, goBackOrHome } from '@/lib/navigation';
 import { usePalette } from '@/hooks/usePalette';
 import { CTAButton } from '@/components/ui/Buttons';
-import { FullscreenImageViewer } from '@/components/ui/FullscreenImageViewer';
 import { AchievementsCatalogModal } from '@/components/ui/AchievementsCatalogModal';
 import { createFormStyles } from '@/components/ui/FormStyles';
 import AppHeader from '@/components/ui/AppHeader';
@@ -60,8 +59,6 @@ export default function PublicUserProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [friendActionBusy, setFriendActionBusy] = useState(false);
   const [optimisticFriendshipStatus, setOptimisticFriendshipStatus] = useState(null);
-  const [viewerVisible, setViewerVisible] = useState(false);
-  const [selectedUrl, setSelectedUrl] = useState(null);
   const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
   const router = useRouter();
   const colors = usePalette();
@@ -311,8 +308,8 @@ export default function PublicUserProfileScreen() {
             <ProfileTopPhotosCard
               colors={colors}
               onPressPhoto={(photo) => {
-                setSelectedUrl(photo?.file_url || null);
-                setViewerVisible(true);
+                if (!photo?.pin_id) return;
+                router.push(buildViewPhotoChallengeRoute({ pinId: String(photo.pin_id) }));
               }}
               styles={styles}
               topPhotos={topPhotosData}
@@ -321,11 +318,6 @@ export default function PublicUserProfileScreen() {
           </>
         ) : null}
       </ScrollView>
-      <FullscreenImageViewer
-        visible={viewerVisible}
-        imageUrl={selectedUrl}
-        onClose={() => setViewerVisible(false)}
-      />
       <AchievementsCatalogModal
         achievementCatalog={achievementCatalog}
         earnedAchievements={statsData?.earned_achievements}

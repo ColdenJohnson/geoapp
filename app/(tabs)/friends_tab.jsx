@@ -20,6 +20,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1458,55 +1459,55 @@ export default function FriendsTabScreen() {
       const ch = row.item;
       const senderLabel = ch.sender_display_name || getHandleDisplay(ch.sender_handle) || 'Someone';
       return (
-        <View style={[styles.activityEntry, styles.challengeEntry]}>
-          <View style={styles.activityHeaderText}>
-            <View style={styles.activityMetaRow}>
-              <Text style={styles.activityHeadlineName}>{senderLabel}</Text>
-              <Text style={styles.activityMetaDot}>•</Text>
-              <Text style={styles.activityTimestamp}>{formatRelativeTime(ch.created_at)}</Text>
-            </View>
-            <Text style={styles.activityHeadline}>challenged you to a quest</Text>
-          </View>
-          {ch.challenge_photo_url ? (
+        <View style={[styles.activityEntry, styles.challengeCardRow]}>
+          {/* Left: avatar + header + prompt */}
+          <View style={styles.challengeCardLeft}>
             <Pressable
-              onPress={() => handleViewChallengeQuest(ch)}
-              disabled={!ch.can_open}
-              style={({ pressed }) => [pressed && ch.can_open ? styles.pressed : null]}
+              onPress={() => ch.sender_uid ? openUserProfile(ch.sender_uid) : null}
+              style={({ pressed }) => [styles.activityUserPressable, pressed && styles.pressed]}
             >
-              <Image
-                source={{ uri: ch.challenge_photo_url }}
-                style={styles.activityImage}
-                contentFit="cover"
-                cachePolicy="memory-disk"
+              <UserAvatar
+                uri={ch.sender_photo_url || null}
+                label={senderLabel.charAt(0).toUpperCase()}
+                size={42}
+                styles={styles}
               />
+              <View style={styles.activityHeaderText}>
+                <View style={styles.activityMetaRow}>
+                  <Text style={styles.activityHeadlineName}>{senderLabel}</Text>
+                  <Text style={styles.activityMetaDot}>•</Text>
+                  <Text style={styles.activityTimestamp}>{formatRelativeTime(ch.created_at)}</Text>
+                </View>
+                <Text style={styles.activityHeadline}>Challenged you</Text>
+              </View>
             </Pressable>
-          ) : null}
-          {ch.challenge_prompt ? (
-            <Text style={styles.activityPrompt}>{ch.challenge_prompt}</Text>
-          ) : null}
-          <View style={styles.challengeActionRow}>
-            <CTAButton
-              title="Upload Photo"
-              variant="filled"
-              style={styles.challengeActionBtn}
-              textStyle={styles.challengeActionBtnText}
-              onPress={() => handleUploadForChallenge(ch)}
-            />
-            <CTAButton
-              title="View Quest"
-              variant="secondary"
-              style={styles.challengeActionBtn}
-              textStyle={styles.challengeActionBtnText}
-              onPress={() => handleViewChallengeQuest(ch)}
-              disabled={!ch.can_open}
-            />
             <Pressable
-              style={({ pressed }) => [styles.challengeDeclineBtn, pressed && styles.pressed]}
+              disabled={!ch.can_open}
+              onPress={() => handleViewChallengeQuest(ch)}
+              style={({ pressed }) => [
+                !ch.can_open && styles.activityBodyStatic,
+                pressed && ch.can_open ? styles.pressed : null,
+              ]}
+            >
+              <Text style={styles.activityPrompt}>{ch.challenge_prompt}</Text>
+            </Pressable>
+          </View>
+
+          {/* Right: two full-height action halves */}
+          <View style={styles.challengeCardActions}>
+            <Pressable
               onPress={() => handleDeclineChallenge(ch)}
-              hitSlop={8}
+              style={({ pressed }) => [styles.challengeCardActionHalf, pressed && styles.pressed]}
               accessibilityLabel="Decline challenge"
             >
-              <Text style={styles.challengeDeclineBtnText}>Decline</Text>
+              <MaterialIcons name="close" size={44} color={colors.textMuted} />
+            </Pressable>
+            <Pressable
+              onPress={() => handleUploadForChallenge(ch)}
+              style={({ pressed }) => [styles.challengeCardActionHalf, pressed && styles.pressed]}
+              accessibilityLabel="Upload photo for challenge"
+            >
+              <MaterialIcons name="photo-camera" size={44} color={colors.primary} />
             </Pressable>
           </View>
         </View>
@@ -2213,30 +2214,23 @@ function createStyles(colors) {
     pressed: {
       opacity: 0.78,
     },
-    challengeEntry: {
-      borderLeftWidth: 3,
-      borderLeftColor: colors.primary || '#4A90D9',
-    },
-    challengeActionRow: {
+    challengeCardRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: 10,
-      gap: 8,
+      alignItems: 'stretch',
     },
-    challengeActionBtn: {
+    challengeCardLeft: {
       flex: 1,
-      paddingVertical: 8,
+      minWidth: 0,
     },
-    challengeActionBtnText: {
-      fontSize: 13,
+    challengeCardActions: {
+      width: 100,
+      flexDirection: 'row',
+      marginLeft: 0,
     },
-    challengeDeclineBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-    },
-    challengeDeclineBtnText: {
-      ...textStyles.caption,
-      color: colors.textSecondary || colors.text,
+    challengeCardActionHalf: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
   });
 }
