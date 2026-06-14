@@ -383,7 +383,7 @@ export default function ChallengeCameraStage({
         )}
       </Pressable>
 
-      <Text style={styles.helper}>{helperText}</Text>
+      {!!helperText && <Text style={styles.helper}>{helperText}</Text>}
     </View>
   );
 }
