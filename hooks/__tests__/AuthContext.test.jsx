@@ -132,7 +132,7 @@ describe('AuthProvider', () => {
     });
 
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(false);
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
     expect(AsyncStorage.setItem).not.toHaveBeenCalledWith(
       'app_tutorial_seen_abc',
@@ -152,7 +152,7 @@ describe('AuthProvider', () => {
 
     await waitFor(() => {
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(true);
-      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(true);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
     });
 
@@ -160,7 +160,6 @@ describe('AuthProvider', () => {
       'app_tutorial_progress_abc',
       JSON.stringify([
         APP_TUTORIAL_STEPS.QUESTS_TAB,
-        APP_TUTORIAL_STEPS.MAP_CREATE,
         APP_TUTORIAL_STEPS.FRIENDS_ADD,
         APP_TUTORIAL_STEPS.PROFILE_EDIT,
       ])
@@ -181,7 +180,7 @@ describe('AuthProvider', () => {
     });
 
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(false);
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
   });
 
@@ -197,7 +196,7 @@ describe('AuthProvider', () => {
 
     await waitFor(() => {
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(true);
-      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(true);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
     });
 
@@ -205,20 +204,14 @@ describe('AuthProvider', () => {
       await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.QUESTS_TAB);
     });
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(true);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'app_tutorial_progress_abc',
       JSON.stringify([
-        APP_TUTORIAL_STEPS.MAP_CREATE,
         APP_TUTORIAL_STEPS.FRIENDS_ADD,
         APP_TUTORIAL_STEPS.PROFILE_EDIT,
       ])
     );
-
-    await act(async () => {
-      await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
-    });
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
 
     await act(async () => {
       await result.current.advanceAppTutorial(APP_TUTORIAL_STEPS.FRIENDS_ADD);
@@ -235,7 +228,7 @@ describe('AuthProvider', () => {
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('app_tutorial_progress_abc');
   });
 
-  it('keeps map and profile tutorial dismissal untethered when reusing an older callback', async () => {
+  it('keeps friends and profile tutorial dismissal untethered when reusing an older callback', async () => {
     const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
     fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
 
@@ -246,24 +239,24 @@ describe('AuthProvider', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(true);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
     });
 
     const initialAdvanceAppTutorial = result.current.advanceAppTutorial;
 
     await act(async () => {
-      await initialAdvanceAppTutorial(APP_TUTORIAL_STEPS.MAP_CREATE);
+      await initialAdvanceAppTutorial(APP_TUTORIAL_STEPS.FRIENDS_ADD);
     });
 
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(false);
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
 
     await act(async () => {
       await initialAdvanceAppTutorial(APP_TUTORIAL_STEPS.PROFILE_EDIT);
     });
 
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(false);
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(false);
   });
 
@@ -281,7 +274,7 @@ describe('AuthProvider', () => {
 
     await waitFor(() => {
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(true);
-      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(true);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
     });
 
@@ -290,7 +283,7 @@ describe('AuthProvider', () => {
     });
 
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(true);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(true);
     expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('app_tutorial_seen_abc', 'true');
   });
 
@@ -309,7 +302,7 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.PROFILE_EDIT)).toBe(true);
       expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
-      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+      expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(false);
     });
   });
 
@@ -333,6 +326,6 @@ describe('AuthProvider', () => {
     });
 
     expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.QUESTS_TAB)).toBe(false);
-    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.MAP_CREATE)).toBe(false);
+    expect(result.current.isAppTutorialStepVisible(APP_TUTORIAL_STEPS.FRIENDS_ADD)).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView from 'react-native-maps';
 import { Callout, CalloutSubview, Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -54,18 +54,6 @@ function normalizeCoordinate(value) {
   return { latitude, longitude };
 }
 
-function formatShortDate(value) {
-  const parsed = value ? new Date(value) : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) {
-    return 'Unknown date';
-  }
-  return parsed.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
 function buildPhotoMarker(photo) {
   const location = normalizeCoordinate(photo?.location);
   if (!photo?._id || !location) {
@@ -78,13 +66,6 @@ function buildPhotoMarker(photo) {
     location,
     photo_count: 1,
   };
-}
-
-function getPhotoHandle(photo) {
-  const handle = typeof photo?.created_by_handle === 'string'
-    ? photo.created_by_handle.trim()
-    : '';
-  return handle ? `@${handle}` : 'anon';
 }
 
 function buildRegionForCoordinate(coordinate) {
@@ -127,7 +108,6 @@ export default function QuestPhotoMapScreen() {
   const watchRef = useRef(null);
   const router = useRouter();
   const { message: toastMessage, show: showToast } = useToast(3500);
-  const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const colorScheme = useColorScheme();
@@ -365,13 +345,6 @@ export default function QuestPhotoMapScreen() {
     }));
   }, [pinId, router]);
 
-  const calloutWidth = useMemo(
-    () => Math.max(276, Math.min(windowWidth - 48, 340)),
-    [windowWidth]
-  );
-  const calloutCardStyle = useMemo(() => ({
-    width: calloutWidth,
-  }), [calloutWidth]);
   const controlsBottomOffset = 20 + insets.bottom + bottomTabOverflow;
   const toastBottomOffset = controlsBottomOffset + 96;
   const topControlsTop = 16 + insets.top;
@@ -423,8 +396,6 @@ export default function QuestPhotoMapScreen() {
               anchor={{ x: 0.5, y: 1 }}
               calloutOffset={{ x: 0, y: 12 }}
               tracksViewChanges={markerTracksViewChanges}
-              title="Quest Photo"
-              description={getPhotoHandle(photo)}
             >
               <QuestMapPin
                 theme={photoPinTheme}
@@ -433,7 +404,7 @@ export default function QuestPhotoMapScreen() {
               <Callout tooltip>
                 <CalloutSubview
                   onPress={() => openPhotoDetail(photo)}
-                  style={[styles.calloutCard, calloutCardStyle]}
+                  style={styles.calloutImageTarget}
                 >
                   <Image
                     source={{ uri: photo.file_url }}
@@ -441,24 +412,6 @@ export default function QuestPhotoMapScreen() {
                     contentFit="cover"
                     cachePolicy="memory-disk"
                   />
-                  <View style={styles.calloutContent}>
-                    <Text style={styles.calloutLabel}>Quest Photo</Text>
-                    <Text style={styles.calloutHandle} numberOfLines={1}>
-                      {getPhotoHandle(photo)}
-                    </Text>
-                    <Text style={styles.calloutMeta}>
-                      Elo {Number.isFinite(photo?.global_elo) ? photo.global_elo : 1000}
-                    </Text>
-                    <Text style={styles.calloutMeta}>
-                      Uploaded {formatShortDate(photo?.createdAt)}
-                    </Text>
-                    {group.memberCount > 1 ? (
-                      <Text style={styles.calloutMeta}>
-                        Most recent of {group.memberCount} photos
-                      </Text>
-                    ) : null}
-                  </View>
-                  <MaterialIcons name="chevron-right" size={24} color={colors.textMuted} />
                 </CalloutSubview>
               </Callout>
             </Marker>
@@ -633,48 +586,16 @@ function createStyles(colors) {
       color: colors.textMuted,
       marginTop: 2,
     },
-    calloutCard: {
-      flexDirection: 'row',
+    calloutImageTarget: {
+      width: 72,
+      height: 72,
       alignItems: 'center',
-      alignSelf: 'flex-start',
-      gap: 12,
-      padding: 10,
-      backgroundColor: colors.bg,
-      borderRadius: 22,
-      borderWidth: 1,
-      borderColor: colors.border,
-      shadowColor: '#000',
-      shadowOpacity: 0.14,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 12,
+      justifyContent: 'center',
+      backgroundColor: 'transparent',
     },
     calloutThumbnail: {
-      width: 74,
-      height: 74,
-      borderRadius: 16,
-      backgroundColor: colors.border,
-    },
-    calloutContent: {
-      flex: 1,
-      minWidth: 0,
-      paddingVertical: 4,
-    },
-    calloutLabel: {
-      ...textStyles.eyebrow,
-      color: colors.primary,
-      marginBottom: 6,
-    },
-    calloutHandle: {
-      ...textStyles.bodyStrong,
-      fontSize: 15,
-      lineHeight: 20,
-      color: colors.text,
-    },
-    calloutMeta: {
-      ...textStyles.bodyXsStrong,
-      color: colors.textMuted,
-      marginTop: 2,
+      width: 72,
+      height: 72,
     },
     centerOverlay: {
       ...StyleSheet.absoluteFillObject,

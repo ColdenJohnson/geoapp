@@ -15,7 +15,6 @@ jest.mock('@/hooks/AuthContext', () => {
     AuthContext: React.createContext({}),
     APP_TUTORIAL_STEPS: {
       QUESTS_TAB: 'quests_tab',
-      MAP_CREATE: 'map_create',
       FRIENDS_ADD: 'friends_add',
       PROFILE_EDIT: 'profile_edit',
       COMPLETED: 'completed',

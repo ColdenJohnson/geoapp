@@ -30,7 +30,6 @@ const ACHIEVEMENT_CATALOG_CACHE_KEY = 'achievement_catalog_cache_v2';
 const ACHIEVEMENT_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
 export const APP_TUTORIAL_STEPS = Object.freeze({
   QUESTS_TAB: 'quests_tab',
-  MAP_CREATE: 'map_create',
   FRIENDS_ADD: 'friends_add',
   PROFILE_EDIT: 'profile_edit',
 });

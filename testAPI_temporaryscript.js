@@ -1,7 +1,7 @@
 
 // NOTE: TO RUN USE THIS TERMINAL COMMAND: EXPO_PUBLIC_BASE_URL=http://192.168.86.29:3500 node testAPI_temporaryscript.js
 
-import { newChallenge, addPhoto, fetchPhotosByPinId, fetchAllLocationPins } from './lib/api.js';
+import { newChallenge, addPhoto, fetchPhotosByPinId } from './lib/api.js';
 
 async function main() {
   // Example: test fetching all pins

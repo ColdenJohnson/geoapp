@@ -10,7 +10,6 @@ export const light = {
   // map pins
   pinOutline: '#FFFFFF',
   pinLocation: '#EB0A46',
-  pinRestrictedOutline: '#C4083A',
   pinOpen: '#FFE1D6',
 
   // text
@@ -45,7 +44,6 @@ export const dark = {
   // map pins
   pinOutline: '#F6EFE8',
   pinLocation: '#EB0A46',
-  pinRestrictedOutline: '#575A4B',
   pinOpen: '#FFE1D6',
 
   text: '#F6EFE8',
