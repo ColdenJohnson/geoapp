@@ -2,7 +2,9 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import {
   ActivityIndicator,
   Animated,
+  FlatList,
   Keyboard,
+  Modal,
   PanResponder,
   Pressable,
   SafeAreaView,
@@ -27,6 +29,7 @@ import {
   fetchRankedQuests,
   fetchSavedQuests,
   saveQuest,
+  sendQuestChallenge,
   unsaveQuest
 } from '@/lib/api';
 import { buildViewPhotoChallengeRoute } from '@/lib/navigation';
@@ -458,7 +461,7 @@ export default function ActiveChallengesScreen() {
   const insets = useSafeAreaInsets();
   const bottomTabOverflow = useBottomTabOverflow();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const { user, isAppTutorialStepVisible, advanceAppTutorial } = useContext(AuthContext);
+  const { user, friends, isAppTutorialStepVisible, advanceAppTutorial } = useContext(AuthContext);
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const formStyles = useMemo(() => createFormStyles(colors), [colors]);
@@ -479,6 +482,11 @@ export default function ActiveChallengesScreen() {
   const [forceQuestSearch, setForceQuestSearch] = useState(false);
   const [selectedQuestFilter, setSelectedQuestFilter] = useState('all');
   const [showSavedQueueHint, setShowSavedQueueHint] = useState(false);
+  const [friendSelectorVisible, setFriendSelectorVisible] = useState(false);
+  const [friendSelectorQuest, setFriendSelectorQuest] = useState(null);
+  const [friendSelectorBusy, setFriendSelectorBusy] = useState(false);
+  // Map of pinId -> Set<recipientUid> tracking challenges sent this session
+  const sentChallengesRef = useRef({});
   const cardPan = useRef(new Animated.ValueXY()).current;
   const swipeAnimatingPinId = useRef(null);
   const longPressTimerRef = useRef(null);
@@ -1022,6 +1030,49 @@ export default function ActiveChallengesScreen() {
     }
   }, [dismissQuestTutorial, showToast]);
 
+  const handleOpenFriendSelector = useCallback((challenge) => {
+    if (!challenge?.pinId) return;
+    dismissQuestTutorial();
+    Haptics.selectionAsync().catch(() => {});
+    setFriendSelectorQuest(challenge);
+    setFriendSelectorVisible(true);
+  }, [dismissQuestTutorial]);
+
+  const handleSendChallenge = useCallback(async (friend) => {
+    const challenge = friendSelectorQuest;
+    if (!challenge?.pinId || !friend?.uid) return;
+
+    const alreadySent = sentChallengesRef.current[challenge.pinId]?.has(friend.uid);
+    if (alreadySent) {
+      showToast(`Already challenged ${friend.display_name || friend.handle || 'this friend'}`, 2200);
+      return;
+    }
+
+    setFriendSelectorBusy(true);
+    const result = await sendQuestChallenge(challenge.pinId, friend.uid);
+    setFriendSelectorBusy(false);
+
+    if (!result?.success) {
+      if (result?.code === 'already_sent') {
+        if (!sentChallengesRef.current[challenge.pinId]) {
+          sentChallengesRef.current[challenge.pinId] = new Set();
+        }
+        sentChallengesRef.current[challenge.pinId].add(friend.uid);
+        showToast(`Already challenged ${friend.display_name || friend.handle || 'this friend'}`, 2200);
+      } else {
+        showToast('Failed to send challenge', 2500);
+      }
+      return;
+    }
+
+    if (!sentChallengesRef.current[challenge.pinId]) {
+      sentChallengesRef.current[challenge.pinId] = new Set();
+    }
+    sentChallengesRef.current[challenge.pinId].add(friend.uid);
+    setFriendSelectorVisible(false);
+    showToast(`Challenge sent to ${friend.display_name || friend.handle || 'friend'}!`, 2200);
+  }, [friendSelectorQuest, showToast]);
+
   const handleSaveChallenge = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
     dismissQuestTutorial();
@@ -1433,6 +1484,41 @@ export default function ActiveChallengesScreen() {
               >
                 <MaterialIcons name={cardSaveIconName} size={20} color="#FFFFFF" />
               </Pressable>
+              {(() => {
+                const alreadySentToAll = !!(
+                  friends?.length &&
+                  sentChallengesRef.current[challenge.pinId] &&
+                  friends.every((f) => sentChallengesRef.current[challenge.pinId].has(f.uid))
+                );
+                const noFriends = !friends?.length;
+                const sendDisabled = !isTop || interactionLocked || noFriends;
+                return (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.cardIconButton,
+                      (!isTop || noFriends) && styles.cardIconButtonInactive,
+                      pressed && isTop && !noFriends ? styles.cardIconButtonPressed : null,
+                    ]}
+                    onPress={(event) => {
+                      event?.stopPropagation?.();
+                      if (alreadySentToAll) {
+                        showToast('Already challenged all friends to this quest', 2200);
+                        return;
+                      }
+                      handleOpenFriendSelector(challenge);
+                    }}
+                    onPressIn={(event) => {
+                      event?.stopPropagation?.();
+                    }}
+                    disabled={sendDisabled}
+                    hitSlop={8}
+                    accessibilityLabel="Challenge a friend"
+                    testID={`quest-card-send-button-${challenge.pinId}`}
+                  >
+                    <MaterialIcons name="send" size={18} color="#FFFFFF" />
+                  </Pressable>
+                );
+              })()}
             </View>
           </View>
 
@@ -1513,6 +1599,7 @@ export default function ActiveChallengesScreen() {
   ]);
 
   return (
+    <>
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <SafeAreaView style={styles.safe}>
         <View style={[styles.container, { paddingTop: spacing.sm, paddingBottom: footerSafePadding + spacing.md }]}>
@@ -1708,6 +1795,80 @@ export default function ActiveChallengesScreen() {
         </View>
       </SafeAreaView>
     </TouchableWithoutFeedback>
+
+      <Modal
+        visible={friendSelectorVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFriendSelectorVisible(false)}
+      >
+        <Pressable
+          style={styles.friendSelectorOverlay}
+          onPress={() => setFriendSelectorVisible(false)}
+        >
+          <Pressable style={styles.friendSelectorSheet} onPress={() => {}}>
+            <View style={styles.friendSelectorDragHandle} />
+            <Text style={styles.friendSelectorTitle}>Challenge a Friend</Text>
+            {friendSelectorQuest ? (
+              <Text style={styles.friendSelectorPrompt} numberOfLines={2}>
+                "{friendSelectorQuest.prompt}"
+              </Text>
+            ) : null}
+            {!friends?.length ? (
+              <Text style={styles.friendSelectorEmpty}>Add friends to send them challenges.</Text>
+            ) : (
+              <FlatList
+                data={friends}
+                keyExtractor={(item) => item?.uid || item?.handle || String(Math.random())}
+                renderItem={({ item: friend }) => {
+                  const alreadySent = !!(
+                    friendSelectorQuest?.pinId &&
+                    sentChallengesRef.current[friendSelectorQuest.pinId]?.has(friend.uid)
+                  );
+                  return (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.friendSelectorRow,
+                        alreadySent && styles.friendSelectorRowSent,
+                        pressed && !alreadySent && !friendSelectorBusy ? styles.pressed : null,
+                      ]}
+                      onPress={() => {
+                        if (alreadySent) {
+                          showToast(`Already challenged ${friend.display_name || friend.handle || 'this friend'}`, 2200);
+                          return;
+                        }
+                        if (!friendSelectorBusy) handleSendChallenge(friend);
+                      }}
+                      disabled={friendSelectorBusy}
+                    >
+                      <View style={styles.friendSelectorAvatar}>
+                        <Text style={styles.friendSelectorAvatarText}>
+                          {(friend.display_name || friend.handle || 'A').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.friendSelectorRowInfo}>
+                        <Text style={[styles.friendSelectorName, alreadySent && styles.friendSelectorNameSent]}>
+                          {friend.display_name || friend.handle || 'Friend'}
+                        </Text>
+                        {friend.handle ? (
+                          <Text style={styles.friendSelectorHandleText}>@{friend.handle}</Text>
+                        ) : null}
+                      </View>
+                      {alreadySent ? (
+                        <Text style={styles.friendSelectorSentLabel}>Sent</Text>
+                      ) : (
+                        <MaterialIcons name="send" size={18} color={colors.primary || '#4A90D9'} />
+                      )}
+                    </Pressable>
+                  );
+                }}
+                style={styles.friendSelectorList}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -2117,6 +2278,91 @@ function createStyles(colors) {
       ...textStyles.buttonCaps,
       color: '#FFFFFF',
       letterSpacing: 0.6,
+    },
+    friendSelectorOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    friendSelectorSheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingHorizontal: spacing.md,
+      paddingTop: 12,
+      paddingBottom: 32,
+      maxHeight: '75%',
+    },
+    friendSelectorDragHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.border || '#ccc',
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    friendSelectorTitle: {
+      ...textStyles.title3,
+      color: colors.text,
+      marginBottom: 6,
+    },
+    friendSelectorPrompt: {
+      ...textStyles.body,
+      color: colors.textSecondary || colors.text,
+      marginBottom: 14,
+      fontStyle: 'italic',
+    },
+    friendSelectorEmpty: {
+      ...textStyles.body,
+      color: colors.textSecondary || colors.text,
+      textAlign: 'center',
+      marginTop: 24,
+      marginBottom: 24,
+    },
+    friendSelectorList: {
+      flexGrow: 0,
+    },
+    friendSelectorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border || '#eee',
+    },
+    friendSelectorRowSent: {
+      opacity: 0.45,
+    },
+    friendSelectorAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primary || '#4A90D9',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    friendSelectorAvatarText: {
+      ...textStyles.title3,
+      color: '#FFFFFF',
+    },
+    friendSelectorRowInfo: {
+      flex: 1,
+    },
+    friendSelectorName: {
+      ...textStyles.body,
+      color: colors.text,
+      fontWeight: '600',
+    },
+    friendSelectorNameSent: {
+      color: colors.textSecondary || colors.text,
+    },
+    friendSelectorHandleText: {
+      ...textStyles.caption,
+      color: colors.textSecondary || colors.text,
+    },
+    friendSelectorSentLabel: {
+      ...textStyles.caption,
+      color: colors.textSecondary || colors.text,
     },
   });
 }

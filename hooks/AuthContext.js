@@ -44,6 +44,10 @@ function getAppTutorialProgressStorageKey(uid) {
   return `app_tutorial_progress_${uid}`;
 }
 
+function getFriendActivityWatermarkKey(uid) {
+  return `friend_activity_watermark_${uid}`;
+}
+
 function createAppTutorialVisibilityState(visibleSteps = []) {
   const visibleSet = new Set(Array.isArray(visibleSteps) ? visibleSteps : []);
   return APP_TUTORIAL_STEP_LIST.reduce((accumulator, step) => {
@@ -202,6 +206,7 @@ export function AuthProvider({ children }) {
   const [topPhotosFetchedAt, setTopPhotosFetchedAt] = useState(null);
   const [friendActivityItems, setFriendActivityItems] = useState([]);
   const [friendActivitySuggestions, setFriendActivitySuggestions] = useState([]);
+  const [friendActivityPendingChallenges, setFriendActivityPendingChallenges] = useState([]);
   const [friendActivityLoading, setFriendActivityLoading] = useState(false);
   const [friendActivityLoadingMore, setFriendActivityLoadingMore] = useState(false);
   const [friendActivityNextCursor, setFriendActivityNextCursor] = useState(null);
@@ -538,7 +543,7 @@ export function AuthProvider({ children }) {
     setFriendActivityLoadingMore(false);
     setFriendActivityNextCursor(null);
     setFriendActivityFetchedAt(null);
-    setHasUnseenFriendActivity(!!user?.uid);
+    setHasUnseenFriendActivity(false);
     setAppTutorialVisibility(createAppTutorialVisibilityState());
   }, [user?.uid]);
 
@@ -736,16 +741,26 @@ export function AuthProvider({ children }) {
       const payload = await fetchFriendActivity({ limit: FRIEND_ACTIVITY_PAGE_SIZE });
       const nextItems = Array.isArray(payload?.items) ? payload.items : [];
       const nextSuggestions = Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+      const nextPendingChallenges = Array.isArray(payload?.pendingChallenges) ? payload.pendingChallenges : [];
       const nextCursor = payload?.nextCursor || null;
       const fetchedAt = Date.now();
 
       setFriendActivityItems(nextItems);
       setFriendActivitySuggestions(nextSuggestions);
+      setFriendActivityPendingChallenges(nextPendingChallenges);
       setFriendActivityNextCursor(nextCursor);
       setFriendActivityFetchedAt(fetchedAt);
       friendActivityHasLoadedRef.current = true;
 
-      return { items: nextItems, suggestions: nextSuggestions, nextCursor };
+      const newestCreatedAt = nextItems[0]?.created_at ?? null;
+      if (newestCreatedAt) {
+        const watermark = await AsyncStorage.getItem(getFriendActivityWatermarkKey(user.uid));
+        setHasUnseenFriendActivity(!watermark || newestCreatedAt > watermark);
+      } else {
+        setHasUnseenFriendActivity(false);
+      }
+
+      return { items: nextItems, suggestions: nextSuggestions, pendingChallenges: nextPendingChallenges, nextCursor };
     } finally {
       friendActivityInFlightRef.current = false;
       if (showLoading) setFriendActivityLoading(false);
@@ -850,7 +865,12 @@ export function AuthProvider({ children }) {
 
   const markFriendActivitySeen = useCallback(() => {
     setHasUnseenFriendActivity(false);
-  }, []);
+    if (!user?.uid) return;
+    const watermark = friendActivityItems[0]?.created_at ?? new Date().toISOString();
+    AsyncStorage.setItem(getFriendActivityWatermarkKey(user.uid), watermark).catch((e) => {
+      console.warn('Failed to save friend activity watermark', e);
+    });
+  }, [user?.uid, friendActivityItems]);
 
   const isAppTutorialStepVisible = useCallback((step) => {
     return Boolean(appTutorialVisibility?.[step]);
@@ -939,10 +959,14 @@ export function AuthProvider({ children }) {
       topPhotosLoading,
       friendActivityItems,
       friendActivitySuggestions,
+      friendActivityPendingChallenges,
       friendActivityLoading,
       friendActivityLoadingMore,
       friendActivityFetchedAt,
       hasUnseenFriendActivity,
+      removePendingChallenge: (challengeId) => {
+        setFriendActivityPendingChallenges((prev) => prev.filter((ch) => ch.challenge_id !== challengeId));
+      },
       isAppTutorialStepVisible,
       refreshFriends,
       refreshFriendRequests,

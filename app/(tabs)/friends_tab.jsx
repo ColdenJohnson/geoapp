@@ -33,6 +33,7 @@ import {
 import {
   acceptFriendRequest,
   cancelFriendRequest,
+  declineQuestChallenge,
   fetchContactMatches,
   rejectFriendRequest,
   requestFriend,
@@ -109,6 +110,11 @@ function getActivityLabel(item) {
   return 'Commented';
 }
 
+function getHandleDisplay(handle) {
+  if (!handle) return null;
+  return handle.startsWith('@') ? handle : `@${handle}`;
+}
+
 function UserAvatar({ uri, label, size, styles }) {
   if (uri) {
     return (
@@ -147,11 +153,13 @@ export default function FriendsTabScreen() {
     markFriendActivitySeen,
     friendActivityItems: activityItems,
     friendActivitySuggestions: activitySuggestions,
+    friendActivityPendingChallenges: pendingChallenges,
     friendActivityLoading: activityLoading,
     friendActivityLoadingMore: activityLoadingMore,
     friendActivityFetchedAt,
     refreshFriendActivity,
     loadMoreFriendActivity,
+    removePendingChallenge,
     isAppTutorialStepVisible,
     advanceAppTutorial,
     applyUploadResult,
@@ -228,6 +236,11 @@ export default function FriendsTabScreen() {
   ), [friends]);
 
   const activityFeedData = useMemo(() => {
+    const challengeRows = (pendingChallenges || []).map((ch) => ({
+      key: `quest-challenge-${ch.challenge_id}`,
+      rowType: 'quest_challenge',
+      item: ch,
+    }));
     const baseRows = activityItems.map((item) => ({
       key: item.id,
       rowType: 'activity',
@@ -236,22 +249,23 @@ export default function FriendsTabScreen() {
     const shouldInsertSuggestions = !activityLoading && (baseRows.length > 0 || activitySuggestions.length > 0);
 
     if (!shouldInsertSuggestions) {
-      return baseRows;
+      return [...challengeRows, ...baseRows];
     }
 
     const insertionIndex = Math.min(FRIEND_ACTIVITY_PAGE_SIZE, baseRows.length);
     const suggestionRow = { key: 'activity-suggestions', rowType: 'suggestions' };
 
     if (baseRows.length === 0) {
-      return [suggestionRow];
+      return [...challengeRows, suggestionRow];
     }
 
     return [
+      ...challengeRows,
       ...baseRows.slice(0, insertionIndex),
       suggestionRow,
       ...baseRows.slice(insertionIndex),
     ];
-  }, [activityItems, activityLoading, activitySuggestions]);
+  }, [activityItems, activityLoading, activitySuggestions, pendingChallenges]);
 
   useEffect(() => {
     setNotificationsPermissionStatus('undetermined');
@@ -802,6 +816,40 @@ export default function FriendsTabScreen() {
       createdByHandle: item.challenge_created_by_handle || '',
     }));
   }, [router, showToast]);
+
+  const handleDeclineChallenge = useCallback(async (challenge) => {
+    if (!challenge?.challenge_id) return;
+    Haptics.selectionAsync().catch(() => {});
+    removePendingChallenge(challenge.challenge_id);
+    await declineQuestChallenge(challenge.challenge_id).catch((err) => {
+      console.warn('Failed to decline challenge', err);
+    });
+  }, [removePendingChallenge]);
+
+  const handleUploadForChallenge = useCallback((challenge) => {
+    if (!challenge?.pin_id) return;
+    Haptics.selectionAsync().catch(() => {});
+    const uploadRequestId = `challenge-upload-${challenge.pin_id}-${Date.now()}`;
+    router.push({
+      pathname: '/upload',
+      params: {
+        next: '/view_photochallenge',
+        pinId: challenge.pin_id,
+        prompt: challenge.challenge_prompt || '',
+        created_by_handle: challenge.challenge_created_by_handle || '',
+        uploadRequestId,
+      },
+    });
+  }, [router]);
+
+  const handleViewChallengeQuest = useCallback((challenge) => {
+    if (!challenge?.pin_id || !challenge?.can_open) return;
+    router.push(buildViewPhotoChallengeRoute({
+      pinId: challenge.pin_id,
+      message: challenge.challenge_prompt || '',
+      createdByHandle: challenge.challenge_created_by_handle || '',
+    }));
+  }, [router]);
 
   const runFriendSearch = useCallback(async (query, { showLoading = false, allowShort = false } = {}) => {
     const trimmed = normalizeHandleQuery(query ?? friendSearchInput);
@@ -1406,6 +1454,65 @@ export default function FriendsTabScreen() {
   ]);
 
   const renderActivityRow = useCallback(({ item: row }) => {
+    if (row?.rowType === 'quest_challenge') {
+      const ch = row.item;
+      const senderLabel = ch.sender_display_name || getHandleDisplay(ch.sender_handle) || 'Someone';
+      return (
+        <View style={[styles.activityEntry, styles.challengeEntry]}>
+          <View style={styles.activityHeaderText}>
+            <View style={styles.activityMetaRow}>
+              <Text style={styles.activityHeadlineName}>{senderLabel}</Text>
+              <Text style={styles.activityMetaDot}>•</Text>
+              <Text style={styles.activityTimestamp}>{formatRelativeTime(ch.created_at)}</Text>
+            </View>
+            <Text style={styles.activityHeadline}>challenged you to a quest</Text>
+          </View>
+          {ch.challenge_photo_url ? (
+            <Pressable
+              onPress={() => handleViewChallengeQuest(ch)}
+              disabled={!ch.can_open}
+              style={({ pressed }) => [pressed && ch.can_open ? styles.pressed : null]}
+            >
+              <Image
+                source={{ uri: ch.challenge_photo_url }}
+                style={styles.activityImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            </Pressable>
+          ) : null}
+          {ch.challenge_prompt ? (
+            <Text style={styles.activityPrompt}>{ch.challenge_prompt}</Text>
+          ) : null}
+          <View style={styles.challengeActionRow}>
+            <CTAButton
+              title="Upload Photo"
+              variant="filled"
+              style={styles.challengeActionBtn}
+              textStyle={styles.challengeActionBtnText}
+              onPress={() => handleUploadForChallenge(ch)}
+            />
+            <CTAButton
+              title="View Quest"
+              variant="secondary"
+              style={styles.challengeActionBtn}
+              textStyle={styles.challengeActionBtnText}
+              onPress={() => handleViewChallengeQuest(ch)}
+              disabled={!ch.can_open}
+            />
+            <Pressable
+              style={({ pressed }) => [styles.challengeDeclineBtn, pressed && styles.pressed]}
+              onPress={() => handleDeclineChallenge(ch)}
+              hitSlop={8}
+              accessibilityLabel="Decline challenge"
+            >
+              <Text style={styles.challengeDeclineBtnText}>Decline</Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
+
     if (row?.rowType === 'suggestions') {
       return (
         <View style={[formStyles.card, styles.sectionCard]}>
@@ -1507,6 +1614,9 @@ export default function FriendsTabScreen() {
     activitySuggestions,
     formStyles.card,
     friendActionBusy,
+    handleDeclineChallenge,
+    handleUploadForChallenge,
+    handleViewChallengeQuest,
     openChallenge,
     openUserProfile,
     pendingOutgoing,
@@ -2102,6 +2212,31 @@ function createStyles(colors) {
     },
     pressed: {
       opacity: 0.78,
+    },
+    challengeEntry: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary || '#4A90D9',
+    },
+    challengeActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 10,
+      gap: 8,
+    },
+    challengeActionBtn: {
+      flex: 1,
+      paddingVertical: 8,
+    },
+    challengeActionBtnText: {
+      fontSize: 13,
+    },
+    challengeDeclineBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+    },
+    challengeDeclineBtnText: {
+      ...textStyles.caption,
+      color: colors.textSecondary || colors.text,
     },
   });
 }
