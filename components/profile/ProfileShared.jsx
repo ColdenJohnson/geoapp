@@ -536,6 +536,22 @@ export function createProfileStyles(colors) {
       ...textStyles.chipSmall,
       color: colors.text,
     },
+    galleryButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 40,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bg,
+      marginBottom: spacing.xl,
+    },
+    galleryButtonIcon: {
+      marginRight: spacing.xs,
+    },
     topPhotoPlaceholder: {
       alignItems: 'center',
       justifyContent: 'center',

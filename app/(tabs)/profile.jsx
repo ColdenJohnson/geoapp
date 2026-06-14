@@ -191,6 +191,15 @@ export default function UserProfileScreen() {
           topPhotos={topPhotos}
           topPhotosLoading={topPhotosLoading}
         />
+        <Pressable
+          onPress={() => router.push('/gallery')}
+          style={({ pressed }) => [styles.galleryButton, pressed && styles.sharePressablePressed]}
+          accessibilityRole="button"
+          accessibilityLabel="View gallery"
+        >
+          <MaterialIcons name="grid-on" size={16} color={colors.primary} style={styles.galleryButtonIcon} />
+          <Text style={styles.sharePressableText}>Gallery</Text>
+        </Pressable>
       </ScrollView>
       <FullscreenImageViewer
         visible={viewerVisible}
