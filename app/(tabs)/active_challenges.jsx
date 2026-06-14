@@ -26,6 +26,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  declineQuestChallenge,
   fetchRankedQuests,
   fetchSavedQuests,
   saveQuest,
@@ -436,6 +437,16 @@ function normalizeChallengePin(pin, index, { isSaved = false } = {}) {
     : null;
   const tags = normalizeQuestTags(pin?.tags, pinId);
   const createdAtMs = parseQuestCreatedAtMs(pin?.createdAt);
+  const rawBanner = pin?.challenge_banner;
+  const challengeBanner = rawBanner && rawBanner.challenge_id
+    ? {
+        challengeId: String(rawBanner.challenge_id),
+        senderUid: typeof rawBanner.sender_uid === 'string' ? rawBanner.sender_uid : null,
+        senderHandle: typeof rawBanner.sender_handle === 'string' && rawBanner.sender_handle
+          ? rawBanner.sender_handle
+          : null,
+      }
+    : null;
 
   return {
     pinId,
@@ -453,6 +464,7 @@ function normalizeChallengePin(pin, index, { isSaved = false } = {}) {
     createdAt: pin?.createdAt || null,
     createdAtMs,
     isSaved,
+    challengeBanner,
   };
 }
 
@@ -1073,6 +1085,31 @@ export default function ActiveChallengesScreen() {
     showToast(`Challenge sent to ${friend.display_name || friend.handle || 'friend'}!`, 2200);
   }, [friendSelectorQuest, showToast]);
 
+  const handleDeclineChallenge = useCallback(async (challenge) => {
+    const challengeId = challenge?.challengeBanner?.challengeId;
+    if (!challengeId || !challenge?.pinId) return;
+    Haptics.selectionAsync().catch(() => {});
+    const result = await declineQuestChallenge(challengeId);
+    if (!result?.success) {
+      showToast('Failed to decline challenge', 2500);
+      return;
+    }
+    const pinId = challenge.pinId;
+    const stripBanner = (items) => {
+      if (!Array.isArray(items) || items.length === 0) return items;
+      const idx = items.findIndex((c) => c?.pinId === pinId);
+      if (idx === -1) return items;
+      const next = items.slice();
+      const [item] = next.splice(idx, 1);
+      next.push({ ...item, challengeBanner: null });
+      return next;
+    };
+    setChallenges(stripBanner);
+    SESSION_CHALLENGE_CACHE.all = stripBanner(SESSION_CHALLENGE_CACHE.all);
+    moveDeferredChallengeToBack(pinId);
+    showToast('Challenge declined', 2200);
+  }, [showToast]);
+
   const handleSaveChallenge = useCallback(async (challenge) => {
     if (!challenge?.pinId) return;
     dismissQuestTutorial();
@@ -1422,7 +1459,32 @@ export default function ActiveChallengesScreen() {
           <View style={styles.dimLayer} pointerEvents="none" />
           <View style={styles.topMeta}>
             <View style={styles.cardTagRail}>
-              {challengeTags.length ? (
+              {challenge.challengeBanner ? (
+                <View style={styles.challengeBannerContent}>
+                  <Pressable
+                    style={[
+                      styles.cardIconButton,
+                      !isTop && styles.cardIconButtonInactive,
+                    ]}
+                    onPress={(event) => {
+                      event?.stopPropagation?.();
+                      handleDeclineChallenge(challenge);
+                    }}
+                    onPressIn={(event) => {
+                      event?.stopPropagation?.();
+                    }}
+                    disabled={!isTop || interactionLocked}
+                    hitSlop={8}
+                    accessibilityLabel="Decline challenge"
+                    testID={`quest-card-decline-button-${challenge.pinId}`}
+                  >
+                    <MaterialIcons name="close" size={18} color="#FFFFFF" />
+                  </Pressable>
+                  <Text style={styles.challengeBannerLabel} numberOfLines={1}>
+                    {`challenged by @${challenge.challengeBanner.senderHandle || 'friend'}`}
+                  </Text>
+                </View>
+              ) : challengeTags.length ? (
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -1522,7 +1584,30 @@ export default function ActiveChallengesScreen() {
             </View>
           </View>
 
-          <View style={styles.promptBlock}>
+          {challenge.challengeBanner && challengeTags.length ? (
+            <View style={styles.challengeBannerRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.cardTagList}
+                keyboardShouldPersistTaps="handled"
+              >
+                {challengeTags.map((tag) => (
+                  <View
+                    key={tag}
+                    style={styles.cardTagChip}
+                    testID={`quest-card-tag-${challenge.pinId}-${tag}`}
+                  >
+                    <Text style={styles.cardTagChipText}>
+                      {QUEST_TAG_LABEL_BY_ID[tag] || tag}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          <View style={[styles.promptBlock, challenge.challengeBanner && styles.promptBlockShifted]}>
             <Text style={styles.promptText} numberOfLines={4}>
               "{challenge.prompt}"
             </Text>
@@ -1592,6 +1677,7 @@ export default function ActiveChallengesScreen() {
     challengeOptions,
     queueMode,
     styles,
+    handleDeclineChallenge,
     handleViewPhotos,
     handleShareChallenge,
     interactionLocked,
@@ -2188,6 +2274,30 @@ function createStyles(colors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.xs,
+    },
+    challengeBannerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      flex: 1,
+      minWidth: 0,
+    },
+    challengeBannerLabel: {
+      ...textStyles.eyebrow,
+      color: '#FFFFFF',
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      flex: 1,
+      flexShrink: 1,
+    },
+    challengeBannerRow: {
+      position: 'absolute',
+      top: 62,
+      left: 16,
+      right: 16,
+    },
+    promptBlockShifted: {
+      top: 106,
     },
     cardIconButtonInactive: {
       opacity: 0.72,

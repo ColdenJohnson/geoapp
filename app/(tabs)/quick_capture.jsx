@@ -5,6 +5,8 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -108,6 +110,8 @@ export default function QuickCaptureScreen({ initialUri = null }) {
   const { message: toastMessage, show: showToast } = useToast(3000);
   const isMounted = useRef(true);
   const inputRef = useRef(null);
+  const scrollRef = useRef(null);
+  const photoStageHeight = useRef(0);
   const backButtonClearance = insets.top + spacing.sm + BACK_BUTTON_HEIGHT + spacing.sm;
   const hasMessage = message.trim().length > 0;
   const isAtMaxLength = message.length >= MAX_LEN;
@@ -130,6 +134,12 @@ export default function QuickCaptureScreen({ initialUri = null }) {
     () => rankedQuests.find((quest) => quest.pinId === selectedQuestPinId) || null,
     [selectedQuestPinId, rankedQuests]
   );
+  const createSuggestionsQuests = useMemo(() => {
+    const base = isQuestSearchReady(message)
+      ? filterChallengesByPrompt(rankedQuests, message)
+      : rankedQuests;
+    return base.slice(0, 5);
+  }, [message, rankedQuests]);
 
   useEffect(() => () => {
     isMounted.current = false;
@@ -179,6 +189,12 @@ export default function QuickCaptureScreen({ initialUri = null }) {
       setSelectedQuestPinId('');
     }
   }, [selectedQuestPinId, rankedQuests]);
+
+  const scrollToForm = useCallback(() => {
+    if (photoStageHeight.current > 0) {
+      scrollRef.current?.scrollTo({ y: photoStageHeight.current + spacing.md, animated: false });
+    }
+  }, []);
 
   const renderBackButton = () => (
     <Pressable
@@ -259,6 +275,8 @@ export default function QuickCaptureScreen({ initialUri = null }) {
       }
       await applyUploadResult?.(created);
       showToast('Upload Sucess', 2200);
+      setUri(null);
+      router.navigate('/(tabs)/active_challenges');
       router.push(buildViewPhotoChallengeRoute({
         pinId: created.pinId,
         message: trimmed,
@@ -301,6 +319,8 @@ export default function QuickCaptureScreen({ initialUri = null }) {
           console.warn('Failed waiting for quick capture upload completion', queueError);
         });
 
+      setUri(null);
+      router.navigate('/(tabs)/active_challenges');
       router.push(buildViewPhotoChallengeRoute({
         pinId: selectedQuest.pinId,
         message: selectedQuest.prompt,
@@ -335,7 +355,7 @@ export default function QuickCaptureScreen({ initialUri = null }) {
   );
 
   const renderPreview = () => (
-    <View style={styles.stage}>
+    <View style={styles.stage} onLayout={(e) => { photoStageHeight.current = e.nativeEvent.layout.height; }}>
       <View style={styles.card}>
         <Image source={{ uri }} style={styles.photo} contentFit="cover" cachePolicy="memory-disk" />
         <View style={[StyleSheet.absoluteFillObject, styles.cardOverlay]} pointerEvents="none" />
@@ -378,12 +398,41 @@ export default function QuickCaptureScreen({ initialUri = null }) {
     </View>
   );
 
+  const renderQuestRow = (quest, onPress) => {
+    const selected = selectedQuestPinId === quest.pinId;
+    return (
+      <Pressable
+        key={quest.pinId}
+        onPress={() => onPress(quest)}
+        style={({ pressed }) => [
+          styles.questRow,
+          selected && styles.questRowSelected,
+          pressed && !selected ? styles.questRowPressed : null,
+        ]}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        testID={`quick-capture-quest-${quest.pinId}`}
+      >
+        <View style={styles.questThumb}>
+          {quest.teaserPhoto ? (
+            <Image source={{ uri: quest.teaserPhoto }} style={styles.questThumbImage} contentFit="cover" />
+          ) : (
+            <MaterialIcons name="photo-camera" size={20} color={colors.textMuted} />
+          )}
+        </View>
+        <Text style={styles.questPrompt} numberOfLines={2}>{quest.prompt}</Text>
+        {selected ? <MaterialIcons name="check-circle" size={22} color={colors.primary} /> : null}
+      </Pressable>
+    );
+  };
+
   const renderCreateForm = () => (
     <View style={styles.formBlock}>
       <TextInput
         ref={inputRef}
         value={message}
         onChangeText={handleMessageChange}
+        onFocus={scrollToForm}
         placeholder="Write a short challenge prompt…"
         placeholderTextColor={showEmptyMessageError ? colors.danger : colors.textMuted}
         maxLength={MAX_LEN}
@@ -395,19 +444,26 @@ export default function QuickCaptureScreen({ initialUri = null }) {
         multiline
         testID="quick-capture-prompt-input"
       />
-      <Pressable
+      <CTAButton
+        title={uploading ? 'Uploading...' : 'Create'}
         onPress={handleCreateQuest}
-        disabled={uploading}
-        style={({ pressed }) => [
-          styles.createAction,
-          pressed && { opacity: 0.7 },
-          uploading && { opacity: 0.5 },
-          !hasMessage && { opacity: 0.45 },
-        ]}
+        disabled={!hasMessage || uploading}
+        loading={uploading}
+        variant="filled"
         testID="quick-capture-create-submit"
-      >
-        <Text style={styles.createText}>{uploading ? 'UPLOADING...' : 'CREATE>'}</Text>
-      </Pressable>
+      />
+      {!questsLoading && createSuggestionsQuests.length > 0 && (
+        <View style={styles.createSuggestions}>
+          <Text style={styles.createSuggestionsLabel}>Or join an existing quest</Text>
+          {createSuggestionsQuests.map((quest) =>
+            renderQuestRow(quest, (q) => {
+              setSelectedQuestPinId(q.pinId);
+              setQuestSearchInput(message);
+              setMode('existing');
+            })
+          )}
+        </View>
+      )}
     </View>
   );
 
@@ -431,6 +487,7 @@ export default function QuickCaptureScreen({ initialUri = null }) {
           placeholder="Search quests"
           value={questSearchInput}
           onChangeText={handleQuestSearchInputChange}
+          onFocus={scrollToForm}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -457,37 +514,13 @@ export default function QuickCaptureScreen({ initialUri = null }) {
             </Text>
           </View>
         ) : (
-          visibleQuests.slice(0, 10).map((quest) => {
-            const selected = selectedQuestPinId === quest.pinId;
-            return (
-              <Pressable
-                key={quest.pinId}
-                onPress={() => setSelectedQuestPinId(quest.pinId)}
-                style={({ pressed }) => [
-                  styles.questRow,
-                  selected && styles.questRowSelected,
-                  pressed && !selected ? styles.questRowPressed : null,
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                testID={`quick-capture-quest-${quest.pinId}`}
-              >
-                <View style={styles.questThumb}>
-                  {quest.teaserPhoto ? (
-                    <Image source={{ uri: quest.teaserPhoto }} style={styles.questThumbImage} contentFit="cover" />
-                  ) : (
-                    <MaterialIcons name="photo-camera" size={20} color={colors.textMuted} />
-                  )}
-                </View>
-                <Text style={styles.questPrompt} numberOfLines={2}>{quest.prompt}</Text>
-                {selected ? <MaterialIcons name="check-circle" size={22} color={colors.primary} /> : null}
-              </Pressable>
-            );
-          })
+          visibleQuests.slice(0, 10).map((quest) =>
+            renderQuestRow(quest, (q) => setSelectedQuestPinId(q.pinId))
+          )
         )}
       </View>
       <CTAButton
-        title={uploading ? 'Uploading...' : 'Add photo'}
+        title={uploading ? 'Uploading...' : 'Join'}
         onPress={handleAddToQuest}
         disabled={!selectedQuest || uploading}
         loading={uploading}
@@ -508,32 +541,39 @@ export default function QuickCaptureScreen({ initialUri = null }) {
   }
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-        {renderBackButton()}
-        {uri ? (
-          <ScrollView
-            style={[styles.scrollFrame, { paddingTop: backButtonClearance }]}
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingBottom: spacing.lg + insets.bottom },
-            ]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {renderPreview()}
-            {renderModeToggle()}
-            {mode === 'create' ? renderCreateForm() : renderQuestSearch()}
-          </ScrollView>
-        ) : renderCamera()}
-        <Toast message={toastMessage} bottomOffset={spacing.lg + insets.bottom} />
-      </SafeAreaView>
-    </TouchableWithoutFeedback>
+    <KeyboardAvoidingView
+      style={styles.keyboardAvoid}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+          {renderBackButton()}
+          {uri ? (
+            <ScrollView
+              ref={scrollRef}
+              style={[styles.scrollFrame, { paddingTop: backButtonClearance }]}
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: spacing.lg + insets.bottom },
+              ]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {renderPreview()}
+              {renderModeToggle()}
+              {mode === 'create' ? renderCreateForm() : renderQuestSearch()}
+            </ScrollView>
+          ) : renderCamera()}
+          <Toast message={toastMessage} bottomOffset={spacing.lg + insets.bottom} />
+        </SafeAreaView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 function createStyles(colors) {
   return StyleSheet.create({
+    keyboardAvoid: { flex: 1 },
     container: { flex: 1, backgroundColor: colors.surface },
     permissionGate: { alignItems: 'center', justifyContent: 'center', padding: spacing.lg, gap: spacing.md },
     backButton: {
@@ -660,15 +700,6 @@ function createStyles(colors) {
       elevation: 8,
     },
     inputMaxed: { color: colors.danger },
-    createAction: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 0,
-    },
-    createText: {
-      ...textStyles.accentAction,
-      color: colors.primary,
-    },
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -737,6 +768,17 @@ function createStyles(colors) {
       ...textStyles.bodyStrong,
       color: colors.text,
       lineHeight: 22,
+    },
+    createSuggestions: {
+      gap: spacing.xs,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: spacing.md,
+    },
+    createSuggestionsLabel: {
+      ...textStyles.bodySmallStrong,
+      color: colors.textMuted,
+      marginBottom: spacing.xs,
     },
   });
 }
