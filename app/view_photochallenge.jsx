@@ -536,7 +536,7 @@ export default function ViewPhotoChallengeScreen() {
   const openQuestMap = useCallback(() => {
     if (!pinId) return;
     router.push({
-      pathname: '/map',
+      pathname: '/quest_map',
       params: {
         pinId,
         message: promptText || '',

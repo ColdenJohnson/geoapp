@@ -218,6 +218,7 @@ function RootLayoutContent() {
                 options={{
                   title: 'View Quest',
                 }} />
+              <Stack.Screen name="quest_map" options={{ headerShown: false }} />
             </Stack>
             {shouldShieldAuthedApp ? <View pointerEvents="auto" style={[styles.authedShield, { backgroundColor: colors.surface }]} /> : null}
             {shouldShowCreateUsernameGate ? <View style={styles.gateWrap}><CreateUsernameScreen /></View> : null}
