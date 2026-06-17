@@ -68,12 +68,12 @@ describe('QuickCaptureScreen', () => {
     expect(getByTestId('camera-shutter')).toBeTruthy();
   });
 
-  it('defaults to create mode after a photo is captured', async () => {
+  it('defaults to join mode after a photo is captured', async () => {
     const { getByTestId } = render(<QuickCaptureScreen initialUri="file://mock.jpg" />);
 
     await flushInitialEffects();
-    expect(getByTestId('quick-capture-mode-create')).toHaveAccessibilityState({ selected: true });
-    expect(getByTestId('quick-capture-mode-existing')).toHaveAccessibilityState({ selected: false });
+    expect(getByTestId('quick-capture-mode-create')).toHaveAccessibilityState({ selected: false });
+    expect(getByTestId('quick-capture-mode-existing')).toHaveAccessibilityState({ selected: true });
   });
 
   it('queues a new quest and navigates away optimistically without waiting for upload', async () => {
@@ -103,28 +103,19 @@ describe('QuickCaptureScreen', () => {
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it('hides blocked ranked quests from the existing quest search results', async () => {
+  it('shows ranked quests from the existing quest search results', async () => {
     fetchRankedQuests.mockResolvedValue([
       {
         _id: 'open-pin',
         message: 'Open quest',
-        isGeoLocked: false,
         location: { latitude: 11, longitude: 22 },
-      },
-      {
-        _id: 'blocked-pin',
-        message: 'Blocked quest',
-        isGeoLocked: true,
-        location: { latitude: 44, longitude: 55 },
-        upload_distance_meters: 80,
       },
     ]);
 
-    const { getByTestId, getByText, queryByText } = render(<QuickCaptureScreen initialUri="file://mock.jpg" />);
+    const { getByTestId, getByText } = render(<QuickCaptureScreen initialUri="file://mock.jpg" />);
 
     fireEvent.press(getByTestId('quick-capture-mode-existing'));
 
-    await waitFor(() => expect(getByText('"Open quest"')).toBeTruthy());
-    expect(queryByText('"Blocked quest"')).toBeNull();
+    await waitFor(() => expect(getByText('Open quest')).toBeTruthy());
   });
 });

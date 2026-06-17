@@ -3,7 +3,6 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import EnterMessageScreen from '@/app/enter_message';
 
 jest.mock('@/lib/promiseStore', () => ({
-  resolveGeoLock: jest.fn(),
   resolveMessage: jest.fn(),
   resolveUpload: jest.fn(),
 }));
@@ -17,7 +16,7 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-const { resolveGeoLock, resolveMessage, resolveUpload } = require('@/lib/promiseStore');
+const { resolveMessage, resolveUpload } = require('@/lib/promiseStore');
 const { enqueueNewChallengeUpload } = require('@/lib/uploadQueue');
 const { router } = require('expo-router');
 const cameraModule = require('react-native-vision-camera');
@@ -46,11 +45,9 @@ describe('EnterMessageScreen', () => {
       sourceUri: 'file://mock.jpg',
       message: 'hello world',
       location: { coords: { latitude: 11, longitude: 22 } },
-      isGeoLocked: false,
       photoLocation: { coords: { latitude: 11, longitude: 22 } },
     }));
     await waitFor(() => expect(resolveMessage).toHaveBeenCalledWith('hello world'));
-    await waitFor(() => expect(resolveGeoLock).toHaveBeenCalledWith(false));
     await waitFor(() => expect(resolveUpload).toHaveBeenCalledWith({ queued: true, queueId: 'queue-1' }));
     await waitFor(() => expect(router.back).toHaveBeenCalled());
   });
@@ -58,26 +55,10 @@ describe('EnterMessageScreen', () => {
   it('renders the shared camera controls before a photo is taken', () => {
     const { getByTestId } = render(<EnterMessageScreen />);
 
-    expect(getByTestId('camera-lens-0.5x')).toBeTruthy();
-    expect(getByTestId('camera-lens-1x')).toBeTruthy();
-    expect(getByTestId('camera-timer-10')).toBeTruthy();
+    expect(getByTestId('camera-lens-toggle')).toBeTruthy();
+    expect(getByTestId('camera-timer-toggle')).toBeTruthy();
     expect(getByTestId('camera-flash-toggle')).toBeTruthy();
     expect(getByTestId('camera-shutter')).toBeTruthy();
-  });
-
-  it('sends unlocked challenge type when checkbox is toggled off', async () => {
-    enqueueNewChallengeUpload.mockResolvedValue({ id: 'queue-2' });
-
-    const { getByPlaceholderText, getByText } = render(<EnterMessageScreen initialUri="file://mock.jpg" />);
-
-    fireEvent.press(getByText('Location locked'));
-    fireEvent.changeText(getByPlaceholderText(/challenge prompt/i), 'not geolocked');
-    fireEvent.press(getByText('CREATE>'));
-
-    await waitFor(() => expect(enqueueNewChallengeUpload).toHaveBeenCalledWith(expect.objectContaining({
-      isGeoLocked: true,
-    })));
-    await waitFor(() => expect(resolveGeoLock).toHaveBeenCalledWith(true));
   });
   it('requests permission when camera access is denied', () => {
     cameraModule.useCameraPermission.mockReturnValue({ hasPermission: false, requestPermission: jest.fn() });
@@ -102,6 +83,5 @@ describe('EnterMessageScreen', () => {
 
     expect(resolveUpload).toHaveBeenCalledWith(null);
     expect(resolveMessage).toHaveBeenCalledWith('');
-    expect(resolveGeoLock).toHaveBeenCalledWith(false);
   });
 });

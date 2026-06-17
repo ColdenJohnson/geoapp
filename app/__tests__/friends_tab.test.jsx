@@ -84,6 +84,7 @@ import {
 } from '@/hooks/usePushNotifications';
 import FriendsTabScreen from '@/app/(tabs)/friends_tab';
 import { AuthContext } from '@/hooks/AuthContext';
+const { router } = require('expo-router');
 
 function renderScreen(overrides = {}) {
   const value = {
@@ -95,11 +96,21 @@ function renderScreen(overrides = {}) {
     refreshFriendRequests: jest.fn(async () => ({ incoming: [], outgoing: [] })),
     friendActivityItems: [],
     friendActivitySuggestions: [],
+    friendActivityInteractionSuggestions: [],
+    friendActivityPendingChallenges: [],
     friendActivityLoading: false,
     friendActivityLoadingMore: false,
     friendActivityFetchedAt: Date.now(),
-    refreshFriendActivity: jest.fn(async () => ({ items: [], suggestions: [], nextCursor: null })),
+    refreshFriendActivity: jest.fn(async () => ({
+      items: [],
+      suggestions: [],
+      interactionSuggestions: [],
+      pendingChallenges: [],
+      nextCursor: null,
+    })),
     loadMoreFriendActivity: jest.fn(),
+    dismissInteractionSuggestion: jest.fn(),
+    removePendingChallenge: jest.fn(),
     appTutorialStep: null,
     isAppTutorialStepVisible: jest.fn(() => false),
     advanceAppTutorial: jest.fn(),
@@ -126,15 +137,14 @@ describe('FriendsTabScreen', () => {
     requestContactsPermission.mockResolvedValue('granted');
   });
 
-  it('shows a toast when a geo-locked activity card is tapped', () => {
+  it('does not navigate when an activity card cannot be opened', () => {
     const activityItem = {
       id: 'activity-1',
       actor_uid: 'friend-1',
       actor_display_name: 'Friend',
       actor_handle: 'friend',
       pin_id: 'pin-1',
-      challenge_prompt: 'Locked quest',
-      challenge_is_geo_locked: true,
+      challenge_prompt: 'Unavailable quest',
       can_open: false,
       created_at: '2026-04-07T00:00:00.000Z',
     };
@@ -143,12 +153,9 @@ describe('FriendsTabScreen', () => {
       friendActivityItems: [activityItem],
     });
 
-    fireEvent.press(getByText('Locked quest'));
+    fireEvent.press(getByText('Unavailable quest'));
 
-    expect(mockShowToast).toHaveBeenCalledWith(
-      'Unable to open this activity because it is location locked.',
-      2500
-    );
+    expect(router.push).not.toHaveBeenCalled();
   });
 
   it('shows only the handle search input on the activity tab', () => {

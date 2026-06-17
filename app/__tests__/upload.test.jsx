@@ -9,12 +9,13 @@ jest.mock('@/lib/promiseStore', () => ({
 
 jest.mock('@/lib/uploadQueue', () => ({
   enqueueAddPhotoUpload: jest.fn(),
+  waitForUploadQueueItem: jest.fn(),
 }));
 
 jest.mock('@/hooks/AuthContext', () => {
   const React = require('react');
   return {
-    AuthContext: React.createContext({ profile: { handle: 'tester' } }),
+    AuthContext: React.createContext({ profile: { handle: 'tester' }, applyUploadResult: jest.fn() }),
   };
 });
 
@@ -24,7 +25,7 @@ jest.mock('expo-location', () => ({
   getCurrentPositionAsync: jest.fn(async () => null),
 }));
 
-const { enqueueAddPhotoUpload } = require('@/lib/uploadQueue');
+const { enqueueAddPhotoUpload, waitForUploadQueueItem } = require('@/lib/uploadQueue');
 const { resolveUpload, resolveUploadSubmit } = require('@/lib/promiseStore');
 const { router } = require('expo-router');
 const cameraModule = require('react-native-vision-camera');
@@ -35,8 +36,10 @@ describe('Upload screen', () => {
     jest.clearAllMocks();
     router.back.mockClear();
     router.push.mockClear();
+    router.replace.mockClear();
     expoRouter.useLocalSearchParams.mockReturnValue({});
     cameraModule.useCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
+    waitForUploadQueueItem.mockResolvedValue({});
   });
 
   it('requests permission when camera access denied', () => {
@@ -58,9 +61,8 @@ describe('Upload screen', () => {
   it('renders the shared camera controls before a photo is taken', async () => {
     const { getByTestId } = render(<Upload />);
 
-    expect(getByTestId('camera-lens-0.5x')).toBeTruthy();
-    expect(getByTestId('camera-lens-1x')).toBeTruthy();
-    expect(getByTestId('camera-timer-3')).toBeTruthy();
+    expect(getByTestId('camera-lens-toggle')).toBeTruthy();
+    expect(getByTestId('camera-timer-toggle')).toBeTruthy();
     expect(getByTestId('camera-flash-toggle')).toBeTruthy();
     expect(getByTestId('camera-shutter')).toBeTruthy();
   });
@@ -112,7 +114,7 @@ describe('Upload screen', () => {
       { queued: true, queueId: 'req-123', photoLocation: null },
       'req-123'
     );
-    expect(router.push).toHaveBeenCalledWith({
+    expect(router.replace).toHaveBeenCalledWith({
       pathname: '/view_photochallenge',
       params: {
         pinId: 'pin-123',

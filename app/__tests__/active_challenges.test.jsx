@@ -149,7 +149,7 @@ describe('ActiveChallengesScreen search', () => {
       },
       {
         _id: 'quest-2',
-        message: 'AB non-location locked',
+        message: 'AB public quest',
         created_by_handle: 'maker',
         created_by_name: 'Maker',
         photo_count: 5,
@@ -163,18 +163,18 @@ describe('ActiveChallengesScreen search', () => {
     const { getByTestId, queryByText } = renderScreen();
 
     await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
-    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+    expect(queryByText(/AB public quest/)).toBeTruthy();
 
     const searchInput = getByTestId('quest-search-input');
     fireEvent.changeText(searchInput, 'ab');
 
     expect(queryByText(/Cat quest/)).toBeTruthy();
-    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+    expect(queryByText(/AB public quest/)).toBeTruthy();
 
     fireEvent.press(getByTestId('quest-search-button'));
 
     await waitFor(() => expect(queryByText(/Cat quest/)).toBeNull());
-    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+    expect(queryByText(/AB public quest/)).toBeTruthy();
 
     fireEvent.changeText(searchInput, '');
 
@@ -189,33 +189,33 @@ describe('ActiveChallengesScreen search', () => {
     const { getByTestId, queryByText } = renderScreen();
 
     await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
-    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+    expect(queryByText(/AB public quest/)).toBeTruthy();
 
     fireEvent.press(getByTestId('quest-filter-food'));
 
     await waitFor(() => expect(queryByText(/Cat quest/)).toBeNull());
-    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+    expect(queryByText(/AB public quest/)).toBeTruthy();
 
     fireEvent.press(getByTestId('quest-filter-all'));
 
     await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
-    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+    expect(queryByText(/AB public quest/)).toBeTruthy();
   });
 
   it('applies computed new and stored common quest filters', async () => {
     const { getByTestId, queryByText } = renderScreen();
 
     await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
-    expect(queryByText(/AB non-location locked/)).toBeTruthy();
+    expect(queryByText(/AB public quest/)).toBeTruthy();
 
     fireEvent.press(getByTestId('quest-filter-new'));
 
     await waitFor(() => expect(queryByText(/Cat quest/)).toBeTruthy());
-    expect(queryByText(/AB non-location locked/)).toBeNull();
+    expect(queryByText(/AB public quest/)).toBeNull();
 
     fireEvent.press(getByTestId('quest-filter-common'));
 
-    await waitFor(() => expect(queryByText(/AB non-location locked/)).toBeTruthy());
+    await waitFor(() => expect(queryByText(/AB public quest/)).toBeTruthy());
     fireEvent.press(getByTestId('quest-card-save-button-quest-2'));
 
     await waitFor(() => expect(saveQuest).toHaveBeenCalledWith('quest-2'));

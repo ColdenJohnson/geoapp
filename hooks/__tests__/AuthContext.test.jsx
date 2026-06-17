@@ -31,7 +31,7 @@ jest.mock('@/lib/api', () => ({
   fetchUserTopPhotos: jest.fn(() => Promise.resolve([])),
 }));
 
-const { fetchAchievementCatalog, fetchUsersByUID } = require('@/lib/api');
+const { fetchAchievementCatalog, fetchUsersByUID, fetchFriendActivity } = require('@/lib/api');
 const AsyncStorage = require('@react-native-async-storage/async-storage');
 describe('AuthProvider', () => {
   beforeEach(() => {
@@ -41,6 +41,7 @@ describe('AuthProvider', () => {
     AsyncStorage.setItem.mockResolvedValue();
     AsyncStorage.removeItem.mockResolvedValue();
     fetchAchievementCatalog.mockResolvedValue([]);
+    fetchFriendActivity.mockResolvedValue({ items: [], suggestions: [], nextCursor: null });
     delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL;
     delete process.env.EXPO_PUBLIC_FORCE_APP_TUTORIAL_STEP;
     delete global.__DEV_FORCE_APP_TUTORIAL__;
@@ -102,6 +103,13 @@ describe('AuthProvider', () => {
   it('shows the friends tab dot on session start and clears it when marked seen', async () => {
     const wrapper = ({ children }) => <AuthProvider>{children}</AuthProvider>;
     fetchUsersByUID.mockResolvedValue({ uid: 'abc', name: 'Jane', theme_preference: 'light' });
+    fetchFriendActivity.mockResolvedValue({
+      items: [{ id: 'activity-1', created_at: '2026-04-07T00:00:00.000Z' }],
+      suggestions: [],
+      interactionSuggestions: [],
+      pendingChallenges: [],
+      nextCursor: null,
+    });
 
     const { result } = renderHook(() => React.useContext(AuthContext), { wrapper });
 
