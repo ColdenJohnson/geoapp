@@ -351,6 +351,7 @@ export default function QuickCaptureScreen({ initialUri = null }) {
   const renderPreview = () => (
     <View style={styles.stage} onLayout={(e) => { photoStageHeight.current = e.nativeEvent.layout.height; }}>
       <View style={styles.card}>
+        {/* TODO: This renders the uncompressed camera temp file with memory-disk caching, which can write the full-size image into SDImageCache. */}
         <Image source={{ uri }} style={styles.photo} contentFit="cover" cachePolicy="memory-disk" />
         <View style={[StyleSheet.absoluteFillObject, styles.cardOverlay]} pointerEvents="none" />
         <Pressable style={styles.closeButton} onPress={() => setUri(null)} hitSlop={12}>

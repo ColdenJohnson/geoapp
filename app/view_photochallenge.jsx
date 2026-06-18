@@ -96,6 +96,7 @@ function prefetchPhotoUrls(rows) {
   for (const row of rows) {
     const url = row?.file_url;
     if (typeof url !== 'string' || !url) continue;
+    // TODO: Skip or downscale optimistic local file:// URLs here; they point at full-size queued images and can be written into SDImageCache.
     Image.prefetch(url).catch((error) => {
       console.warn('Failed to prefetch pin photo', error);
     });
@@ -538,6 +539,7 @@ export default function ViewPhotoChallengeScreen() {
   const renderPhotoTile = useCallback(({ item }) => (
     <Pressable onPress={() => openPhotoDetail(item)} style={styles.galleryTileShell}>
       <View style={styles.galleryTile}>
+        {/* TODO: For optimistic local file:// uploads, this memory-disk cache can persist the full-size queued image in SDImageCache. */}
         <Image
           source={{ uri: item.file_url }}
           style={styles.galleryImage}

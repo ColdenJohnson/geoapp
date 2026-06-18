@@ -192,6 +192,7 @@ export default function EnterMessageScreen({ initialUri = null }) {
     <View style={styles.stage}>
       <Pressable onPress={handlePhotoPress} style={{ width: '100%' }}>
         <Animated.View style={[styles.card, { transform: [{ scale: cardScale }] }]}>
+          {/* TODO: This renders the uncompressed camera temp file with memory-disk caching, which can write the full-size image into SDImageCache. */}
           <Image source={{ uri }} style={styles.photo} resizeMode="cover" cachePolicy="memory-disk" />
           <View style={[StyleSheet.absoluteFill, styles.cardOverlay]} pointerEvents="none" />
           <Pressable style={styles.closeButton} onPress={() => setUri(null)} hitSlop={12}>

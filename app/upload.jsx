@@ -98,6 +98,7 @@ export default function Upload({ initialUri = null }) {
   useEffect(() => () => {
     isMounted.current = false;
     if (!didSubmitUpload.current) {
+      // TODO: Delete the captured temp camera file here when uri is set and the user abandons upload.
       if (typeof uploadRequestId === 'string' && uploadRequestId) {
         resolveUpload(null, uploadRequestId);
         resolveUploadSubmit(null, uploadRequestId);
@@ -241,6 +242,7 @@ export default function Upload({ initialUri = null }) {
   const renderPreview = () => (
     <View style={styles.stage}>
       <View style={styles.card}>
+        {/* TODO: This renders the uncompressed camera temp file with memory-disk caching, which can write the full-size image into SDImageCache. */}
         <Image source={{ uri }} style={styles.photo} contentFit="cover" cachePolicy="memory-disk" />
         <View style={[StyleSheet.absoluteFillObject, styles.cardOverlay]} pointerEvents="none" />
         <Pressable style={styles.closeButton} onPress={() => setUri(null)} hitSlop={12}>

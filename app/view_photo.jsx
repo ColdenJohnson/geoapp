@@ -114,6 +114,7 @@ function prefetchPhotoUrls(rows) {
   for (const row of rows) {
     const url = row?.file_url;
     if (typeof url !== 'string' || !url) continue;
+    // TODO: Skip or downscale optimistic local file:// URLs here; they point at full-size queued images and can be written into SDImageCache.
     Image.prefetch(url).catch((error) => {
       console.warn('Failed to prefetch pin photo', error);
     });
@@ -548,6 +549,7 @@ function ZoomableDetailImage({ uri, styles, onInteractionChange }) {
             onLayout={handleLayout}
             style={[styles.detailImageZoomSurface, animatedZoomStyle]}
           >
+            {/* TODO: For optimistic local file:// uploads, this memory-disk cache can persist the full-size queued image in SDImageCache. */}
             <Image
               source={uri ? { uri } : undefined}
               style={styles.detailImage}
