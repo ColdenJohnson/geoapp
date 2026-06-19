@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "designer": "EXPO_PUBLIC_DESIGNER_MODE=true expo start --web",
     "test": "jest",
     "lint": "expo lint",
     "postinstall": "patch-package"

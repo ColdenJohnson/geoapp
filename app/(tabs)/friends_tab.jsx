@@ -62,6 +62,7 @@ const PUBLIC_SHARE_BASE_URL =
   (Constants?.expoConfig?.extra &&
     (Constants.expoConfig.extra.EXPO_PUBLIC_BASE_URL || Constants.expoConfig.extra.apiBaseUrl)) ||
   'https://geode-backend-834952308922.us-central1.run.app';
+const IS_WEB_DESIGNER_MODE = Platform.OS === 'web' && process.env.EXPO_PUBLIC_DESIGNER_MODE === 'true';
 
 function getNotificationsIntroSeenStorageKey(uid) {
   return `${NOTIFICATIONS_INTRO_SEEN_KEY_PREFIX}_${uid}`;
@@ -180,8 +181,8 @@ export default function FriendsTabScreen() {
   const [notificationsPermissionStatus, setNotificationsPermissionStatus] = useState('undetermined');
   const [notificationsPermissionLoading, setNotificationsPermissionLoading] = useState(false);
   const [notificationsConsentVisible, setNotificationsConsentVisible] = useState(false);
-  const [notificationsIntroSeen, setNotificationsIntroSeen] = useState(false);
-  const [notificationsIntroHydrated, setNotificationsIntroHydrated] = useState(false);
+  const [notificationsIntroSeen, setNotificationsIntroSeen] = useState(IS_WEB_DESIGNER_MODE);
+  const [notificationsIntroHydrated, setNotificationsIntroHydrated] = useState(IS_WEB_DESIGNER_MODE);
   const [contactsPermissionStatus, setContactsPermissionStatus] = useState('undetermined');
   const [contactsPermissionLoading, setContactsPermissionLoading] = useState(false);
   const [contactMatches, setContactMatches] = useState([]);
@@ -191,8 +192,8 @@ export default function FriendsTabScreen() {
   const [contactMatchActionBusy, setContactMatchActionBusy] = useState(false);
   const [contactsConsentVisible, setContactsConsentVisible] = useState(false);
   const [contactsOverlayVisible, setContactsOverlayVisible] = useState(false);
-  const [contactsIntroSeen, setContactsIntroSeen] = useState(false);
-  const [contactsIntroHydrated, setContactsIntroHydrated] = useState(false);
+  const [contactsIntroSeen, setContactsIntroSeen] = useState(IS_WEB_DESIGNER_MODE);
+  const [contactsIntroHydrated, setContactsIntroHydrated] = useState(IS_WEB_DESIGNER_MODE);
   const router = useRouter();
   const colors = usePalette();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -277,8 +278,8 @@ export default function FriendsTabScreen() {
     setNotificationsPermissionStatus('undetermined');
     setNotificationsPermissionLoading(false);
     setNotificationsConsentVisible(false);
-    setNotificationsIntroSeen(false);
-    setNotificationsIntroHydrated(false);
+    setNotificationsIntroSeen(IS_WEB_DESIGNER_MODE);
+    setNotificationsIntroHydrated(IS_WEB_DESIGNER_MODE);
     setContactsPermissionStatus('undetermined');
     setContactsPermissionLoading(false);
     setContactMatches([]);
@@ -288,12 +289,20 @@ export default function FriendsTabScreen() {
     setContactMatchActionBusy(false);
     setContactsConsentVisible(false);
     setContactsOverlayVisible(false);
-    setContactsIntroSeen(false);
-    setContactsIntroHydrated(false);
+    setContactsIntroSeen(IS_WEB_DESIGNER_MODE);
+    setContactsIntroHydrated(IS_WEB_DESIGNER_MODE);
     friendsPromptsAutoOpenAttemptedRef.current = false;
   }, [user?.uid]);
 
   useEffect(() => {
+    if (IS_WEB_DESIGNER_MODE) {
+      setNotificationsIntroSeen(true);
+      setNotificationsIntroHydrated(true);
+      setContactsIntroSeen(true);
+      setContactsIntroHydrated(true);
+      return undefined;
+    }
+
     let cancelled = false;
 
     async function hydrateNotificationsIntroState() {
@@ -631,8 +640,12 @@ export default function FriendsTabScreen() {
   }, [markContactsIntroSeen, syncContactDiscovery, user?.uid]);
 
   const handleContactsButtonPress = useCallback(async () => {
+    if (IS_WEB_DESIGNER_MODE) {
+      showToast('Contact discovery is disabled in designer mode.', 2500);
+      return;
+    }
     await openContactsExperience({ allowDeniedPrompt: true, forceIntro: true });
-  }, [openContactsExperience]);
+  }, [openContactsExperience, showToast]);
 
   const handleContactsIntroContinue = useCallback(async () => {
     await requestContactsAndOpenOverlay({ allowDeniedPrompt: true });
@@ -740,7 +753,7 @@ export default function FriendsTabScreen() {
     useCallback(() => {
       markFriendActivitySeen();
       refreshFriendRequests({ force: false });
-      if (user?.uid) {
+      if (user?.uid && !IS_WEB_DESIGNER_MODE) {
         syncContactDiscovery({
           requestPermission: false,
           forceReload: false,
@@ -751,6 +764,7 @@ export default function FriendsTabScreen() {
       if (
         notificationsIntroHydrated
         && contactsIntroHydrated
+        && !IS_WEB_DESIGNER_MODE
         && user?.uid
         && (!notificationsIntroSeen || !contactsIntroSeen)
         && !friendsPromptsAutoOpenAttemptedRef.current

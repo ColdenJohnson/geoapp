@@ -51,6 +51,18 @@ export default function TabLayout() {
             shadowOffset: { width: 0, height: 8 },
             shadowRadius: 20,
           },
+          web: {
+            position: 'absolute',
+            left: 14,
+            right: 14,
+            bottom: 12,
+            height: 80,
+            zIndex: 1,
+            borderTopWidth: 0,
+            borderRadius: 24,
+            overflow: 'hidden',
+            backgroundColor: colors.surface,
+          },
           default: {
             height: 76,
             borderTopWidth: 1,

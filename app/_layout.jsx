@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +21,7 @@ import { getAchievementDefinition } from '@/lib/achievements';
 
 const INTRO_VIDEO_SEEN_STORAGE_KEY = 'app_intro_video_seen_v2';
 const FORCE_INTRO_VIDEO = process.env.EXPO_PUBLIC_FORCE_STARTUP_VIDEO === 'true';
+const IS_DESIGNER_MODE = process.env.EXPO_PUBLIC_DESIGNER_MODE === 'true';
 
 function IntroVideoGate({ onComplete }) {
   const [didFinishVideo, setDidFinishVideo] = useState(false);
@@ -111,7 +112,7 @@ function RootLayoutContent() {
         if (!isActive) {
           return;
         }
-        setShouldShowIntroGate(FORCE_INTRO_VIDEO || hasSeenIntroVideo !== 'true');
+        setShouldShowIntroGate(!IS_DESIGNER_MODE && (FORCE_INTRO_VIDEO || hasSeenIntroVideo !== 'true'));
       } catch (error) {
         if (!isActive) {
           return;
@@ -240,6 +241,21 @@ function RootLayoutContent() {
 }
 
 const styles = StyleSheet.create({
+  webFrameOuter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0d0d1a',
+  },
+  webFrame: {
+    width: 390,
+    height: 844,
+    borderRadius: 40,
+    shadowColor: '#000',
+    shadowOpacity: 0.55,
+    shadowOffset: { width: 0, height: 24 },
+    shadowRadius: 64,
+  },
   authedRoot: {
     flex: 1,
   },
@@ -301,6 +317,19 @@ const styles = StyleSheet.create({
 });
 
 export default function RootLayout() {
+  if (IS_DESIGNER_MODE && Platform.OS === 'web') {
+    return (
+      <View style={styles.webFrameOuter}>
+        <View style={styles.webFrame}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <AuthProvider>
+              <RootLayoutContent />
+            </AuthProvider>
+          </GestureHandlerRootView>
+        </View>
+      </View>
+    );
+  }
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
